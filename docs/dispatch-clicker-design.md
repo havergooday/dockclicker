@@ -5,6 +5,8 @@
 `Dispatch Clicker`는 `파견`을 중심으로 돌아가는 방치형/클리커 게임이다.  
 플레이어는 처음에 자동화 수단이 전혀 없는 상태에서 직접 파견 임무를 수행해 초기 자금을 확보한다. 이후 수익을 머신 파츠 구매, 파일럿 고용, 시설 확장에 재투자하면서 수동 플레이를 자동 파견 네트워크로 확장해나간다.
 
+와이어프레임 및 화면 구성에 대한 내용은 [docs/dispatch-clicker-visual-design.md](D:/Project/side/dockclicker/docs/dispatch-clicker-visual-design.md)를 참고한다.
+
 ## 핵심 판타지
 
 - 플레이어는 초기에 유일한 운용 인력이다.
