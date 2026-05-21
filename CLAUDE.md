@@ -11,7 +11,7 @@ Validation: `python -m unittest tests.test_project_structure`
 | Exists | Not yet |
 |---|---|
 | Folder structure, scene scaffold, autoload | All gameplay (dispatch loop, settle, save/load, UI) |
-| `scenes/main/main.tscn` → 3-zone skeleton | Real panel widgets, game logic |
+| `scenes/main/main.tscn` → 3-zone skeleton (Hangar / Bridge / Lounge) | Real panel widgets, game logic |
 | `scripts/autoload/game_state.gd` (`layout_mode`, `total_credits`) | Dispatch, settlement, data files |
 
 ## Next Priorities
