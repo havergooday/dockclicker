@@ -11,7 +11,13 @@ class ProjectStructureTest(unittest.TestCase):
         required_paths = [
             "project.godot",
             "icon.svg",
+            "docs/document-index.md",
             "docs/godot-project-structure.md",
+            "docs/project-information.md",
+            "docs/implemented-features.md",
+            "docs/missing-features.md",
+            "docs/ai-workflow.md",
+            "docs/current-priorities.md",
             "docs/plans/2026-05-21-godot-bootstrap.md",
             "scenes/main/main.tscn",
             "scripts/autoload/game_state.gd",
