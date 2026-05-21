@@ -6,7 +6,7 @@
 
 **Architecture:** `project.godot`와 메인 씬을 기준으로 `autoload`, `core`, `ui`, `assets`, `data`, `docs`, `tests` 구조를 먼저 고정한다. 초기 범위는 창을 여는 최소 루트 구조와 문서화된 확장 포인트만 포함한다.
 
-**Tech Stack:** Godot 4, GDScript, Python unittest
+**Tech Stack:** Godot 4.6, GDScript, Python unittest
 
 ---
 

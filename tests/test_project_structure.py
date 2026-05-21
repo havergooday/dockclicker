@@ -1,5 +1,6 @@
 import pathlib
 import unittest
+import re
 
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -23,6 +24,10 @@ class ProjectStructureTest(unittest.TestCase):
         for relative_path in required_paths:
             with self.subTest(path=relative_path):
                 self.assertTrue((ROOT / relative_path).exists())
+
+    def test_project_targets_godot_4_6(self):
+        project_text = (ROOT / "project.godot").read_text(encoding="utf8")
+        self.assertRegex(project_text, re.compile(r'config/features=PackedStringArray\("4\.6"\)'))
 
 
 if __name__ == "__main__":
