@@ -1,0 +1,95 @@
+:root {
+  color-scheme: light;
+  --bg-top: #d9e6f2;
+  --bg-bottom: #f4efe7;
+  --panel: rgba(255, 255, 255, 0.86);
+  --panel-border: rgba(53, 70, 91, 0.12);
+  --text-main: #18212b;
+  --text-subtle: #5c6775;
+  --button: #1d4ed8;
+  --button-hover: #1e40af;
+  --button-shadow: rgba(29, 78, 216, 0.22);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Segoe UI", sans-serif;
+  color: var(--text-main);
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.65), transparent 42%),
+    linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
+}
+
+.shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.panel {
+  width: min(100%, 360px);
+  padding: 28px 24px 24px;
+  border: 1px solid var(--panel-border);
+  border-radius: 28px;
+  background: var(--panel);
+  box-shadow: 0 22px 60px rgba(24, 33, 43, 0.14);
+  text-align: center;
+  backdrop-filter: blur(12px);
+}
+
+.eyebrow,
+.score-label {
+  margin: 0;
+  color: var(--text-subtle);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.eyebrow {
+  font-size: 0.75rem;
+}
+
+.score-label {
+  margin-top: 28px;
+  font-size: 0.82rem;
+}
+
+.score {
+  margin: 8px 0 24px;
+  font-size: clamp(3rem, 12vw, 4.5rem);
+  line-height: 1;
+  font-weight: 700;
+}
+
+.click-button {
+  width: 100%;
+  border: 0;
+  border-radius: 20px;
+  padding: 20px 24px;
+  font: inherit;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(180deg, #3b82f6, var(--button));
+  box-shadow: 0 16px 32px var(--button-shadow);
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease,
+    background 120ms ease;
+}
+
+.click-button:hover {
+  background: linear-gradient(180deg, #2563eb, var(--button-hover));
+  box-shadow: 0 20px 36px rgba(30, 64, 175, 0.26);
+}
+
+.click-button:active {
+  transform: translateY(2px) scale(0.995);
+}
