@@ -1,5 +1,5 @@
 ; Engine configuration file.
-; It's best edited using the editor and not directly,
+; It's best edited using the editor UI and not directly,
 ; since the parameters that go here are not all obvious.
 ;
 ; Format:
@@ -23,9 +23,6 @@ GameState="*res://scripts/autoload/game_state.gd"
 
 window/size/viewport_width=1600
 window/size/viewport_height=420
-window/size/borderless=false
-window/size/resizable=true
-window/per_pixel_transparency/allowed=false
 
 [rendering]
 
