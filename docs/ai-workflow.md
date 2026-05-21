@@ -6,22 +6,28 @@
 
 ## 시작 순서
 
-1. [문서 인덱스](D:/Project/side/dockclicker/docs/document-index.md)
+1. [START HERE](D:/Project/side/dockclicker/docs/start-here.md)
+작업 준비용 진입 문서를 먼저 확인한다.
+
+2. [문서 인덱스](D:/Project/side/dockclicker/docs/document-index.md)
 문서 전체 구조와 이동 경로를 먼저 확인한다.
 
-2. [프로젝트 정보](D:/Project/side/dockclicker/docs/project-information.md)
+3. [프로젝트 정보](D:/Project/side/dockclicker/docs/project-information.md)
 현재 엔진 버전, 엔트리 포인트, 검증 방식, 프로젝트 상태를 확인한다.
 
-3. [구현된 기능](D:/Project/side/dockclicker/docs/implemented-features.md)
+4. [구현된 기능](D:/Project/side/dockclicker/docs/implemented-features.md)
 이미 존재하는 구조와 문서화된 범위를 확인한다.
 
-4. [아직 없는 기능](D:/Project/side/dockclicker/docs/missing-features.md)
+5. [아직 없는 기능](D:/Project/side/dockclicker/docs/missing-features.md)
 작업 후보와 미구현 범위를 확인한다.
 
-5. 필요 시 아래 문서를 추가로 읽는다.
+6. 필요 시 아래 문서를 추가로 읽는다.
 - 시스템 설계가 필요하면 [Dispatch Clicker 기획서](D:/Project/side/dockclicker/docs/dispatch-clicker-design.md)
+- 개별 시스템 정의가 필요하면 [시스템 문서 인덱스](D:/Project/side/dockclicker/docs/systems/README.md)
 - 화면/UI 작업이면 [Dispatch Clicker 디자인 문서](D:/Project/side/dockclicker/docs/dispatch-clicker-visual-design.md)
 - 폴더/파일 책임이 필요하면 [Godot 프로젝트 구조](D:/Project/side/dockclicker/docs/godot-project-structure.md)
+- 기술 선택 근거가 필요하면 [기술 결정 기록](D:/Project/side/dockclicker/docs/technical-decisions.md)
+- 커밋 규칙을 확인하려면 [커밋 워크플로우](D:/Project/side/dockclicker/docs/commit-workflow.md)
 - 현재 구현 단계 계획을 확인하려면 [현재 우선순위](D:/Project/side/dockclicker/docs/current-priorities.md)
 
 ## 현재 기준 사실상 소스 오브 트루스
@@ -32,15 +38,20 @@
 - 실제 저장소 반영 상태: `implemented-features.md`
 - 아직 없는 작업 범위: `missing-features.md`
 - 당장 진행할 작업 순서: `current-priorities.md`
+- 이미 확정된 기술 선택: `technical-decisions.md`
 
 ## 수정 원칙
 
 - 새 기능을 추가할 때는 먼저 기존 문서와 충돌하는지 확인한다.
 - 구현 상태가 바뀌면 `implemented-features.md` 와 `missing-features.md` 를 함께 갱신한다.
 - 작업 흐름이나 시작 순서가 바뀌면 `document-index.md` 와 이 문서를 갱신한다.
+- AI 시작 진입점이 바뀌면 `start-here.md` 를 갱신한다.
+- 코드/씬/데이터/테스트 변경 후에는 문서 갱신 없이 커밋하지 않는다.
 - 프로젝트 구조가 바뀌면 `godot-project-structure.md` 를 갱신한다.
 - 게임 규칙이나 시스템 구조가 바뀌면 `dispatch-clicker-design.md` 를 갱신한다.
+- 개별 시스템 정의가 구체화되면 `docs/systems/` 아래 문서를 갱신한다.
 - UI 구조나 와이어프레임 방향이 바뀌면 `dispatch-clicker-visual-design.md` 를 갱신한다.
+- 이미 확정된 기술 선택이 바뀌면 `technical-decisions.md` 를 갱신한다.
 
 ## 코드 작업 기준
 

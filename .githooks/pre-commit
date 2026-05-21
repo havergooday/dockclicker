@@ -1,0 +1,38 @@
+#!/bin/sh
+
+set -eu
+
+STAGED_FILES="$(git diff --cached --name-only --diff-filter=ACMRD)"
+
+if [ -z "$STAGED_FILES" ]; then
+  exit 0
+fi
+
+NEEDS_DOC_UPDATE=0
+HAS_DOC_UPDATE=0
+
+for FILE in $STAGED_FILES; do
+  case "$FILE" in
+    docs/*)
+      HAS_DOC_UPDATE=1
+      ;;
+  esac
+
+  case "$FILE" in
+    scripts/*|scenes/*|data/*|assets/*|tests/*|project.godot|icon.svg)
+      NEEDS_DOC_UPDATE=1
+      ;;
+  esac
+done
+
+if [ "$NEEDS_DOC_UPDATE" -eq 1 ] && [ "$HAS_DOC_UPDATE" -eq 0 ]; then
+  echo "Commit blocked: code or project structure changed without any docs update."
+  echo "Update at least one document under docs/ before committing."
+  echo "Recommended status docs:"
+  echo "  - docs/implemented-features.md"
+  echo "  - docs/missing-features.md"
+  echo "  - docs/current-priorities.md"
+  exit 1
+fi
+
+exit 0
