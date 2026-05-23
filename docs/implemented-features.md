@@ -22,10 +22,9 @@
 
 ## 코드/씬 스캐폴드 구현 완료
 
-- 메인 씬 [scenes/main/main.tscn](D:/Project/side/dockclicker/scenes/main/main.tscn) 생성 완료
-- 앱 루트 스크립트 [scripts/core/app_root.gd](D:/Project/side/dockclicker/scripts/core/app_root.gd) 생성 완료
-- 전역 상태 오토로드 [scripts/autoload/game_state.gd](D:/Project/side/dockclicker/scripts/autoload/game_state.gd) 생성 완료
-- 중앙 패널 스크립트 자리 [scripts/ui/main_panel.gd](D:/Project/side/dockclicker/scripts/ui/main_panel.gd) 생성 완료
+- 메인 씬 `scenes/main/main.tscn` 생성 완료
+- 앱 루트 스크립트 `scripts/core/app_root.gd` 생성 완료
+- 전역 상태 오토로드 `scripts/autoload/game_state.gd` 생성 완료
 
 ## 패널 플립 내비게이션 시스템 구현 완료
 
@@ -33,15 +32,15 @@
 - 브릿지 뷰 (`scenes/ui/bridge_view.tscn`) — 인터랙션 오브젝트 4개(격납고 문, 공작실 입구, PC 터미널, 관제 콘솔), 유틸 바(설정·사운드·최소화)
 - 서브 패널 4개 — 각 패널별 구분 색상, 뒤로가기 버튼
   - 격납고 (`scenes/ui/panel_hangar.tscn`) — 스틸 블루
-  - 공작실 (`scenes/ui/panel_workshop.tscn`) — 앰버
-  - 상점 (`scenes/ui/panel_shop.tscn`) — 틸
+  - 공작실 (`scenes/ui/panel_workshop.tscn`) — 앰버 (플레이스홀더)
+  - PC 터미널 (`scenes/ui/panel_shop.tscn`) — 틸
   - 파견 관제 (`scenes/ui/panel_dispatch.tscn`) — 퍼플
 - ESC 키로 어느 서브 패널에서든 브릿지로 복귀
-- `scenes/main/main.tscn` — 구 3칸 레이아웃 제거, 5개 패널 인스턴스 구조로 재구성
+- `scenes/main/main.tscn` — 6개 패널 인스턴스 구조 (브릿지 + 서브 4 + 클리커)
 
 ## 테스트 및 검증 구현 완료
 
-- 구조 검증 테스트 [tests/test_project_structure.py](D:/Project/side/dockclicker/tests/test_project_structure.py) 작성 완료
+- 구조 검증 테스트 `tests/test_project_structure.py` 작성 완료
 - 필수 파일 존재 여부 검증 가능
 - `Godot 4.6` 표기 검증 가능
 
@@ -55,16 +54,36 @@
 
 ## 직접 파견 클리커 시스템 구현 완료
 
-- `GameState` 확장 — `pending_credits`, `player_status` (idle/on_mission/returned), 관련 시그널 3개
-- 파견 관제 패널 (`scripts/ui/panel_dispatch.gd`) — 직접 출격 버튼, 상태별 버튼 활성화 제어
-- 클리커 화면 (`scenes/ui/panel_clicker.tscn`, `scripts/ui/panel_clicker.gd`) — 외계생물 클릭, HP 바, 처치 시 보류 크레딧 적립, 복귀 버튼
-- 격납고 패널 (`scripts/ui/panel_hangar.gd`) — 플레이어 슬롯 상태 표시(대기중/임무중/귀환완료), 수령 버튼
-- 재화 HUD (`scenes/ui/credit_hud.tscn`, `scripts/ui/credit_hud.gd`) — 모든 패널에서 항상 표시, 수령 시 숫자 주르륵 증가, 재화 아이콘 날아가는 연출
+**플레이 루프:** 브릿지 → 파견 관제 → 직접 출격 → 클리커 → 복귀 → 격납고 수령 → 재화 HUD 증가
 
-**플레이 루프:** 브릿지 → 파견 관제(관제 콘솔 클릭) → 직접 출격 → 클리커(외계생물 클릭 → 크레딧 누적) → 복귀 → 격납고(귀환완료 수령) → 재화 HUD 수치 증가
+- `GameState` — `pending_credits`, `player_status` (idle/on_mission/returned), 시그널 4개
+- 클리커 화면 (`panel_clicker.gd/tscn`)
+  - 외계생물 버튼 랜덤 위치 배치 (BattleArea 내 자유 좌표)
+  - 행성별 동시 최대 출현 수 / 웨이브 총 마리수 적용
+  - 클릭 → HP 감소 → 처치 → 보류 크레딧 적립
+  - 웨이브 완료 시 자동 복귀, 수동 복귀 버튼 + ESC 동일 처리
+  - 헤더에 행성명·처치수·보류 크레딧 실시간 표시
+- 격납고 패널 (`panel_hangar.gd`) — 플레이어 슬롯 상태(대기중/임무중/귀환완료), 수령 버튼
+- 상시 재화 HUD (`credit_hud.gd/tscn`) — 모든 패널에서 항상 표시, 수령 시 숫자 주르륵 증가, 아이콘 비행 연출
+
+## 행성 시스템 구현 완료
+
+| 행성 | 해금 비용 | 동시 출현 | 웨이브 총수 | CR/킬 | 적 HP |
+|---|---|---|---|---|---|
+| 섹터 A | 무료 | 2 | 5 | 10 | 2 |
+| 섹터 B | 50 CR | 3 | 8 | 15 | 3 |
+| 섹터 C | 200 CR | 4 | 12 | 25 | 5 |
+
+- 파견 관제 패널에서 행성 선택 UI (버튼 3개)
+- 미해금 행성 클릭 → 크레딧 차감 + 자동 해금 + 선택
+- 크레딧 부족 시 버튼 비활성화
+
+## PC 터미널 — 클릭 데미지 강화 구현 완료
+
+- 강화 4단계: 20 → 50 → 100 → 200 CR, 데미지 최대 5
+- 현재 데미지·레벨 실시간 표시, 크레딧 부족 시 버튼 비활성화
 
 ## 현재 상태 요약
 
-- MVP 직접 파견 플레이 루프 구현 완료.
-- 브릿지 → 관제 → 클리커 → 격납고 → 재화 수령 흐름이 연결됨.
-- 공작실, 상점 패널은 아직 플레이스홀더.
+- MVP 직접 파견 플레이 루프 완성. 파견 → 전투 → 수령 → 성장(업그레이드·행성 해금) 전체 사이클 동작.
+- 자동 파견(파일럿·머신) 및 공작실은 아직 미구현.
