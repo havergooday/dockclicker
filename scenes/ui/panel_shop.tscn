@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3]
 
-[ext_resource type="Script" path="res://scripts/ui/sub_panel_base.gd" id="1_shop"]
+[ext_resource type="Script" path="res://scripts/ui/panel_shop.gd" id="1_shop"]
 
 [node name="PanelShop" type="Control"]
 layout_mode = 3
@@ -10,7 +10,6 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_shop")
-panel_id = "shop"
 
 [node name="Background" type="ColorRect" parent="."]
 layout_mode = 1
@@ -42,7 +41,7 @@ text = "← 브릿지"
 [node name="TitleLabel" type="Label" parent="Header"]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "상점"
+text = "PC 터미널"
 vertical_alignment = 1
 
 [node name="ContentArea" type="CenterContainer" parent="."]
@@ -54,7 +53,16 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="PlaceholderLabel" type="Label" parent="ContentArea"]
+[node name="VBox" type="VBoxContainer" parent="ContentArea"]
 layout_mode = 2
-text = "상점 — 미구현"
+theme_override_constants/separation = 16
+
+[node name="DamageInfo" type="Label" parent="ContentArea/VBox"]
+layout_mode = 2
+text = "클릭 데미지: 1  (강화 0/4)"
 horizontal_alignment = 1
+
+[node name="UpgradeButton" type="Button" parent="ContentArea/VBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(260, 50)
+text = "데미지 강화  +1  (20 CR)"
