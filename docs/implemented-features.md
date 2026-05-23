@@ -27,13 +27,17 @@
 - 전역 상태 오토로드 [scripts/autoload/game_state.gd](D:/Project/side/dockclicker/scripts/autoload/game_state.gd) 생성 완료
 - 중앙 패널 스크립트 자리 [scripts/ui/main_panel.gd](D:/Project/side/dockclicker/scripts/ui/main_panel.gd) 생성 완료
 
-## 현재 확인 가능한 화면 구조
+## 패널 플립 내비게이션 시스템 구현 완료
 
-- 가로형 기준 3구역 뼈대 존재
-- `Hangar`
-- `Operations Panel`
-- `Bridge Lounge`
-- 실제 기능은 없지만 레이아웃 자리와 진입 구조는 준비됨
+- `PanelManager` autoload — 패널 전환 총괄, 세로 Tween 플립 (0.12s × 2)
+- 브릿지 뷰 (`scenes/ui/bridge_view.tscn`) — 인터랙션 오브젝트 4개(격납고 문, 공작실 입구, PC 터미널, 관제 콘솔), 유틸 바(설정·사운드·최소화)
+- 서브 패널 4개 — 각 패널별 구분 색상, 뒤로가기 버튼
+  - 격납고 (`scenes/ui/panel_hangar.tscn`) — 스틸 블루
+  - 공작실 (`scenes/ui/panel_workshop.tscn`) — 앰버
+  - 상점 (`scenes/ui/panel_shop.tscn`) — 틸
+  - 파견 관제 (`scenes/ui/panel_dispatch.tscn`) — 퍼플
+- ESC 키로 어느 서브 패널에서든 브릿지로 복귀
+- `scenes/main/main.tscn` — 구 3칸 레이아웃 제거, 5개 패널 인스턴스 구조로 재구성
 
 ## 테스트 및 검증 구현 완료
 

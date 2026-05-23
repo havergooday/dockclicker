@@ -1,0 +1,101 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/bridge_view.gd" id="1_bview"]
+[ext_resource type="Script" path="res://scripts/ui/interaction_object.gd" id="2_iobj"]
+
+[node name="BridgeView" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_bview")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.06, 0.08, 0.15, 1)
+
+[node name="TitleLabel" type="Label" parent="."]
+layout_mode = 1
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -80.0
+offset_top = 12.0
+offset_right = 80.0
+offset_bottom = 36.0
+text = "[ BRIDGE ]"
+horizontal_alignment = 1
+
+[node name="ButtonsCenter" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="ObjectsContainer" type="HBoxContainer" parent="ButtonsCenter"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="HangarDoor" type="Button" parent="ButtonsCenter/ObjectsContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(160, 80)
+text = "격납고 문"
+script = ExtResource("2_iobj")
+target_panel = "hangar"
+
+[node name="WorkshopEntrance" type="Button" parent="ButtonsCenter/ObjectsContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(160, 80)
+text = "공작실 입구"
+script = ExtResource("2_iobj")
+target_panel = "workshop"
+
+[node name="PCTerminal" type="Button" parent="ButtonsCenter/ObjectsContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(160, 80)
+text = "PC 터미널"
+script = ExtResource("2_iobj")
+target_panel = "shop"
+
+[node name="ControlConsole" type="Button" parent="ButtonsCenter/ObjectsContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(160, 80)
+text = "관제 콘솔"
+script = ExtResource("2_iobj")
+target_panel = "dispatch"
+
+[node name="UtilBar" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchor_left = 1.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 0.0
+offset_left = -60.0
+offset_top = 8.0
+offset_right = -8.0
+offset_bottom = 116.0
+grow_horizontal = 0
+theme_override_constants/separation = 4
+
+[node name="SettingsButton" type="Button" parent="UtilBar"]
+layout_mode = 2
+custom_minimum_size = Vector2(48, 32)
+text = "⚙"
+
+[node name="SoundButton" type="Button" parent="UtilBar"]
+layout_mode = 2
+custom_minimum_size = Vector2(48, 32)
+text = "♪"
+
+[node name="MinimizeButton" type="Button" parent="UtilBar"]
+layout_mode = 2
+custom_minimum_size = Vector2(48, 32)
+text = "✕"

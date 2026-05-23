@@ -1,7 +1,11 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=7 format=3]
 
-[ext_resource type="Script" path="res://scripts/core/app_root.gd" id="1_q0w1e"]
-[ext_resource type="Script" path="res://scripts/ui/main_panel.gd" id="2_a1s2d"]
+[ext_resource type="Script" path="res://scripts/core/app_root.gd" id="1_apprt"]
+[ext_resource type="PackedScene" path="res://scenes/ui/bridge_view.tscn" id="2_bview"]
+[ext_resource type="PackedScene" path="res://scenes/ui/panel_hangar.tscn" id="3_hangar"]
+[ext_resource type="PackedScene" path="res://scenes/ui/panel_workshop.tscn" id="4_wshop"]
+[ext_resource type="PackedScene" path="res://scenes/ui/panel_shop.tscn" id="5_shop"]
+[ext_resource type="PackedScene" path="res://scenes/ui/panel_dispatch.tscn" id="6_dspch"]
 
 [node name="AppRoot" type="Control"]
 layout_mode = 3
@@ -10,59 +14,39 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-script = ExtResource("1_q0w1e")
+mouse_filter = 2
+script = ExtResource("1_apprt")
 
-[node name="MainPanel" type="PanelContainer" parent="."]
+[node name="BridgeView" parent="." instance=ExtResource("2_bview")]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 24.0
-offset_top = 24.0
-offset_right = -24.0
-offset_bottom = -24.0
-script = ExtResource("2_a1s2d")
 
-[node name="Margin" type="MarginContainer" parent="MainPanel"]
-layout_mode = 2
-theme_override_constants/margin_left = 18
-theme_override_constants/margin_top = 18
-theme_override_constants/margin_right = 18
-theme_override_constants/margin_bottom = 18
+[node name="PanelHangar" parent="." instance=ExtResource("3_hangar")]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+visible = false
 
-[node name="Columns" type="HBoxContainer" parent="MainPanel/Margin"]
-layout_mode = 2
-theme_override_constants/separation = 18
+[node name="PanelWorkshop" parent="." instance=ExtResource("4_wshop")]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+visible = false
 
-[node name="HangarStub" type="PanelContainer" parent="MainPanel/Margin/Columns"]
-custom_minimum_size = Vector2(280, 0)
-layout_mode = 2
-size_flags_horizontal = 3
+[node name="PanelShop" parent="." instance=ExtResource("5_shop")]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+visible = false
 
-[node name="HangarLabel" type="Label" parent="MainPanel/Margin/Columns/HangarStub"]
-layout_mode = 2
-text = "Hangar"
-horizontal_alignment = 1
-vertical_alignment = 1
-
-[node name="CenterStub" type="PanelContainer" parent="MainPanel/Margin/Columns"]
-custom_minimum_size = Vector2(520, 0)
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="CenterLabel" type="Label" parent="MainPanel/Margin/Columns/CenterStub"]
-layout_mode = 2
-text = "Operations Panel"
-horizontal_alignment = 1
-vertical_alignment = 1
-
-[node name="BridgeStub" type="PanelContainer" parent="MainPanel/Margin/Columns"]
-custom_minimum_size = Vector2(320, 0)
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="BridgeLabel" type="Label" parent="MainPanel/Margin/Columns/BridgeStub"]
-layout_mode = 2
-text = "Bridge Lounge"
-horizontal_alignment = 1
-vertical_alignment = 1
+[node name="PanelDispatch" parent="." instance=ExtResource("6_dspch")]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+visible = false
