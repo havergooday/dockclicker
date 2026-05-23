@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3]
 
-[ext_resource type="Script" path="res://scripts/ui/sub_panel_base.gd" id="1_dispatch"]
+[ext_resource type="Script" path="res://scripts/ui/panel_dispatch.gd" id="1_dispatch"]
 
 [node name="PanelDispatch" type="Control"]
 layout_mode = 3
@@ -10,7 +10,6 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_dispatch")
-panel_id = "dispatch"
 
 [node name="Background" type="ColorRect" parent="."]
 layout_mode = 1
@@ -54,7 +53,7 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="PlaceholderLabel" type="Label" parent="ContentArea"]
+[node name="DispatchButton" type="Button" parent="ContentArea"]
 layout_mode = 2
-text = "파견 관제 — 미구현"
-horizontal_alignment = 1
+custom_minimum_size = Vector2(200, 60)
+text = "직접 출격"

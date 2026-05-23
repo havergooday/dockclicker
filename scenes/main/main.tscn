@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/app_root.gd" id="1_apprt"]
 [ext_resource type="PackedScene" path="res://scenes/ui/bridge_view.tscn" id="2_bview"]
@@ -6,6 +6,8 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/panel_workshop.tscn" id="4_wshop"]
 [ext_resource type="PackedScene" path="res://scenes/ui/panel_shop.tscn" id="5_shop"]
 [ext_resource type="PackedScene" path="res://scenes/ui/panel_dispatch.tscn" id="6_dspch"]
+[ext_resource type="PackedScene" path="res://scenes/ui/panel_clicker.tscn" id="7_click"]
+[ext_resource type="PackedScene" path="res://scenes/ui/credit_hud.tscn" id="8_hud"]
 
 [node name="AppRoot" type="Control"]
 layout_mode = 3
@@ -50,3 +52,12 @@ anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 visible = false
+
+[node name="PanelClicker" parent="." instance=ExtResource("7_click")]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+visible = false
+
+[node name="CreditHUD" parent="." instance=ExtResource("8_hud")]
