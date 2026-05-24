@@ -8,12 +8,14 @@ func _ready() -> void:
 	GameState.credits_changed.connect(_on_credits_changed)
 	GameState.credits_collected.connect(_on_credits_collected)
 	_displayed_value = GameState.total_credits
-	credit_label.text = "%d CR" % _displayed_value
+	credit_label.text = "CR  %d" % _displayed_value
+	credit_label.add_theme_font_size_override("font_size", 12)
+	credit_label.modulate = Color(0.75, 1.0, 0.65)
 
 func _on_credits_changed(new_total: int) -> void:
 	var tween := create_tween()
 	tween.tween_method(
-		func(v: float): credit_label.text = "%d CR" % int(v),
+		func(v: float): credit_label.text = "CR  %d" % int(v),
 		float(_displayed_value), float(new_total), 0.5
 	)
 	_displayed_value = new_total
@@ -22,6 +24,7 @@ func _on_credits_collected(amount: int, from_global_pos: Vector2) -> void:
 	var fly := Label.new()
 	fly.text = "+%d" % amount
 	fly.add_theme_color_override("font_color", Color(1.0, 0.85, 0.0))
+	fly.add_theme_font_size_override("font_size", 14)
 	fly.z_index = 100
 	get_parent().add_child(fly)
 	fly.global_position = from_global_pos

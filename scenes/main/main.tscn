@@ -21,43 +21,43 @@ script = ExtResource("1_apprt")
 
 [node name="BridgeView" parent="." instance=ExtResource("2_bview")]
 layout_mode = 1
-anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_bottom = -26.0
 
 [node name="PanelHangar" parent="." instance=ExtResource("3_hangar")]
 layout_mode = 1
-anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_bottom = -26.0
 visible = false
 
 [node name="PanelWorkshop" parent="." instance=ExtResource("4_wshop")]
 layout_mode = 1
-anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_bottom = -26.0
 visible = false
 
 [node name="PanelShop" parent="." instance=ExtResource("5_shop")]
 layout_mode = 1
-anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_bottom = -26.0
 visible = false
 
 [node name="PanelDispatch" parent="." instance=ExtResource("6_dspch")]
 layout_mode = 1
-anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_bottom = -26.0
 visible = false
 
 [node name="PanelClicker" parent="." instance=ExtResource("7_click")]
 layout_mode = 1
-anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_bottom = -26.0
 visible = false
 
 [node name="CreditHUD" parent="." instance=ExtResource("8_hud")]

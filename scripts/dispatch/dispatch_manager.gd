@@ -15,8 +15,8 @@ class AutoSlot:
 	var machine: Dictionary = {}   # {body: int, weapon: int, legs: int}
 	var pilot_tier: int = 0
 	var planet: String = ""
-	var mission_end_time: float = 0.0
-	var return_end_time: float = 0.0
+	var mission_end_time: float = INF
+	var return_end_time: float = INF
 	var credits_earned: int = 0
 
 	static func make_empty() -> AutoSlot:
@@ -31,8 +31,8 @@ class AutoSlot:
 	func reset_mission_data() -> void:
 		pilot_tier = 0
 		planet = ""
-		mission_end_time = 0.0
-		return_end_time = 0.0
+		mission_end_time = INF
+		return_end_time = INF
 		credits_earned = 0
 
 # ── 슬롯 초기화 ───────────────────────────────────────────
@@ -175,6 +175,22 @@ func _complete_return(slot_index: int) -> void:
 	slot.state = "returned"
 	auto_slot_changed.emit(slot_index)
 	auto_dispatch_returned.emit(slot_index)
+
+# ── 머신 스펙 미리보기 ───────────────────────────────────
+
+func get_machine_preview(body_tier: int, weapon_tier: int, legs_tier: int) -> Dictionary:
+	var mission_time := _get_mission_duration(body_tier) if body_tier > 0 else 0.0
+	var return_time  := _get_return_duration(legs_tier)  if legs_tier  > 0 else 0.0
+	var rate: int = 0
+	if weapon_tier >= 1 and weapon_tier <= PartsData.DICT["weapon"]["tiers"].size():
+		rate = PartsData.DICT["weapon"]["tiers"][weapon_tier - 1]["value"]
+	var credits: int = int(float(rate) * mission_time) if (body_tier > 0 and weapon_tier > 0) else 0
+	return {
+		"mission_time": mission_time,
+		"return_time":  return_time,
+		"credits":      credits,
+		"rate":         rate,
+	}
 
 # ── 수치 계산 헬퍼 ────────────────────────────────────────
 

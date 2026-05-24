@@ -47,8 +47,8 @@ func _refresh_missions() -> void:
 		child.queue_free()
 
 	var has_active := false
-	for i in GameState.auto_slots.size():
-		var slot: DispatchManager.AutoSlot = GameState.auto_slots[i]
+	for i: int in GameState.auto_slots.size():
+		var slot: DispatchManager.AutoSlot = GameState.auto_slots[i] as DispatchManager.AutoSlot
 		if slot.state != "on_mission" and slot.state != "returning":
 			continue
 		has_active = true

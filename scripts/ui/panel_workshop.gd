@@ -1,104 +1,671 @@
 extends Control
 
 @onready var back_button: Button = $Header/BackButton
-@onready var content_vbox: VBoxContainer = $ScrollContainer/ContentVBox
+@onready var _body: Control = $Body
 
-var _inventory_content: VBoxContainer
+const PART_LABELS: Dictionary = {"body": "몸체", "weapon": "무기", "legs": "다리"}
+
+const TIER_COLORS: Array = [
+	Color(0.5,  0.5,  0.5,  1.0),  # Tier 1 — gray
+	Color(1.0,  1.0,  1.0,  1.0),  # Tier 2 — white
+	Color(0.35, 0.65, 1.0,  1.0),  # Tier 3 — blue
+]
+
+var _current_tab: int = 0
+var _tab_inv_btn: Button
+var _tab_asm_btn: Button
+
+# ── 파츠 목록 탭 ──────────────────────────────────────────
+var _tab_inv_panel: Control
+var _item_grid: GridContainer
+var _detail_vbox: VBoxContainer
+var _sel_part_type: String = ""
+var _sel_part_tier: int = -1
+
+# ── 파츠 조립 탭 ──────────────────────────────────────────
+var _tab_asm_panel: Control
+var _col_slots_inner: VBoxContainer
+var _col_parts_inner: VBoxContainer
+var _col_specs_inner: VBoxContainer
+var _asm_sel := {"body": 0, "weapon": 0, "legs": 0}
+var _asm_slot: int = -1
+var _asm_btn: Button = null
 
 func _ready() -> void:
 	PanelManager.register_panel("workshop", self)
 	back_button.pressed.connect(func(): PanelManager.show_bridge())
-	GameState.part_purchased.connect(func(_pt, _t): _refresh())
-	GameState.auto_slot_changed.connect(func(_i): _refresh())
-	_build_ui()
-	_refresh()
+	GameState.part_purchased.connect(func(_pt, _t): _refresh_current_tab())
+	GameState.auto_slot_changed.connect(func(_i): _refresh_current_tab())
+	GameState.credits_changed.connect(func(_v): _update_asm_cost())
+	visibility_changed.connect(func():
+		if visible:
+			_apply_preselect()
+	)
+	_build_tab_bar()
+	_build_inventory_panel()
+	_build_assembly_panel()
+	_switch_tab(0)
 
-func _build_ui() -> void:
-	var title := Label.new()
-	title.text = "── 보유 파츠 ──"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	content_vbox.add_child(title)
+func _apply_preselect() -> void:
+	var presel := GameState.workshop_preselect_slot
+	if presel >= 0:
+		GameState.workshop_preselect_slot = -1
+		_asm_slot = presel
+		_switch_tab(1)
 
-	content_vbox.add_child(HSeparator.new())
+# ── 탭 전환 ───────────────────────────────────────────────
 
-	_inventory_content = VBoxContainer.new()
-	_inventory_content.add_theme_constant_override("separation", 3)
-	content_vbox.add_child(_inventory_content)
+func _build_tab_bar() -> void:
+	var tab_bar := HBoxContainer.new()
+	tab_bar.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	tab_bar.offset_bottom = 36.0
+	tab_bar.add_theme_constant_override("separation", 4)
+	_body.add_child(tab_bar)
 
-	content_vbox.add_child(HSeparator.new())
+	_tab_inv_btn = Button.new()
+	_tab_inv_btn.text = "파츠 목록"
+	_tab_inv_btn.toggle_mode = true
+	_tab_inv_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_tab_inv_btn.pressed.connect(func(): _switch_tab(0))
+	tab_bar.add_child(_tab_inv_btn)
 
-	var note := Label.new()
-	note.text = "머신 조립은 격납고에서"
-	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	note.modulate = Color(1, 1, 1, 0.4)
-	content_vbox.add_child(note)
+	_tab_asm_btn = Button.new()
+	_tab_asm_btn.text = "파츠 조립"
+	_tab_asm_btn.toggle_mode = true
+	_tab_asm_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_tab_asm_btn.pressed.connect(func(): _switch_tab(1))
+	tab_bar.add_child(_tab_asm_btn)
 
-func _refresh() -> void:
-	for child in _inventory_content.get_children():
+func _switch_tab(tab: int) -> void:
+	_current_tab = tab
+	_tab_inv_btn.set_pressed_no_signal(tab == 0)
+	_tab_asm_btn.set_pressed_no_signal(tab == 1)
+	_tab_inv_panel.visible = (tab == 0)
+	_tab_asm_panel.visible = (tab == 1)
+	_refresh_current_tab()
+
+func _refresh_current_tab() -> void:
+	if not is_node_ready():
+		return
+	if _current_tab == 0:
+		_refresh_inventory()
+	else:
+		_refresh_assembly()
+
+# ── 파츠 목록 탭 ──────────────────────────────────────────
+
+func _build_inventory_panel() -> void:
+	_tab_inv_panel = Control.new()
+	_tab_inv_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_tab_inv_panel.offset_top = 40.0
+	_body.add_child(_tab_inv_panel)
+
+	var hbox := HBoxContainer.new()
+	hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	hbox.add_theme_constant_override("separation", 6)
+	_tab_inv_panel.add_child(hbox)
+
+	var left_scroll := ScrollContainer.new()
+	left_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left_scroll.size_flags_stretch_ratio = 1.0
+	hbox.add_child(left_scroll)
+
+	_item_grid = GridContainer.new()
+	_item_grid.columns = 2
+	_item_grid.add_theme_constant_override("h_separation", 4)
+	_item_grid.add_theme_constant_override("v_separation", 4)
+	_item_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left_scroll.add_child(_item_grid)
+
+	var right_panel := PanelContainer.new()
+	right_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right_panel.size_flags_stretch_ratio = 1.1
+	right_panel.custom_minimum_size = Vector2(110, 0)
+	hbox.add_child(right_panel)
+
+	_detail_vbox = VBoxContainer.new()
+	_detail_vbox.add_theme_constant_override("separation", 5)
+	right_panel.add_child(_detail_vbox)
+
+func _refresh_inventory() -> void:
+	for child in _item_grid.get_children():
 		child.queue_free()
 
-	var has_any := false
-
+	var found_sel := false
 	for part_type in ["pilot", "body", "weapon", "legs"]:
-		var data: Dictionary = GameState.PARTS[part_type]
 		var qtys: Array = GameState.owned_parts[part_type]
+		for i: int in qtys.size():
+			var qty: int = qtys[i]
+			if qty <= 0:
+				continue
+			var pt := i + 1
+			var is_sel: bool = (_sel_part_type == part_type and _sel_part_tier == pt)
+			if is_sel:
+				found_sel = true
+			_item_grid.add_child(_make_item_box(part_type, pt, qty, is_sel))
 
-		for i in qtys.size():
-			var idle_qty: int = qtys[i]
-			var in_field_qty := 0
+	if not found_sel:
+		_sel_part_type = ""
+		_sel_part_tier = -1
+	_refresh_detail()
 
-			# 파견 중인 파일럿 수 별도 계산
-			if part_type == "pilot":
-				for _slot in GameState.auto_slots:
-					var s: DispatchManager.AutoSlot = _slot
-					if (s.state == "on_mission" or s.state == "returning") and s.pilot_tier == i + 1:
-						in_field_qty += 1
+func _make_item_box(part_type: String, tier: int, qty: int, is_sel: bool) -> Button:
+	var data: Dictionary = GameState.PARTS[part_type]
+	var btn := Button.new()
+	btn.custom_minimum_size = Vector2(56, 56)
+	btn.text = "%s\nLv.%d\n×%d" % [data["name"], tier, qty]
 
-			# 대기 중 아이템 — 개별 슬롯
-			for _j in idle_qty:
-				has_any = true
-				_inventory_content.add_child(_make_item_row(data, i, false))
+	btn.add_theme_stylebox_override("normal",  _tier_stylebox(tier, is_sel, false))
+	btn.add_theme_stylebox_override("hover",   _tier_stylebox(tier, is_sel, true))
+	btn.add_theme_stylebox_override("pressed", _tier_stylebox(tier, true,  false))
+	btn.add_theme_stylebox_override("focus",   _tier_stylebox(tier, is_sel, false))
 
-			# 파견 중 파일럿 — 개별 슬롯 (반투명)
-			for _j in in_field_qty:
-				has_any = true
-				_inventory_content.add_child(_make_item_row(data, i, true))
+	var cap_type := part_type
+	var cap_tier := tier
+	btn.pressed.connect(func():
+		_sel_part_type = cap_type
+		_sel_part_tier = cap_tier
+		_refresh_inventory()
+	)
+	return btn
 
-	if not has_any:
-		var none_lbl := Label.new()
-		none_lbl.text = "보유한 파츠 없음"
-		none_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		none_lbl.modulate = Color(1, 1, 1, 0.5)
-		_inventory_content.add_child(none_lbl)
+func _tier_stylebox(tier: int, selected: bool, hover: bool) -> StyleBoxFlat:
+	var tier_color: Color = TIER_COLORS[mini(tier - 1, TIER_COLORS.size() - 1)]
+	var s := StyleBoxFlat.new()
+	s.border_color = tier_color
+	var bw := 3 if selected else 2
+	s.border_width_left   = bw
+	s.border_width_right  = bw
+	s.border_width_top    = bw
+	s.border_width_bottom = bw
+	var base_bg := Color(0.22, 0.18, 0.40, 1.0) if selected else Color(0.10, 0.10, 0.16, 1.0)
+	s.bg_color = base_bg.lightened(0.08) if hover else base_bg
+	s.corner_radius_top_left     = 3
+	s.corner_radius_top_right    = 3
+	s.corner_radius_bottom_left  = 3
+	s.corner_radius_bottom_right = 3
+	s.content_margin_left   = 3
+	s.content_margin_right  = 3
+	s.content_margin_top    = 3
+	s.content_margin_bottom = 3
+	return s
 
-func _make_item_row(data: Dictionary, tier_index: int, in_field: bool) -> HBoxContainer:
-	var td: Dictionary = data["tiers"][tier_index]
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
+func _refresh_detail() -> void:
+	for child in _detail_vbox.get_children():
+		child.queue_free()
 
-	var tag := Label.new()
-	tag.text = data["name"]
-	tag.custom_minimum_size = Vector2(44, 0)
-	tag.modulate = Color(1, 1, 1, 0.6)
-	row.add_child(tag)
+	if _sel_part_type == "" or _sel_part_tier < 1:
+		var hint := Label.new()
+		hint.text = "파츠를\n선택하세요"
+		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		hint.modulate = Color(1, 1, 1, 0.4)
+		hint.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		_detail_vbox.add_child(hint)
+		return
+
+	var data: Dictionary = GameState.PARTS[_sel_part_type]
+	var td: Dictionary = data["tiers"][_sel_part_tier - 1]
+	var tier_color: Color = TIER_COLORS[mini(_sel_part_tier - 1, TIER_COLORS.size() - 1)]
 
 	var name_lbl := Label.new()
-	name_lbl.text = "Lv.%d  %s" % [tier_index + 1, td["name"]]
-	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(name_lbl)
+	name_lbl.text = td["name"]
+	name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	name_lbl.add_theme_color_override("font_color", tier_color)
+	_detail_vbox.add_child(name_lbl)
 
-	var effect_lbl := Label.new()
-	effect_lbl.text = data["effect"] % td["value"]
-	effect_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	row.add_child(effect_lbl)
+	var type_lbl := Label.new()
+	type_lbl.text = "%s  Lv.%d" % [data["name"], _sel_part_tier]
+	type_lbl.modulate = Color(1, 1, 1, 0.6)
+	type_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_detail_vbox.add_child(type_lbl)
 
-	if in_field:
-		var field_lbl := Label.new()
-		field_lbl.text = "파견중"
-		field_lbl.modulate = Color(1.0, 0.4, 0.4, 1.0)
-		field_lbl.custom_minimum_size = Vector2(48, 0)
-		field_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		row.add_child(field_lbl)
-		row.modulate = Color(1, 1, 1, 0.5)
+	_detail_vbox.add_child(HSeparator.new())
 
-	return row
+	var eff_lbl := Label.new()
+	eff_lbl.text = data["effect"] % td["value"]
+	eff_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_detail_vbox.add_child(eff_lbl)
+
+	var qty: int = GameState.owned_parts[_sel_part_type][_sel_part_tier - 1]
+	var qty_lbl := Label.new()
+	qty_lbl.text = "보유: %d" % qty
+	qty_lbl.modulate = Color(1, 1, 1, 0.7)
+	_detail_vbox.add_child(qty_lbl)
+
+	if "required_planet" in td:
+		var planet_name: String = str(
+			GameState.get_planet(td["required_planet"]).get("name", td["required_planet"])
+		)
+		var req_lbl := Label.new()
+		req_lbl.text = "지역: %s" % planet_name
+		req_lbl.modulate = Color(1.0, 0.8, 0.4, 0.85)
+		req_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_detail_vbox.add_child(req_lbl)
+
+# ── 파츠 조립 탭 ──────────────────────────────────────────
+
+func _build_assembly_panel() -> void:
+	_tab_asm_panel = Control.new()
+	_tab_asm_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_tab_asm_panel.offset_top = 40.0
+	_body.add_child(_tab_asm_panel)
+
+	var outer_vbox := VBoxContainer.new()
+	outer_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	outer_vbox.add_theme_constant_override("separation", 5)
+	_tab_asm_panel.add_child(outer_vbox)
+
+	# 3-column row
+	var col_row := HBoxContainer.new()
+	col_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col_row.add_theme_constant_override("separation", 4)
+	outer_vbox.add_child(col_row)
+
+	# ── Column 1: HANGAR (stretch 1) ───
+	var col1 := _make_col_panel(Color(0.07, 0.09, 0.18, 1.0), Color(0.4, 0.6, 1.0))
+	col1.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col1.size_flags_stretch_ratio = 1.0
+	col1.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col_row.add_child(col1)
+	var col1_vbox := VBoxContainer.new()
+	col1_vbox.add_theme_constant_override("separation", 5)
+	col1.add_child(col1_vbox)
+	col1_vbox.add_child(_make_col_header("격납고", Color(0.5, 0.72, 1.0)))
+	_col_slots_inner = VBoxContainer.new()
+	_col_slots_inner.add_theme_constant_override("separation", 4)
+	col1_vbox.add_child(_col_slots_inner)
+
+	# ── Column 2: LOADOUT (stretch 2) ──
+	var col2 := _make_col_panel(Color(0.07, 0.13, 0.09, 1.0), Color(0.3, 0.75, 0.45))
+	col2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col2.size_flags_stretch_ratio = 2.0
+	col2.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col_row.add_child(col2)
+	var col2_vbox := VBoxContainer.new()
+	col2_vbox.add_theme_constant_override("separation", 5)
+	col2.add_child(col2_vbox)
+	col2_vbox.add_child(_make_col_header("LOADOUT", Color(0.4, 0.9, 0.55)))
+	var col2_scroll := ScrollContainer.new()
+	col2_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col2_vbox.add_child(col2_scroll)
+	_col_parts_inner = VBoxContainer.new()
+	_col_parts_inner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_col_parts_inner.add_theme_constant_override("separation", 5)
+	col2_scroll.add_child(_col_parts_inner)
+
+	# ── Column 3: SYS SPEC (stretch 2) ─
+	var col3 := _make_col_panel(Color(0.13, 0.10, 0.04, 1.0), Color(0.85, 0.65, 0.2))
+	col3.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col3.size_flags_stretch_ratio = 2.0
+	col3.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col_row.add_child(col3)
+	var col3_vbox := VBoxContainer.new()
+	col3_vbox.add_theme_constant_override("separation", 5)
+	col3.add_child(col3_vbox)
+	col3_vbox.add_child(_make_col_header("SYS SPEC", Color(1.0, 0.82, 0.35)))
+	_col_specs_inner = VBoxContainer.new()
+	_col_specs_inner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_col_specs_inner.add_theme_constant_override("separation", 4)
+	col3_vbox.add_child(_col_specs_inner)
+
+	# ── 조립 버튼 (full width) ──────────
+	_asm_btn = Button.new()
+	_asm_btn.text = "▶  조립하기"
+	_asm_btn.custom_minimum_size = Vector2(0, 42)
+	_asm_btn.disabled = true
+	_asm_btn.pressed.connect(func():
+		if GameState.assemble_machine(_asm_slot, _asm_sel["body"], _asm_sel["weapon"], _asm_sel["legs"]):
+			_asm_slot = -1
+			_asm_sel = {"body": 0, "weapon": 0, "legs": 0}
+			_refresh_assembly()
+	)
+	outer_vbox.add_child(_asm_btn)
+
+func _make_col_panel(bg: Color, border: Color) -> PanelContainer:
+	var pc := PanelContainer.new()
+	var s := StyleBoxFlat.new()
+	s.bg_color = bg
+	s.border_color = border
+	s.border_width_left   = 1
+	s.border_width_right  = 1
+	s.border_width_top    = 1
+	s.border_width_bottom = 1
+	s.corner_radius_top_left     = 4
+	s.corner_radius_top_right    = 4
+	s.corner_radius_bottom_left  = 4
+	s.corner_radius_bottom_right = 4
+	s.content_margin_left   = 4
+	s.content_margin_right  = 4
+	s.content_margin_top    = 4
+	s.content_margin_bottom = 4
+	pc.add_theme_stylebox_override("panel", s)
+	return pc
+
+func _make_col_header(text: String, color: Color) -> PanelContainer:
+	var pc := PanelContainer.new()
+	pc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var s := StyleBoxFlat.new()
+	s.bg_color = Color(color.r * 0.22, color.g * 0.22, color.b * 0.22, 1.0)
+	s.border_color = color
+	s.border_width_bottom = 1
+	s.content_margin_left   = 4
+	s.content_margin_right  = 4
+	s.content_margin_top    = 3
+	s.content_margin_bottom = 3
+	pc.add_theme_stylebox_override("panel", s)
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.add_theme_color_override("font_color", color)
+	pc.add_child(lbl)
+	return pc
+
+# ── 조립 탭 — 컬럼별 갱신 ────────────────────────────────
+
+func _refresh_assembly() -> void:
+	_refresh_slot_column()
+	_refresh_parts_column()
+	_refresh_spec_column()
+
+func _refresh_slot_column() -> void:
+	for child in _col_slots_inner.get_children():
+		child.queue_free()
+
+	var empty_slots: Array = []
+	for i: int in GameState.auto_slots.size():
+		var s: DispatchManager.AutoSlot = GameState.auto_slots[i] as DispatchManager.AutoSlot
+		if s.state == "empty":
+			empty_slots.append(i)
+
+	if empty_slots.is_empty():
+		_asm_slot = -1
+		var lbl := Label.new()
+		lbl.text = "빈 슬롯\n없음"
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lbl.modulate = Color(1, 0.4, 0.4, 1)
+		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_col_slots_inner.add_child(lbl)
+		return
+
+	if _asm_slot != -1 and not (_asm_slot in empty_slots):
+		_asm_slot = -1
+
+	var grp := ButtonGroup.new()
+	for si: int in empty_slots:
+		var is_sel: bool = (_asm_slot == si)
+		var btn := Button.new()
+		btn.text = "No.%d\nEMPTY" % (si + 1)
+		btn.custom_minimum_size = Vector2(0, 52)
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.toggle_mode = true
+		btn.button_group = grp
+		btn.button_pressed = is_sel
+		btn.add_theme_stylebox_override("normal",        _slot_stylebox(false, false))
+		btn.add_theme_stylebox_override("hover",         _slot_stylebox(false, true))
+		btn.add_theme_stylebox_override("pressed",       _slot_stylebox(true,  false))
+		btn.add_theme_stylebox_override("hover_pressed", _slot_stylebox(true,  true))
+		btn.add_theme_stylebox_override("focus",         _slot_stylebox(false, false))
+		var cap := si
+		btn.pressed.connect(func():
+			_asm_slot = cap
+			_refresh_spec_column()
+		)
+		_col_slots_inner.add_child(btn)
+
+func _slot_stylebox(selected: bool, hover: bool) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.border_color = Color(0.5, 0.72, 1.0)
+	var bw := 2 if selected else 1
+	s.border_width_left   = bw
+	s.border_width_right  = bw
+	s.border_width_top    = bw
+	s.border_width_bottom = bw
+	var base := Color(0.18, 0.28, 0.52, 1.0) if selected else Color(0.07, 0.09, 0.20, 1.0)
+	s.bg_color = base.lightened(0.07) if hover else base
+	s.corner_radius_top_left     = 3
+	s.corner_radius_top_right    = 3
+	s.corner_radius_bottom_left  = 3
+	s.corner_radius_bottom_right = 3
+	s.content_margin_left   = 4
+	s.content_margin_right  = 4
+	s.content_margin_top    = 4
+	s.content_margin_bottom = 4
+	return s
+
+func _refresh_parts_column() -> void:
+	for child in _col_parts_inner.get_children():
+		child.queue_free()
+	for part_type in ["body", "weapon", "legs"]:
+		_build_loadout_section(part_type)
+
+func _build_loadout_section(part_type: String) -> void:
+	var data: Dictionary = GameState.PARTS[part_type]
+	var qtys: Array = GameState.owned_parts[part_type]
+
+	# 섹션 카드 패널 — 파츠 종류별 시각적 그룹화
+	var sec_panel := PanelContainer.new()
+	sec_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var sec_s := StyleBoxFlat.new()
+	sec_s.bg_color    = Color(0.10, 0.12, 0.17, 1.0)
+	sec_s.border_color = Color(0.35, 0.38, 0.50, 1.0)
+	sec_s.border_width_left   = 2
+	sec_s.border_width_right  = 1
+	sec_s.border_width_top    = 1
+	sec_s.border_width_bottom = 1
+	sec_s.corner_radius_top_left     = 3
+	sec_s.corner_radius_top_right    = 3
+	sec_s.corner_radius_bottom_left  = 3
+	sec_s.corner_radius_bottom_right = 3
+	sec_s.content_margin_left   = 5
+	sec_s.content_margin_right  = 5
+	sec_s.content_margin_top    = 4
+	sec_s.content_margin_bottom = 5
+	sec_panel.add_theme_stylebox_override("panel", sec_s)
+	_col_parts_inner.add_child(sec_panel)
+
+	var sec_vbox := VBoxContainer.new()
+	sec_vbox.add_theme_constant_override("separation", 4)
+	sec_panel.add_child(sec_vbox)
+
+	var sec_lbl := Label.new()
+	sec_lbl.text = data["name"]
+	sec_lbl.modulate = Color(1, 1, 1, 0.65)
+	sec_vbox.add_child(sec_lbl)
+
+	# 보유 파츠 확인
+	var available: Array = []
+	for i: int in qtys.size():
+		if qtys[i] > 0:
+			available.append(i)
+
+	if available.is_empty():
+		var none_lbl := Label.new()
+		none_lbl.text = "없음"
+		none_lbl.modulate = Color(1, 0.45, 0.45, 1)
+		sec_vbox.add_child(none_lbl)
+		return
+
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.add_theme_constant_override("h_separation", 4)
+	grid.add_theme_constant_override("v_separation", 4)
+	sec_vbox.add_child(grid)
+
+	var grp := ButtonGroup.new()
+	for i: int in available:
+		var tier := i + 1
+		var qty: int = qtys[i]
+
+		var btn := Button.new()
+		btn.custom_minimum_size = Vector2(0, 52)
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.text = "Lv.%d\n×%d" % [tier, qty]
+		btn.toggle_mode = true
+		btn.button_group = grp
+		btn.button_pressed = (_asm_sel.get(part_type, 0) == tier)
+
+		# normal = 미선택, pressed = 선택됨 (ButtonGroup이 pressed 상태 관리)
+		btn.add_theme_stylebox_override("normal",        _tier_stylebox(tier, false, false))
+		btn.add_theme_stylebox_override("hover",         _tier_stylebox(tier, false, true))
+		btn.add_theme_stylebox_override("pressed",       _tier_stylebox(tier, true,  false))
+		btn.add_theme_stylebox_override("hover_pressed", _tier_stylebox(tier, true,  true))
+		btn.add_theme_stylebox_override("focus",         _tier_stylebox(tier, false, false))
+		grid.add_child(btn)
+
+		var pt := part_type
+		var t  := tier
+		btn.pressed.connect(func():
+			_asm_sel[pt] = t
+			_refresh_spec_column()
+		)
+
+# ── SYS SPEC 컬럼 ─────────────────────────────────────────
+
+func _refresh_spec_column() -> void:
+	if _col_specs_inner == null:
+		return
+	for child in _col_specs_inner.get_children():
+		child.queue_free()
+
+	var b: int = _asm_sel.get("body",   0)
+	var w: int = _asm_sel.get("weapon", 0)
+	var l: int = _asm_sel.get("legs",   0)
+
+	# RPG 장비 슬롯 3개
+	var equip_row := HBoxContainer.new()
+	equip_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	equip_row.add_theme_constant_override("separation", 3)
+	_col_specs_inner.add_child(equip_row)
+	equip_row.add_child(_make_equip_slot("body",   b))
+	equip_row.add_child(_make_equip_slot("weapon", w))
+	equip_row.add_child(_make_equip_slot("legs",   l))
+
+	_col_specs_inner.add_child(HSeparator.new())
+
+	# 스탯 계산
+	var preview: Dictionary = GameState.get_machine_preview(b, w, l)
+	var mission_time: float = preview.get("mission_time", 0.0)
+	var return_time: float  = preview.get("return_time",  0.0)
+	var rate: int           = preview.get("rate",         0)
+	var credits: int        = preview.get("credits",      0)
+
+	_add_stat_row("미션",  ("%ds" % int(mission_time)) if b > 0 else "--")
+	_add_stat_row("CR/s",  ("×%d" % rate)              if w > 0 else "--")
+	_add_stat_row("복귀",  ("%ds" % int(return_time))  if l > 0 else "--")
+
+	_col_specs_inner.add_child(HSeparator.new())
+
+	_add_stat_row("예상", ("%d CR" % credits)          if (b > 0 and w > 0) else "--")
+
+	var cost := 0
+	if b > 0 and w > 0 and l > 0:
+		cost = GameState.get_assembly_cost(b, w, l)
+	_add_stat_row("비용", ("%d CR" % cost) if cost > 0 else "--")
+
+	_col_specs_inner.add_child(HSeparator.new())
+
+	# 상태 인디케이터
+	var all_sel: bool   = _asm_slot >= 0 and b > 0 and w > 0 and l > 0
+	var can_afford: bool = all_sel and GameState.total_credits >= cost
+	var status_lbl := Label.new()
+	status_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	if not all_sel:
+		status_lbl.text = "◌  STANDBY"
+		status_lbl.modulate = Color(1, 1, 1, 0.3)
+	elif not can_afford:
+		status_lbl.text = "●  CR 부족"
+		status_lbl.modulate = Color(1.0, 0.3, 0.3, 1.0)
+	else:
+		status_lbl.text = "●  READY"
+		status_lbl.modulate = Color(0.35, 1.0, 0.5, 1.0)
+	_col_specs_inner.add_child(status_lbl)
+
+	# 조립 버튼 상태
+	if _asm_btn != null:
+		_asm_btn.disabled = not can_afford
+		_asm_btn.modulate = Color(0.35, 1.0, 0.55, 1.0) if can_afford else Color(1, 1, 1, 0.6)
+
+func _make_equip_slot(part_type: String, tier: int) -> VBoxContainer:
+	var container := VBoxContainer.new()
+	container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	container.add_theme_constant_override("separation", 2)
+
+	# 슬롯 박스
+	var box := PanelContainer.new()
+	box.custom_minimum_size = Vector2(0, 44)
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var s := StyleBoxFlat.new()
+	if tier > 0:
+		var tc: Color = TIER_COLORS[mini(tier - 1, TIER_COLORS.size() - 1)]
+		s.bg_color     = Color(tc.r * 0.18, tc.g * 0.18, tc.b * 0.18, 1.0)
+		s.border_color = tc
+		s.border_width_left   = 2
+		s.border_width_right  = 2
+		s.border_width_top    = 2
+		s.border_width_bottom = 2
+	else:
+		s.bg_color     = Color(0.08, 0.08, 0.12, 1.0)
+		s.border_color = Color(0.28, 0.28, 0.35, 1.0)
+		s.border_width_left   = 1
+		s.border_width_right  = 1
+		s.border_width_top    = 1
+		s.border_width_bottom = 1
+	s.corner_radius_top_left     = 3
+	s.corner_radius_top_right    = 3
+	s.corner_radius_bottom_left  = 3
+	s.corner_radius_bottom_right = 3
+	s.content_margin_left   = 2
+	s.content_margin_right  = 2
+	s.content_margin_top    = 2
+	s.content_margin_bottom = 2
+	box.add_theme_stylebox_override("panel", s)
+
+	var inner_lbl := Label.new()
+	inner_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	inner_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	inner_lbl.size_flags_vertical  = Control.SIZE_EXPAND_FILL
+	if tier > 0:
+		var tc: Color = TIER_COLORS[mini(tier - 1, TIER_COLORS.size() - 1)]
+		inner_lbl.text = "Lv.%d" % tier
+		inner_lbl.add_theme_color_override("font_color", tc)
+	else:
+		inner_lbl.text = "─"
+		inner_lbl.modulate = Color(1, 1, 1, 0.2)
+	box.add_child(inner_lbl)
+
+	# 파츠 타입 레이블
+	var type_lbl := Label.new()
+	type_lbl.text = PART_LABELS.get(part_type, part_type)
+	type_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	type_lbl.add_theme_font_size_override("font_size", 10)
+	type_lbl.modulate = Color(1, 1, 1, 0.6 if tier > 0 else 0.3)
+
+	container.add_child(box)
+	container.add_child(type_lbl)
+	return container
+
+func _add_stat_row(key: String, value: String) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 2)
+	_col_specs_inner.add_child(row)
+
+	var key_lbl := Label.new()
+	key_lbl.text = key
+	key_lbl.modulate = Color(1, 1, 1, 0.5)
+	key_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(key_lbl)
+
+	var val_lbl := Label.new()
+	val_lbl.text = value
+	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(val_lbl)
+
+func _update_asm_cost() -> void:
+	if not is_node_ready() or _col_specs_inner == null:
+		return
+	if _current_tab != 1:
+		return
+	_refresh_spec_column()

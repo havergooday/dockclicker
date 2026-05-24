@@ -2,6 +2,7 @@ extends Node
 
 var layout_mode := "horizontal"
 var dispatch_preselect_slot: int = -1
+var workshop_preselect_slot: int = -1
 var total_credits: int = 1000000
 var pending_credits: int = 0
 var player_status: String = "idle"  # idle / on_mission / returned
@@ -17,9 +18,11 @@ var owned_parts: Dictionary = {
 }
 
 # 데이터 상수 — 실제 정의는 data/ 파일에 있음
-const PLANETS: Array = PlanetData.LIST
-const PARTS: Dictionary = PartsData.DICT
-const DAMAGE_UPGRADE_COSTS: Array = PartsData.DAMAGE_UPGRADE_COSTS
+const _PlanetDataScript = preload("res://data/planet_data.gd")
+const _PartsDataScript  = preload("res://data/parts_data.gd")
+const PLANETS:               Array      = _PlanetDataScript.LIST
+const PARTS:                 Dictionary = _PartsDataScript.DICT
+const DAMAGE_UPGRADE_COSTS:  Array      = _PartsDataScript.DAMAGE_UPGRADE_COSTS
 
 signal credits_changed(new_total: int)
 signal credits_collected(amount: int, from_global_pos: Vector2)
@@ -150,3 +153,6 @@ func start_auto_dispatch(slot_index: int, pilot_tier: int, planet_id: String) ->
 
 func collect_auto_slot(slot_index: int) -> bool:
 	return _dispatch.collect_auto_slot(slot_index)
+
+func get_machine_preview(body_tier: int, weapon_tier: int, legs_tier: int) -> Dictionary:
+	return _dispatch.get_machine_preview(body_tier, weapon_tier, legs_tier)

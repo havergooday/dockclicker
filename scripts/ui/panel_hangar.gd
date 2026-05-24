@@ -3,18 +3,11 @@ extends Control
 @onready var back_button: Button = $Header/BackButton
 @onready var main_scroll: ScrollContainer = $MainScroll
 @onready var main_vbox: VBoxContainer = $MainScroll/MainVBox
-@onready var sub_scroll: ScrollContainer = $SubScroll
-@onready var sub_vbox: VBoxContainer = $SubScroll/SubVBox
 
 var _status_label: Label
 var _reward_label: Label
 var _collect_button: Button
 var _auto_slots_container: GridContainer
-
-# 조립 선택 상태
-var _asm_sel := {"body": 0, "weapon": 0, "legs": 0}
-var _asm_cost_lbl: Label = null
-var _asm_btn: Button = null
 
 func _ready() -> void:
 	PanelManager.register_panel("hangar", self)
@@ -24,25 +17,9 @@ func _ready() -> void:
 	GameState.auto_slot_changed.connect(func(_i): _rebuild_auto_slots())
 	visibility_changed.connect(func():
 		if visible:
-			_show_main()
+			_rebuild_auto_slots()
 	)
 	_build_main_view()
-	_show_main()
-
-# ── view switching ────────────────────────
-
-func _show_main() -> void:
-	main_scroll.visible = true
-	sub_scroll.visible = false
-	_rebuild_auto_slots()
-
-func _show_assembly(slot_index: int) -> void:
-	_asm_sel = {"body": 0, "weapon": 0, "legs": 0}
-	main_scroll.visible = false
-	sub_scroll.visible = true
-	for child in sub_vbox.get_children():
-		child.queue_free()
-	_build_assembly_view(slot_index)
 
 # ── main view ─────────────────────────────
 
@@ -103,11 +80,11 @@ func _rebuild_auto_slots() -> void:
 		return
 	for child in _auto_slots_container.get_children():
 		child.queue_free()
-	for i in GameState.auto_slots.size():
+	for i: int in GameState.auto_slots.size():
 		_auto_slots_container.add_child(_make_slot_btn(i))
 
 func _make_slot_btn(index: int) -> Button:
-	var slot: DispatchManager.AutoSlot = GameState.auto_slots[index]
+	var slot: DispatchManager.AutoSlot = GameState.auto_slots[index] as DispatchManager.AutoSlot
 	var btn := Button.new()
 	btn.custom_minimum_size = Vector2(90, 90)
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -121,7 +98,10 @@ func _make_slot_btn(index: int) -> Button:
 
 		"empty":
 			btn.text = "슬롯 %d\n비어있음\n+ 조립" % (index + 1)
-			btn.pressed.connect(func(): _show_assembly(index))
+			btn.pressed.connect(func():
+				GameState.workshop_preselect_slot = index
+				PanelManager.show_panel("workshop")
+			)
 
 		"offline":
 			var b: int = slot.machine.get("body", 0)
@@ -173,100 +153,3 @@ func _refresh_player_slot() -> void:
 			_reward_label.text = "보류: %d CR" % GameState.pending_credits
 			_reward_label.visible = true
 			_collect_button.visible = true
-
-# ── assembly sub-view ─────────────────────
-
-func _build_assembly_view(slot_index: int) -> void:
-	# 헤더
-	var hbox := HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 12)
-	sub_vbox.add_child(hbox)
-
-	var back_btn := Button.new()
-	back_btn.text = "← 목록"
-	back_btn.custom_minimum_size = Vector2(80, 32)
-	back_btn.pressed.connect(_show_main)
-	hbox.add_child(back_btn)
-
-	var title_lbl := Label.new()
-	title_lbl.text = "머신 조립  —  슬롯 %d" % (slot_index + 1)
-	title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	hbox.add_child(title_lbl)
-
-	sub_vbox.add_child(HSeparator.new())
-
-	# 비용·조립 버튼을 먼저 생성해서 파츠 버튼 클로저에서 참조
-	_asm_cost_lbl = Label.new()
-	_asm_cost_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-
-	_asm_btn = Button.new()
-	_asm_btn.text = "조립하기"
-	_asm_btn.custom_minimum_size = Vector2(0, 40)
-	_asm_btn.disabled = true
-	_asm_btn.pressed.connect(func():
-		if GameState.assemble_machine(slot_index, _asm_sel["body"], _asm_sel["weapon"], _asm_sel["legs"]):
-			_show_main()
-	)
-
-	# 파츠 선택 섹션
-	for part_type in ["body", "weapon", "legs"]:
-		_build_asm_part_rows(part_type)
-
-	sub_vbox.add_child(HSeparator.new())
-	sub_vbox.add_child(_asm_cost_lbl)
-	sub_vbox.add_child(_asm_btn)
-	_update_asm_cost()
-
-func _build_asm_part_rows(part_type: String) -> void:
-	var data: Dictionary = GameState.PARTS[part_type]
-	var qtys: Array = GameState.owned_parts[part_type]
-
-	var sec_lbl := Label.new()
-	sec_lbl.text = "── %s ──" % data["name"]
-	sec_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub_vbox.add_child(sec_lbl)
-
-	var grp := ButtonGroup.new()
-	var has_any := false
-
-	for i in qtys.size():
-		if qtys[i] <= 0:
-			continue
-		has_any = true
-		var tier := i + 1
-		var td: Dictionary = data["tiers"][i]
-
-		var btn := Button.new()
-		btn.text = "Lv.%d  %s  (%s)  ×%d" % [
-			tier, td["name"], data["effect"] % td["value"], qtys[i]
-		]
-		btn.toggle_mode = true
-		btn.button_group = grp
-		sub_vbox.add_child(btn)
-
-		var pt := part_type
-		var t := tier
-		btn.pressed.connect(func():
-			_asm_sel[pt] = t
-			_update_asm_cost()
-		)
-
-	if not has_any:
-		var none_lbl := Label.new()
-		none_lbl.text = "보유한 파츠 없음  (PC 터미널에서 구매)"
-		none_lbl.modulate = Color(1, 0.45, 0.45, 1)
-		none_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		sub_vbox.add_child(none_lbl)
-
-func _update_asm_cost() -> void:
-	var b: int = _asm_sel.get("body", 0)
-	var w: int = _asm_sel.get("weapon", 0)
-	var l: int = _asm_sel.get("legs", 0)
-	if b > 0 and w > 0 and l > 0:
-		var cost := GameState.get_assembly_cost(b, w, l)
-		_asm_cost_lbl.text = "조립 비용: %d CR" % cost
-		_asm_btn.disabled = GameState.total_credits < cost
-	else:
-		_asm_cost_lbl.text = "파츠를 모두 선택하세요"
-		_asm_btn.disabled = true
