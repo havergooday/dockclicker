@@ -44,25 +44,61 @@ size_flags_horizontal = 3
 text = "PC 터미널"
 vertical_alignment = 1
 
-[node name="ContentArea" type="CenterContainer" parent="."]
+[node name="TabBar" type="HBoxContainer" parent="."]
 layout_mode = 1
-anchors_preset = 15
+anchor_left = 0.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 0.0
+offset_left = 0.0
+offset_top = 48.0
+offset_right = 0.0
+offset_bottom = 82.0
+grow_horizontal = 2
+
+[node name="ShopTabBtn" type="Button" parent="TabBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "상점"
+
+[node name="InventoryTabBtn" type="Button" parent="TabBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "보유 파츠"
+
+[node name="ShopScroll" type="ScrollContainer" parent="."]
+layout_mode = 1
+anchor_left = 0.0
+anchor_top = 0.0
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = 86.0
+offset_right = -8.0
+offset_bottom = -4.0
 grow_horizontal = 2
 grow_vertical = 2
-mouse_filter = 2
 
-[node name="VBox" type="VBoxContainer" parent="ContentArea"]
+[node name="ContentVBox" type="VBoxContainer" parent="ShopScroll"]
 layout_mode = 2
-theme_override_constants/separation = 16
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
 
-[node name="DamageInfo" type="Label" parent="ContentArea/VBox"]
-layout_mode = 2
-text = "클릭 데미지: 1  (강화 0/4)"
-horizontal_alignment = 1
+[node name="InventoryScroll" type="ScrollContainer" parent="."]
+layout_mode = 1
+anchor_left = 0.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = 86.0
+offset_right = -8.0
+offset_bottom = -4.0
+grow_horizontal = 2
+grow_vertical = 2
+visible = false
 
-[node name="UpgradeButton" type="Button" parent="ContentArea/VBox"]
+[node name="InventoryVBox" type="VBoxContainer" parent="InventoryScroll"]
 layout_mode = 2
-custom_minimum_size = Vector2(260, 50)
-text = "데미지 강화  +1  (20 CR)"
+size_flags_horizontal = 3
+theme_override_constants/separation = 8

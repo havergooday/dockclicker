@@ -44,40 +44,39 @@ size_flags_horizontal = 3
 text = "격납고"
 vertical_alignment = 1
 
-[node name="ContentArea" type="CenterContainer" parent="."]
+[node name="MainScroll" type="ScrollContainer" parent="."]
 layout_mode = 1
-anchors_preset = 15
+anchor_left = 0.0
+anchor_top = 0.0
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = 56.0
+offset_right = -8.0
+offset_bottom = -4.0
 grow_horizontal = 2
 grow_vertical = 2
-mouse_filter = 2
 
-[node name="PlayerSlot" type="PanelContainer" parent="ContentArea"]
+[node name="MainVBox" type="VBoxContainer" parent="MainScroll"]
 layout_mode = 2
-custom_minimum_size = Vector2(200, 120)
-
-[node name="VBox" type="VBoxContainer" parent="ContentArea/PlayerSlot"]
-layout_mode = 2
+size_flags_horizontal = 3
 theme_override_constants/separation = 8
 
-[node name="SlotTitle" type="Label" parent="ContentArea/PlayerSlot/VBox"]
-layout_mode = 2
-text = "플레이어 슬롯"
-horizontal_alignment = 1
-
-[node name="StatusLabel" type="Label" parent="ContentArea/PlayerSlot/VBox"]
-layout_mode = 2
-text = "대기중"
-horizontal_alignment = 1
-
-[node name="RewardLabel" type="Label" parent="ContentArea/PlayerSlot/VBox"]
-layout_mode = 2
-text = ""
-horizontal_alignment = 1
+[node name="SubScroll" type="ScrollContainer" parent="."]
+layout_mode = 1
+anchor_left = 0.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = 56.0
+offset_right = -8.0
+offset_bottom = -4.0
+grow_horizontal = 2
+grow_vertical = 2
 visible = false
 
-[node name="CollectButton" type="Button" parent="ContentArea/PlayerSlot/VBox"]
+[node name="SubVBox" type="VBoxContainer" parent="SubScroll"]
 layout_mode = 2
-text = "수령"
-visible = false
+size_flags_horizontal = 3
+theme_override_constants/separation = 8

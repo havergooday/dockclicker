@@ -44,29 +44,35 @@ size_flags_horizontal = 3
 text = "파견 관제"
 vertical_alignment = 1
 
-[node name="ContentArea" type="CenterContainer" parent="."]
+[node name="ScrollContainer" type="ScrollContainer" parent="."]
 layout_mode = 1
-anchors_preset = 15
+anchor_left = 0.0
+anchor_top = 0.0
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = 56.0
+offset_right = -8.0
+offset_bottom = -4.0
 grow_horizontal = 2
 grow_vertical = 2
-mouse_filter = 2
 
-[node name="VBox" type="VBoxContainer" parent="ContentArea"]
+[node name="ContentVBox" type="VBoxContainer" parent="ScrollContainer"]
 layout_mode = 2
-theme_override_constants/separation = 20
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
 
-[node name="PlanetLabel" type="Label" parent="ContentArea/VBox"]
-layout_mode = 2
-text = "행성 선택"
+[node name="ToastLabel" type="Label" parent="."]
+layout_mode = 1
+anchor_left = 0.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = -52.0
+offset_right = -8.0
+offset_bottom = -8.0
+grow_vertical = 0
 horizontal_alignment = 1
-
-[node name="PlanetContainer" type="HBoxContainer" parent="ContentArea/VBox"]
-layout_mode = 2
-theme_override_constants/separation = 12
-
-[node name="DispatchButton" type="Button" parent="ContentArea/VBox"]
-layout_mode = 2
-custom_minimum_size = Vector2(200, 50)
-text = "직접 출격"
+vertical_alignment = 1
+visible = false
