@@ -49,9 +49,9 @@ func _refresh() -> void:
 
 			# 파견 중인 파일럿 수 별도 계산
 			if part_type == "pilot":
-				for slot in GameState.auto_slots:
-					var s: String = slot.get("state", "")
-					if (s == "on_mission" or s == "returning") and slot.get("pilot_tier", 0) == i + 1:
+				for _slot in GameState.auto_slots:
+					var s: DispatchManager.AutoSlot = _slot
+					if (s.state == "on_mission" or s.state == "returning") and s.pilot_tier == i + 1:
 						in_field_qty += 1
 
 			# 대기 중 아이템 — 개별 슬롯

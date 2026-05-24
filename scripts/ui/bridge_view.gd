@@ -48,9 +48,8 @@ func _refresh_missions() -> void:
 
 	var has_active := false
 	for i in GameState.auto_slots.size():
-		var slot: Dictionary = GameState.auto_slots[i]
-		var state: String = slot.get("state", "")
-		if state != "on_mission" and state != "returning":
+		var slot: DispatchManager.AutoSlot = GameState.auto_slots[i]
+		if slot.state != "on_mission" and slot.state != "returning":
 			continue
 		has_active = true
 
@@ -61,18 +60,16 @@ func _refresh_missions() -> void:
 		info_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var end_time: float = 0.0
 
-		if state == "on_mission":
-			var planet_id: String = slot.get("planet", "")
-			var planet_name: String = planet_id
-			if planet_id != "":
-				var pd := GameState.get_planet(planet_id)
-				planet_name = str(pd.get("name", planet_id))
+		if slot.state == "on_mission":
+			var planet_name: String = slot.planet
+			if slot.planet != "":
+				planet_name = str(GameState.get_planet(slot.planet).get("name", slot.planet))
 			info_lbl.text = "슬롯 %d  →  %s" % [i + 1, planet_name]
-			end_time = float(slot.get("mission_end_time", 0.0))
+			end_time = slot.mission_end_time
 		else:
 			info_lbl.text = "슬롯 %d  ←  귀환중" % (i + 1)
 			info_lbl.modulate = Color(1.0, 0.8, 0.4, 1.0)
-			end_time = float(slot.get("return_end_time", 0.0))
+			end_time = slot.return_end_time
 
 		row.add_child(info_lbl)
 

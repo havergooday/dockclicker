@@ -107,17 +107,16 @@ func _rebuild_auto_slots() -> void:
 		_auto_slots_container.add_child(_make_slot_btn(i))
 
 func _make_slot_btn(index: int) -> Button:
-	var slot: Dictionary = GameState.auto_slots[index]
+	var slot: DispatchManager.AutoSlot = GameState.auto_slots[index]
 	var btn := Button.new()
 	btn.custom_minimum_size = Vector2(90, 90)
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
 
-	match slot["state"]:
+	match slot.state:
 		"locked":
-			var cost: int = slot.get("unlock_cost", 0)
-			btn.text = "슬롯 %d\n🔒 잠금\n%d CR" % [index + 1, cost]
-			btn.disabled = GameState.total_credits < cost
+			btn.text = "슬롯 %d\n🔒 잠금\n%d CR" % [index + 1, slot.unlock_cost]
+			btn.disabled = GameState.total_credits < slot.unlock_cost
 			btn.pressed.connect(func(): GameState.unlock_auto_slot(index))
 
 		"empty":
@@ -125,10 +124,9 @@ func _make_slot_btn(index: int) -> Button:
 			btn.pressed.connect(func(): _show_assembly(index))
 
 		"offline":
-			var machine: Dictionary = slot.get("machine", {})
-			var b: int = machine.get("body", 0)
-			var w: int = machine.get("weapon", 0)
-			var l: int = machine.get("legs", 0)
+			var b: int = slot.machine.get("body", 0)
+			var w: int = slot.machine.get("weapon", 0)
+			var l: int = slot.machine.get("legs", 0)
 			btn.text = "슬롯 %d\nOFFLINE\n몸%d 무%d 다%d" % [index + 1, b, w, l]
 			btn.pressed.connect(func():
 				GameState.dispatch_preselect_slot = index
@@ -136,28 +134,23 @@ func _make_slot_btn(index: int) -> Button:
 			)
 
 		"on_mission":
-			var planet_id: String = slot.get("planet", "")
-			var planet_name: String = planet_id
-			if planet_id != "":
-				var pd := GameState.get_planet(planet_id)
-				planet_name = str(pd.get("name", planet_id))
+			var planet_name: String = slot.planet
+			if slot.planet != "":
+				planet_name = str(GameState.get_planet(slot.planet).get("name", slot.planet))
 			btn.text = "슬롯 %d\n파견중\n→ %s" % [index + 1, planet_name]
 			btn.modulate = Color(1.0, 0.55, 0.55, 1.0)
 			btn.disabled = true
 
 		"returning":
-			var planet_id: String = slot.get("planet", "")
-			var planet_name: String = planet_id
-			if planet_id != "":
-				var pd := GameState.get_planet(planet_id)
-				planet_name = str(pd.get("name", planet_id))
+			var planet_name: String = slot.planet
+			if slot.planet != "":
+				planet_name = str(GameState.get_planet(slot.planet).get("name", slot.planet))
 			btn.text = "슬롯 %d\n귀환중\n← %s" % [index + 1, planet_name]
 			btn.modulate = Color(1.0, 0.85, 0.4, 1.0)
 			btn.disabled = true
 
 		"returned":
-			var credits: int = slot.get("credits_earned", 0)
-			btn.text = "슬롯 %d\n복귀완료!\n%d CR 수령" % [index + 1, credits]
+			btn.text = "슬롯 %d\n복귀완료!\n%d CR 수령" % [index + 1, slot.credits_earned]
 			btn.modulate = Color(0.4, 1.0, 0.55, 1.0)
 			btn.pressed.connect(func(): GameState.collect_auto_slot(index))
 

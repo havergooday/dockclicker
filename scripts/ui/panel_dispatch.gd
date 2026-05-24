@@ -31,8 +31,9 @@ func _apply_preselect() -> void:
 	if presel < 0:
 		return
 	GameState.dispatch_preselect_slot = -1
-	if presel < GameState.auto_slots.size() \
-			and GameState.auto_slots[presel].get("state", "") == "offline":
+	var presel_slot: DispatchManager.AutoSlot = GameState.auto_slots[presel] \
+			if presel < GameState.auto_slots.size() else null
+	if presel_slot != null and presel_slot.state == "offline":
 		_sel_slot = presel
 		_sel_pilot_tier = 0
 		_sel_planet = ""
@@ -124,7 +125,8 @@ func _rebuild_auto_section() -> void:
 
 	var offline_slots: Array = []
 	for i in GameState.auto_slots.size():
-		if GameState.auto_slots[i]["state"] == "offline":
+		var s: DispatchManager.AutoSlot = GameState.auto_slots[i]
+		if s.state == "offline":
 			offline_slots.append(i)
 
 	if offline_slots.is_empty():
@@ -137,11 +139,15 @@ func _rebuild_auto_section() -> void:
 		return
 
 	# _sel_slot이 더 이상 offline이 아니면 초기화
-	if _sel_slot != -1 and (_sel_slot >= GameState.auto_slots.size() \
-			or GameState.auto_slots[_sel_slot]["state"] != "offline"):
-		_sel_slot = -1
-		_sel_pilot_tier = 0
-		_sel_planet = ""
+	if _sel_slot != -1:
+		var sel_valid := _sel_slot < GameState.auto_slots.size()
+		if sel_valid:
+			var sel_s: DispatchManager.AutoSlot = GameState.auto_slots[_sel_slot]
+			sel_valid = sel_s.state == "offline"
+		if not sel_valid:
+			_sel_slot = -1
+			_sel_pilot_tier = 0
+			_sel_planet = ""
 
 	# 머신 선택
 	var machine_title := Label.new()
@@ -150,13 +156,13 @@ func _rebuild_auto_section() -> void:
 
 	var machine_grp := ButtonGroup.new()
 	for si in offline_slots:
-		var machine: Dictionary = GameState.auto_slots[si].get("machine", {})
+		var slot_si: DispatchManager.AutoSlot = GameState.auto_slots[si]
 		var mbtn := Button.new()
 		mbtn.text = "슬롯 %d   몸체%d / 무기%d / 다리%d" % [
 			si + 1,
-			machine.get("body", 0),
-			machine.get("weapon", 0),
-			machine.get("legs", 0),
+			slot_si.machine.get("body", 0),
+			slot_si.machine.get("weapon", 0),
+			slot_si.machine.get("legs", 0),
 		]
 		mbtn.toggle_mode = true
 		mbtn.button_group = machine_grp
