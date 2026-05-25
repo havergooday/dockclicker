@@ -24,7 +24,11 @@ var _sel_planet: String = ""
 
 func _ready() -> void:
 	PanelManager.register_panel("dispatch", self)
-	_back_button.pressed.connect(func(): PanelManager.show_bridge())
+	_back_button.pressed.connect(func(): PanelManager.go_back())
+	_back_button.text = "← %s" % PanelManager.get_back_label()
+	PanelManager.panel_changed.connect(func(id: String):
+		if id == "dispatch": _back_button.text = "← %s" % PanelManager.get_back_label()
+	)
 	GameState.player_status_changed.connect(func(_s): _rebuild_planet_strip())
 	GameState.planet_unlocked.connect(func(_id): _rebuild_planet_strip())
 	GameState.credits_changed.connect(func(_v): _refresh_credits_dependent())

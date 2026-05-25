@@ -53,6 +53,12 @@ const PILOTS: Array = [
 
 var hired_pilots: Array = []  # Array of pilot instance dicts
 
+# ── UI 편집 ───────────────────────────────────────────────────
+var ui_edit_mode: bool = false
+var ui_positions: Dictionary = {}
+signal ui_edit_mode_changed(enabled: bool)
+signal ui_positions_reset
+
 # ── 데이터 상수 ───────────────────────────────────────────────
 const _PlanetDataScript = preload("res://data/planet_data.gd")
 const _PartsDataScript  = preload("res://data/parts_data.gd")

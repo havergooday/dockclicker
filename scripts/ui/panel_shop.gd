@@ -31,7 +31,11 @@ var _custom_pilot_color: String = "#44AADD"
 
 func _ready() -> void:
 	PanelManager.register_panel("shop", self)
-	_back_button.pressed.connect(func(): PanelManager.show_bridge())
+	_back_button.pressed.connect(func(): PanelManager.go_back())
+	_back_button.text = "← %s" % PanelManager.get_back_label()
+	PanelManager.panel_changed.connect(func(id: String):
+		if id == "shop": _back_button.text = "← %s" % PanelManager.get_back_label()
+	)
 	GameState.credits_changed.connect(func(_v): _refresh())
 	GameState.planet_unlocked.connect(func(_id): _refresh())
 	GameState.part_purchased.connect(func(_pt, _t): _refresh())

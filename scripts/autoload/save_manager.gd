@@ -31,6 +31,7 @@ func save() -> void:
 		},
 		"hired_pilots": _serialize_pilots(),
 		"auto_slots":   _serialize_slots(),
+		"ui_positions": GameState.ui_positions.duplicate(),
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file == null:
@@ -87,6 +88,11 @@ func load_save() -> bool:
 	var slots_raw: Array = d.get("auto_slots", [])
 	var save_time: float  = float(d.get("save_time", Time.get_unix_time_from_system()))
 	GameState.apply_dispatch_save(slots_raw, save_time)
+
+	var ui_pos = d.get("ui_positions", {})
+	if ui_pos is Dictionary:
+		GameState.ui_positions = (ui_pos as Dictionary).duplicate()
+
 	return true
 
 # ── 직렬화 헬퍼 ───────────────────────────────────────────────────
@@ -116,8 +122,10 @@ func _serialize_slots() -> Array:
 			"machine":          s.machine.duplicate(),
 			"pilot_id":         s.pilot_id,
 			"planet":           s.planet,
-			"mission_end_time": _enc(s.mission_end_time),
-			"return_end_time":  _enc(s.return_end_time),
+			"mission_start_time": s.mission_start_time,
+			"mission_end_time":   _enc(s.mission_end_time),
+			"return_start_time":  s.return_start_time,
+			"return_end_time":    _enc(s.return_end_time),
 			"credits_earned":   s.credits_earned,
 			"auto_redispatch":  s.auto_redispatch,
 			"auto_pilot_id":    s.auto_pilot_id,

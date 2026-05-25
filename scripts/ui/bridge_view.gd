@@ -1,225 +1,222 @@
 extends Control
 
-var _missions_vbox: VBoxContainer
-var _countdown_data: Array = []
-var _pilot_strip: HBoxContainer
+var _pilot_nodes: Dictionary = {}  # pilot_id -> Control
 
 # ── Util side panel ───────────────────────────────────────────────
 var _util_open: bool = false
-var _util_strip: VBoxContainer
-var _active_tab: String = ""
-var _side_panel: PanelContainer
+var _util_panel: PanelContainer
 var _side_content: VBoxContainer
-var _tab_btns: Dictionary = {}
 
 func _ready() -> void:
 	PanelManager.register_panel("bridge", self)
-	GameState.auto_slot_changed.connect(func(_i): _refresh_missions())
-	GameState.auto_dispatch_returned.connect(func(_i): _refresh_missions())
-	GameState.pilot_hired.connect(func(_id): _refresh_pilots())
-	GameState.pilot_status_changed.connect(func(_id): _refresh_pilots())
-	_build_pilot_strip()
-	_build_mission_panel()
-	_refresh_missions()
-	_refresh_pilots()
+	GameState.pilot_hired.connect(func(id): _spawn_pilot(id))
+	GameState.pilot_status_changed.connect(func(id): _update_pilot_status(id))
+	_build_roaming_pilots()
 	_build_util_panel()
+	_build_grid_overlay()
 
-func _process(_delta: float) -> void:
-	if not visible:
-		return
-	var now := Time.get_unix_time_from_system()
-	for entry in _countdown_data:
-		var lbl: Label = entry["label"]
-		if not is_instance_valid(lbl):
-			continue
-		var remaining: float = maxf(0.0, float(entry["end_time"]) - now)
-		lbl.text = "%02d:%02d" % [int(remaining) / 60, int(remaining) % 60]
+func _build_grid_overlay() -> void:
+	var overlay := Control.new()
+	overlay.set_script(load("res://scripts/ui/grid_overlay.gd"))
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	overlay.visible = false
+	add_child(overlay)
+	GameState.ui_edit_mode_changed.connect(func(v: bool):
+		overlay.visible = v
+		overlay.queue_redraw()
+	)
 
-# ── Pilot roster strip (top-left) ────────────────────────────────
+# ── Roaming pilots ────────────────────────────────────────────────
 
-func _build_pilot_strip() -> void:
-	var container := PanelContainer.new()
-	container.anchor_left   = 0.0
-	container.anchor_top    = 0.0
-	container.anchor_right  = 0.0
-	container.anchor_bottom = 0.0
-	container.offset_left   = 4.0
-	container.offset_top    = 4.0
-	container.offset_right  = 380.0
-	container.offset_bottom = 58.0
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.04, 0.07, 0.13, 0.82)
-	style.border_color = Color(0.18, 0.28, 0.44)
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(4)
-	style.content_margin_left   = 10
-	style.content_margin_right  = 10
-	style.content_margin_top    = 5
-	style.content_margin_bottom = 5
-	container.add_theme_stylebox_override("panel", style)
-	add_child(container)
+const _WANDER_X_MIN := 180.0
+const _WANDER_X_MAX := 1720.0
+const _WANDER_Y_MIN := 210.0
+const _WANDER_Y_MAX := 265.0
+const _WALK_SPEED   := 30.0   # px/sec
 
-	_pilot_strip = HBoxContainer.new()
-	_pilot_strip.add_theme_constant_override("separation", 10)
-	_pilot_strip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_pilot_strip.size_flags_vertical   = Control.SIZE_EXPAND_FILL
-	container.add_child(_pilot_strip)
-
-func _refresh_pilots() -> void:
-	if _pilot_strip == null:
-		return
-	for c in _pilot_strip.get_children():
-		c.queue_free()
-
-	if GameState.hired_pilots.is_empty():
-		var lbl := Label.new()
-		lbl.text = "파일럿 없음  —  PC 터미널에서 고용"
-		lbl.add_theme_font_size_override("font_size", 11)
-		lbl.modulate = Color(1, 1, 1, 0.30)
-		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		_pilot_strip.add_child(lbl)
-		return
-
+func _build_roaming_pilots() -> void:
 	for pilot in GameState.hired_pilots:
-		var col_str: String = pilot.get("portrait_color", "#4499DD")
-		var col := Color(col_str) if col_str.begins_with("#") else Color.CORNFLOWER_BLUE
-		var status: String = pilot.get("status", "idle")
+		_spawn_pilot(pilot["id"])
 
-		var card := HBoxContainer.new()
-		card.add_theme_constant_override("separation", 5)
-		card.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		_pilot_strip.add_child(card)
+func _spawn_pilot(pilot_id: String) -> void:
+	var pilot := GameState.get_hired_pilot(pilot_id)
+	if pilot.is_empty() or _pilot_nodes.has(pilot_id):
+		return
 
-		# Portrait dot
-		var dot_panel := PanelContainer.new()
-		dot_panel.custom_minimum_size = Vector2(28, 28)
-		dot_panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		var dot_style := StyleBoxFlat.new()
-		dot_style.bg_color = col.darkened(0.35)
-		dot_style.border_color = col if status == "idle" else col.darkened(0.4)
-		dot_style.set_border_width_all(2)
-		dot_style.set_corner_radius_all(14)
-		dot_panel.add_theme_stylebox_override("panel", dot_style)
-		var init_lbl := Label.new()
-		var pname: String = pilot.get("name", "?")
-		init_lbl.text = pname.substr(0, 1)
-		init_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		init_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		init_lbl.add_theme_font_size_override("font_size", 11)
-		init_lbl.modulate = col.lightened(0.3) if status == "idle" else col.darkened(0.2)
-		dot_panel.add_child(init_lbl)
-		card.add_child(dot_panel)
+	var col_str: String = pilot.get("portrait_color", "#4499DD")
+	var col := Color(col_str) if col_str.begins_with("#") else Color.CORNFLOWER_BLUE
+	var pname: String = pilot.get("name", "?")
+	var status: String = pilot.get("status", "idle")
 
-		# Name + status
-		var info := VBoxContainer.new()
-		info.add_theme_constant_override("separation", 0)
-		info.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		card.add_child(info)
+	# 루트 — 발 위치 기준으로 자유 배치
+	var root := Control.new()
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.position = Vector2(
+		randf_range(_WANDER_X_MIN, _WANDER_X_MAX),
+		randf_range(_WANDER_Y_MIN, _WANDER_Y_MAX)
+	)
+	add_child(root)
+	_apply_depth(root)
 
-		var name_lbl := Label.new()
-		name_lbl.text = pname
-		name_lbl.add_theme_font_size_override("font_size", 11)
-		name_lbl.modulate = Color(1, 1, 1, 0.9) if status == "idle" else Color(0.6, 0.6, 0.6, 0.8)
-		info.add_child(name_lbl)
+	# 몸통 (컬러 직사각형 플레이스홀더, 56×96)
+	var body := Panel.new()
+	body.custom_minimum_size = Vector2(56, 96)
+	body.size = Vector2(56, 96)
+	body.position = Vector2(-28, -96)
+	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var bstyle := StyleBoxFlat.new()
+	bstyle.bg_color = col.darkened(0.20)
+	bstyle.border_color = col.lightened(0.15)
+	bstyle.set_border_width_all(1)
+	bstyle.set_corner_radius_all(4)
+	body.add_theme_stylebox_override("panel", bstyle)
+	root.add_child(body)
 
-		var st_lbl := Label.new()
-		st_lbl.text = "대기중" if status == "idle" else "파견중"
-		st_lbl.add_theme_font_size_override("font_size", 10)
-		st_lbl.modulate = Color(0.45, 0.90, 0.55) if status == "idle" else Color(0.95, 0.70, 0.25)
-		info.add_child(st_lbl)
+	var init_lbl := Label.new()
+	init_lbl.text = pname.substr(0, 1)
+	init_lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	init_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	init_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	init_lbl.add_theme_font_size_override("font_size", 20)
+	init_lbl.modulate = col.lightened(0.5)
+	init_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	body.add_child(init_lbl)
 
-		# Separator between pilots (not after last)
-		if pilot != GameState.hired_pilots.back():
-			var sep := VSeparator.new()
-			sep.modulate = Color(1, 1, 1, 0.15)
-			_pilot_strip.add_child(sep)
+	# 이름 라벨 (발 아래)
+	var name_lbl := Label.new()
+	name_lbl.text = pname
+	name_lbl.add_theme_font_size_override("font_size", 9)
+	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_lbl.custom_minimum_size = Vector2(80, 0)
+	name_lbl.position = Vector2(-40, 1)
+	name_lbl.modulate = Color(1, 1, 1, 0.55)
+	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(name_lbl)
 
-# ── Mission status panel (bottom) ─────────────────────────────────
+	# 말풍선 (클릭 시 표시)
+	var bubble := _make_bubble(pname, status)
+	bubble.visible = false
+	bubble.position = Vector2(-28, -118)
+	root.add_child(bubble)
 
-func _build_mission_panel() -> void:
-	var panel := PanelContainer.new()
-	panel.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	panel.offset_top = -120
-	add_child(panel)
+	# 클릭 버튼 (투명, 몸통 영역)
+	var btn := Button.new()
+	btn.flat = true
+	btn.size = Vector2(56, 96)
+	btn.position = Vector2(-28, -96)
+	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	for sname in ["normal", "hover", "pressed", "focus"]:
+		btn.add_theme_stylebox_override(sname, StyleBoxEmpty.new())
+	btn.pressed.connect(func():
+		var cur_status: String = GameState.get_hired_pilot(pilot_id).get("status", "idle")
+		_show_bubble(bubble, pname, cur_status)
+	)
+	root.add_child(btn)
 
-	var vbox := VBoxContainer.new()
-	panel.add_child(vbox)
+	_pilot_nodes[pilot_id] = root
 
-	var title := Label.new()
-	title.text = "── 파견 현황 ──"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(title)
+	if status != "dispatched":
+		_start_wander(root)
+	else:
+		root.modulate.a = 0.35
 
-	_missions_vbox = VBoxContainer.new()
-	_missions_vbox.add_theme_constant_override("separation", 4)
-	vbox.add_child(_missions_vbox)
+func _start_wander(root: Control) -> void:
+	if not is_instance_valid(root) or root.get_meta("paused", false):
+		return
+	var tx := randf_range(_WANDER_X_MIN, _WANDER_X_MAX)
+	var ty := randf_range(_WANDER_Y_MIN, _WANDER_Y_MAX)
+	var dist := root.position.distance_to(Vector2(tx, ty))
+	var dur  := maxf(dist / _WALK_SPEED, 0.1)
 
-func _refresh_missions() -> void:
-	_countdown_data.clear()
-	for child in _missions_vbox.get_children():
-		child.queue_free()
+	var tw := root.create_tween()
+	tw.tween_property(root, "position", Vector2(tx, ty), dur) \
+		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	tw.tween_callback(func(): _apply_depth(root))
+	tw.tween_interval(randf_range(1.5, 4.0))
+	tw.tween_callback(func(): _start_wander(root))
+	root.set_meta("wander_tween", tw)
 
-	var has_active := false
-	for i: int in GameState.auto_slots.size():
-		var slot: DispatchManager.AutoSlot = GameState.auto_slots[i] as DispatchManager.AutoSlot
-		if slot.state != "on_mission" and slot.state != "returning":
-			continue
-		has_active = true
+func _apply_depth(root: Control) -> void:
+	var t := clampf((root.position.y - _WANDER_Y_MIN) / (_WANDER_Y_MAX - _WANDER_Y_MIN), 0.0, 1.0)
+	root.scale   = Vector2.ONE * lerpf(0.75, 1.0, t)
+	root.z_index = int(root.position.y)
 
-		var row := HBoxContainer.new()
-		_missions_vbox.add_child(row)
+func _update_pilot_status(pilot_id: String) -> void:
+	if not _pilot_nodes.has(pilot_id):
+		return
+	var root: Control = _pilot_nodes[pilot_id]
+	var status: String = GameState.get_hired_pilot(pilot_id).get("status", "idle")
+	if status == "dispatched":
+		root.set_meta("paused", true)
+		if root.has_meta("wander_tween"):
+			var old: Tween = root.get_meta("wander_tween")
+			if is_instance_valid(old):
+				old.kill()
+		root.create_tween().tween_property(root, "modulate:a", 0.35, 0.4)
+	else:
+		root.set_meta("paused", false)
+		var tw := root.create_tween()
+		tw.tween_property(root, "modulate:a", 1.0, 0.4)
+		tw.tween_callback(func(): _start_wander(root))
 
-		var info_lbl := Label.new()
-		info_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var end_time: float = 0.0
+func _make_bubble(pname: String, status: String) -> PanelContainer:
+	var bubble := PanelContainer.new()
+	bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var bstyle := StyleBoxFlat.new()
+	bstyle.bg_color = Color(0.05, 0.08, 0.16, 0.93)
+	bstyle.border_color = Color(0.35, 0.55, 0.85, 0.65)
+	bstyle.set_border_width_all(1)
+	bstyle.set_corner_radius_all(4)
+	bstyle.content_margin_left   = 6
+	bstyle.content_margin_right  = 6
+	bstyle.content_margin_top    = 4
+	bstyle.content_margin_bottom = 4
+	bubble.add_theme_stylebox_override("panel", bstyle)
 
-		if slot.state == "on_mission":
-			var planet_name: String = slot.planet
-			if slot.planet != "":
-				planet_name = str(GameState.get_planet(slot.planet).get("name", slot.planet))
-			info_lbl.text = "슬롯 %d  →  %s" % [i + 1, planet_name]
-			end_time = slot.mission_end_time
-		else:
-			info_lbl.text = "슬롯 %d  ←  귀환중" % (i + 1)
-			info_lbl.modulate = Color(1.0, 0.8, 0.4, 1.0)
-			end_time = slot.return_end_time
+	var lbl := Label.new()
+	lbl.text = _bubble_text(pname, status)
+	lbl.add_theme_font_size_override("font_size", 9)
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bubble.add_child(lbl)
+	bubble.set_meta("lbl", lbl)
+	return bubble
 
-		row.add_child(info_lbl)
+func _bubble_text(pname: String, status: String) -> String:
+	match status:
+		"dispatched": return "%s\n▶ 임무 중..." % pname
+		_:            return "%s\n● 대기 중" % pname
 
-		var countdown_lbl := Label.new()
-		countdown_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		countdown_lbl.custom_minimum_size = Vector2(52, 0)
-		row.add_child(countdown_lbl)
-
-		_countdown_data.append({"label": countdown_lbl, "end_time": end_time})
-
-	if not has_active:
-		var lbl := Label.new()
-		lbl.text = "파견 중인 머신 없음"
-		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		lbl.modulate = Color(1, 1, 1, 0.35)
-		_missions_vbox.add_child(lbl)
+func _show_bubble(bubble: PanelContainer, pname: String, status: String) -> void:
+	var lbl: Label = bubble.get_meta("lbl")
+	lbl.text = _bubble_text(pname, status)
+	bubble.visible = true
+	if bubble.has_meta("tw"):
+		var old: Tween = bubble.get_meta("tw")
+		if is_instance_valid(old):
+			old.kill()
+	var tw := bubble.create_tween()
+	tw.tween_interval(3.5)
+	tw.tween_callback(func(): bubble.visible = false)
+	bubble.set_meta("tw", tw)
 
 # ── Util panel ────────────────────────────────────────────────────
-#
-# 레이아웃 (우측 → 좌측):
-#   핸들(10px) | 버튼 스트립(36px, 숨김) | 콘텐츠 패널(200px, 숨김)
 
 func _build_util_panel() -> void:
-	# ── 콘텐츠 패널 (탭 선택 시 표시) ───────────────────────
-	_side_panel = PanelContainer.new()
-	_side_panel.anchor_left   = 1.0
-	_side_panel.anchor_top    = 0.0
-	_side_panel.anchor_right  = 1.0
-	_side_panel.anchor_bottom = 1.0
-	_side_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	_side_panel.offset_left   = -250.0  # 200px + 4px gap + 36px strip + 10px handle
-	_side_panel.offset_top    = 4.0
-	_side_panel.offset_right  = -50.0   # 36px strip + 4px gap + 10px handle
-	_side_panel.offset_bottom = -4.0
-	_side_panel.visible = false
-	_side_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	# ── 설정 패널 (⚙ 버튼 클릭 시 표시) ─────────────────────
+	_util_panel = PanelContainer.new()
+	_util_panel.anchor_left   = 1.0
+	_util_panel.anchor_top    = 0.0
+	_util_panel.anchor_right  = 1.0
+	_util_panel.anchor_bottom = 1.0
+	_util_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_util_panel.offset_left   = -210.0
+	_util_panel.offset_right  = 0.0
+	_util_panel.offset_top    = 0.0
+	_util_panel.offset_bottom = 0.0
+	_util_panel.visible = false
+	_util_panel.modulate.a = 0.0
+	_util_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	var ps := StyleBoxFlat.new()
 	ps.bg_color = Color(0.04, 0.07, 0.13, 0.96)
 	ps.border_color = Color(0.22, 0.34, 0.56)
@@ -229,127 +226,100 @@ func _build_util_panel() -> void:
 	ps.content_margin_right  = 10
 	ps.content_margin_top    = 8
 	ps.content_margin_bottom = 8
-	_side_panel.add_theme_stylebox_override("panel", ps)
-	add_child(_side_panel)
+	_util_panel.add_theme_stylebox_override("panel", ps)
+	add_child(_util_panel)
 
 	_side_content = VBoxContainer.new()
 	_side_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_side_content.size_flags_vertical   = Control.SIZE_EXPAND_FILL
 	_side_content.add_theme_constant_override("separation", 7)
-	_side_panel.add_child(_side_content)
+	_util_panel.add_child(_side_content)
 
-	# ── 버튼 스트립 (핸들 열면 표시) ────────────────────────
-	_util_strip = VBoxContainer.new()
-	_util_strip.anchor_left   = 1.0
-	_util_strip.anchor_top    = 0.0
-	_util_strip.anchor_right  = 1.0
-	_util_strip.anchor_bottom = 0.0
-	_util_strip.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	_util_strip.offset_left   = -46.0   # 36px 버튼 + 10px 핸들
-	_util_strip.offset_top    = 4.0
-	_util_strip.offset_right  = -10.0   # 핸들 바로 옆
-	_util_strip.offset_bottom = 116.0
-	_util_strip.add_theme_constant_override("separation", 2)
-	_util_strip.modulate.a = 0.0
-	_util_strip.visible = false
-	add_child(_util_strip)
-
-	for pair: Array in [["⚙", "settings"], ["♪", "sound"]]:
-		var btn := Button.new()
-		btn.text = pair[0]
-		btn.custom_minimum_size = Vector2(34, 34)
-		btn.toggle_mode = true
-		var cap: String = pair[1]
-		_tab_btns[cap] = btn
-		btn.pressed.connect(func(): _toggle_tab(cap))
-		_util_strip.add_child(btn)
+	_build_settings_tab()
+	_util_separator()
+	_build_sound_tab()
+	_util_separator()
 
 	var min_btn := Button.new()
-	min_btn.text = "─"
-	min_btn.custom_minimum_size = Vector2(34, 34)
-	min_btn.tooltip_text = "최소화"
+	min_btn.text = "─  최소화"
+	min_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	min_btn.pressed.connect(func(): get_window().mode = Window.MODE_MINIMIZED)
-	_util_strip.add_child(min_btn)
+	_side_content.add_child(min_btn)
 
-	# ── 핸들 탭 (항상 표시) ──────────────────────────────────
-	var handle := Button.new()
-	handle.anchor_left   = 1.0
-	handle.anchor_top    = 0.0
-	handle.anchor_right  = 1.0
-	handle.anchor_bottom = 1.0
-	handle.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	handle.offset_left   = -10.0
-	handle.offset_right  =   0.0
-	handle.tooltip_text  = "설정 열기 / 닫기"
-	handle.mouse_filter  = Control.MOUSE_FILTER_STOP
+	# ── ⚙ 버튼 (우측 상단, 작은 정사각형) ────────────────────
+	var gear := Button.new()
+	gear.anchor_left   = 1.0
+	gear.anchor_top    = 0.0
+	gear.anchor_right  = 1.0
+	gear.anchor_bottom = 0.0
+	gear.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	gear.offset_left   = -34.0   # 28px 너비
+	gear.offset_right  = -6.0    # 우측 6px 틈
+	gear.offset_top    =  6.0    # 상단 6px 틈
+	gear.offset_bottom =  34.0   # 28px 높이
+	gear.text = "⚙"
+	gear.tooltip_text = "설정"
+	gear.mouse_filter = Control.MOUSE_FILTER_STOP
 
-	var h_norm := StyleBoxFlat.new()
-	h_norm.bg_color = Color(0.14, 0.22, 0.38, 0.70)
-	h_norm.border_color = Color(0.28, 0.42, 0.68, 0.60)
-	h_norm.border_width_left = 1
-	h_norm.corner_radius_top_left    = 4
-	h_norm.corner_radius_bottom_left = 4
-	handle.add_theme_stylebox_override("normal", h_norm)
+	var g_norm := StyleBoxFlat.new()
+	g_norm.bg_color = Color(0.12, 0.18, 0.30, 0.72)
+	g_norm.border_color = Color(0.28, 0.42, 0.68, 0.55)
+	g_norm.set_border_width_all(1)
+	g_norm.set_corner_radius_all(5)
+	gear.add_theme_stylebox_override("normal", g_norm)
 
-	var h_hov := StyleBoxFlat.new()
-	h_hov.bg_color = Color(0.22, 0.36, 0.60, 0.88)
-	h_hov.border_color = Color(0.45, 0.65, 1.00, 0.90)
-	h_hov.border_width_left = 1
-	h_hov.corner_radius_top_left    = 4
-	h_hov.corner_radius_bottom_left = 4
-	handle.add_theme_stylebox_override("hover", h_hov)
+	var g_hov := StyleBoxFlat.new()
+	g_hov.bg_color = Color(0.22, 0.36, 0.58, 0.90)
+	g_hov.border_color = Color(0.50, 0.72, 1.00, 0.88)
+	g_hov.set_border_width_all(1)
+	g_hov.set_corner_radius_all(5)
+	gear.add_theme_stylebox_override("hover", g_hov)
 
-	var h_prs := StyleBoxFlat.new()
-	h_prs.bg_color = Color(0.18, 0.30, 0.52, 0.95)
-	h_prs.border_color = Color(0.50, 0.75, 1.00)
-	h_prs.border_width_left = 2
-	h_prs.corner_radius_top_left    = 4
-	h_prs.corner_radius_bottom_left = 4
-	handle.add_theme_stylebox_override("pressed", h_prs)
+	var g_prs := StyleBoxFlat.new()
+	g_prs.bg_color = Color(0.18, 0.30, 0.50, 0.95)
+	g_prs.border_color = Color(0.55, 0.80, 1.00)
+	g_prs.set_border_width_all(1)
+	g_prs.set_corner_radius_all(5)
+	gear.add_theme_stylebox_override("pressed", g_prs)
 
-	handle.pressed.connect(_toggle_util_open)
-	add_child(handle)
+	gear.add_theme_font_size_override("font_size", 14)
+	gear.pressed.connect(_toggle_util_open)
+	add_child(gear)
 
 func _toggle_util_open() -> void:
 	_util_open = not _util_open
+	var tw := create_tween()
 	if _util_open:
-		_util_strip.visible = true
-		var tw := create_tween()
-		tw.tween_property(_util_strip, "modulate:a", 1.0, 0.15)
+		_util_panel.visible = true
+		tw.tween_property(_util_panel, "modulate:a", 1.0, 0.15)
 	else:
-		# 탭과 패널도 함께 닫기
-		_active_tab = ""
-		_side_panel.visible = false
-		for id: String in _tab_btns:
-			(_tab_btns[id] as Button).set_pressed_no_signal(false)
-		var tw := create_tween()
-		tw.tween_property(_util_strip, "modulate:a", 0.0, 0.10)
-		tw.tween_callback(func(): _util_strip.visible = false)
-
-func _toggle_tab(tab_id: String) -> void:
-	if _active_tab == tab_id:
-		_active_tab = ""
-		_side_panel.visible = false
-		for id: String in _tab_btns:
-			(_tab_btns[id] as Button).set_pressed_no_signal(false)
-	else:
-		_active_tab = tab_id
-		_side_panel.visible = true
-		for id: String in _tab_btns:
-			(_tab_btns[id] as Button).set_pressed_no_signal(id == tab_id)
-		_rebuild_tab_content()
-
-func _rebuild_tab_content() -> void:
-	for c in _side_content.get_children():
-		c.queue_free()
-	match _active_tab:
-		"settings": _build_settings_tab()
-		"sound":    _build_sound_tab()
+		tw.tween_property(_util_panel, "modulate:a", 0.0, 0.12)
+		tw.tween_callback(func(): _util_panel.visible = false)
 
 # ── Settings tab ──────────────────────────────────────────────────
 
 func _build_settings_tab() -> void:
 	_util_header("⚙  설정")
+
+	_util_toggle(
+		"UI 위치 변형",
+		false,
+		func(v: bool):
+			GameState.ui_edit_mode = v
+			GameState.ui_edit_mode_changed.emit(v)
+	)
+
+	var reset_btn := Button.new()
+	reset_btn.text = "↺  UI 위치 초기화"
+	reset_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	reset_btn.pressed.connect(func():
+		GameState.ui_positions.clear()
+		SaveManager.save()
+		GameState.ui_positions_reset.emit()
+	)
+	_side_content.add_child(reset_btn)
+
+	_util_separator()
 
 	_util_toggle(
 		"항상 위에",

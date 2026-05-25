@@ -15,7 +15,9 @@ class AutoSlot:
 	var machine: Dictionary = {}   # {body: int, weapon: int, legs: int}
 	var pilot_id: String = ""
 	var planet: String = ""
+	var mission_start_time: float = 0.0
 	var mission_end_time: float = INF
+	var return_start_time: float = 0.0
 	var return_end_time: float = INF
 	var credits_earned: int = 0
 	# 자동 재파견 설정 (수령 후 즉시 동일 조건으로 재파견)
@@ -49,6 +51,19 @@ func _ready() -> void:
 		AutoSlot.make_empty(),
 		AutoSlot.make_locked(300),
 		AutoSlot.make_locked(700),
+		AutoSlot.make_locked(1500),
+		AutoSlot.make_locked(3500),
+		AutoSlot.make_locked(8000),
+		AutoSlot.make_locked(18000),
+		AutoSlot.make_locked(40000),
+		AutoSlot.make_locked(90000),
+		AutoSlot.make_locked(200000),
+		AutoSlot.make_locked(450000),
+		AutoSlot.make_locked(1000000),
+		AutoSlot.make_locked(2200000),
+		AutoSlot.make_locked(5000000),
+		AutoSlot.make_locked(11000000),
+		AutoSlot.make_locked(25000000),
 	]
 
 # ── 타이머 ────────────────────────────────────────────────────
@@ -148,6 +163,7 @@ func start_auto_dispatch(slot_index: int, pilot_id: String, planet_id: String) -
 	var duration := _get_mission_duration(body_tier)
 	if pilot.get("bonus_type", "") == "speed":
 		duration *= (1.0 - float(pilot.get("bonus_value", 0)) / 100.0)
+	slot.mission_start_time = now
 	slot.mission_end_time = now + duration
 	auto_slot_changed.emit(slot_index)
 	return true
@@ -185,6 +201,7 @@ func _start_returning(slot_index: int, now: float) -> void:
 		base_credits = int(float(base_credits) * (1.0 + float(pilot.get("bonus_value", 0)) / 100.0))
 	slot.credits_earned = base_credits
 	slot.state = "returning"
+	slot.return_start_time = now
 	slot.return_end_time = now + _get_return_duration(legs_tier)
 	auto_slot_changed.emit(slot_index)
 
@@ -247,8 +264,10 @@ func apply_save_data(slot_data: Array, save_time: float) -> void:
 		slot.machine          = (mraw as Dictionary).duplicate() if mraw is Dictionary else {}
 		slot.pilot_id         = str(d.get("pilot_id",         ""))
 		slot.planet           = str(d.get("planet",           ""))
-		slot.mission_end_time = _dec(d.get("mission_end_time", INF))
-		slot.return_end_time  = _dec(d.get("return_end_time",  INF))
+		slot.mission_start_time = float(d.get("mission_start_time", 0.0))
+		slot.mission_end_time   = _dec(d.get("mission_end_time", INF))
+		slot.return_start_time  = float(d.get("return_start_time", 0.0))
+		slot.return_end_time    = _dec(d.get("return_end_time",  INF))
 		slot.credits_earned   = int(d.get("credits_earned",   0))
 		slot.auto_redispatch  = bool(d.get("auto_redispatch",  false))
 		slot.auto_pilot_id    = str(d.get("auto_pilot_id",    ""))

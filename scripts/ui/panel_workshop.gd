@@ -35,7 +35,11 @@ var _asm_btn: Button = null
 
 func _ready() -> void:
 	PanelManager.register_panel("workshop", self)
-	back_button.pressed.connect(func(): PanelManager.show_bridge())
+	back_button.pressed.connect(func(): PanelManager.go_back())
+	back_button.text = "← %s" % PanelManager.get_back_label()
+	PanelManager.panel_changed.connect(func(id: String):
+		if id == "workshop": back_button.text = "← %s" % PanelManager.get_back_label()
+	)
 	GameState.part_purchased.connect(func(_pt, _t): _refresh_current_tab())
 	GameState.auto_slot_changed.connect(func(_i): _refresh_current_tab())
 	GameState.credits_changed.connect(func(_v): _update_asm_cost())

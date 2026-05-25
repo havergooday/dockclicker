@@ -34,54 +34,62 @@ grow_vertical = 2
 mouse_filter = 2
 color = Color(0, 0, 0, 0.45)
 
-[node name="TitleLabel" type="Label" parent="."]
+[node name="HangarDoor" type="Button" parent="."]
 layout_mode = 1
-anchor_left = 0.5
-anchor_right = 0.5
-offset_left = -80.0
-offset_top = 12.0
-offset_right = 80.0
-offset_bottom = 36.0
-text = "[ BRIDGE ]"
-horizontal_alignment = 1
-
-[node name="ButtonsCenter" type="CenterContainer" parent="."]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-
-[node name="ObjectsContainer" type="HBoxContainer" parent="ButtonsCenter"]
-layout_mode = 2
-theme_override_constants/separation = 16
-
-[node name="HangarDoor" type="Button" parent="ButtonsCenter/ObjectsContainer"]
-layout_mode = 2
-custom_minimum_size = Vector2(160, 80)
-text = "격납고 문"
+anchor_left = 0.0
+anchor_top = 0.0
+anchor_right = 0.0
+anchor_bottom = 0.0
+offset_left = 60.0
+offset_top = 100.0
+offset_right = 160.0
+offset_bottom = 200.0
+text = "격납고"
 script = ExtResource("2_iobj")
 target_panel = "hangar"
+accent_color = Color(0.40, 0.65, 1.00, 1.0)
 
-[node name="WorkshopEntrance" type="Button" parent="ButtonsCenter/ObjectsContainer"]
-layout_mode = 2
-custom_minimum_size = Vector2(160, 80)
-text = "공작실 입구"
+[node name="WorkshopEntrance" type="Button" parent="."]
+layout_mode = 1
+anchor_left = 0.0
+anchor_top = 0.0
+anchor_right = 0.0
+anchor_bottom = 0.0
+offset_left = 180.0
+offset_top = 100.0
+offset_right = 280.0
+offset_bottom = 200.0
+text = "공작실"
 script = ExtResource("2_iobj")
 target_panel = "workshop"
+accent_color = Color(1.00, 0.60, 0.20, 1.0)
 
-[node name="PCTerminal" type="Button" parent="ButtonsCenter/ObjectsContainer"]
-layout_mode = 2
-custom_minimum_size = Vector2(160, 80)
-text = "PC 터미널"
-script = ExtResource("2_iobj")
-target_panel = "shop"
-
-[node name="ControlConsole" type="Button" parent="ButtonsCenter/ObjectsContainer"]
-layout_mode = 2
-custom_minimum_size = Vector2(160, 80)
+[node name="ControlConsole" type="Button" parent="."]
+layout_mode = 1
+anchor_left = 0.5
+anchor_top = 0.0
+anchor_right = 0.5
+anchor_bottom = 0.0
+offset_left = -65.0
+offset_top = 85.0
+offset_right = 65.0
+offset_bottom = 215.0
 text = "관제 콘솔"
 script = ExtResource("2_iobj")
 target_panel = "dispatch"
+accent_color = Color(0.20, 1.00, 0.80, 1.0)
 
+[node name="PCTerminal" type="Button" parent="."]
+layout_mode = 1
+anchor_left = 1.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 0.0
+offset_left = -260.0
+offset_top = 100.0
+offset_right = -160.0
+offset_bottom = 200.0
+text = "PC 터미널"
+script = ExtResource("2_iobj")
+target_panel = "shop"
+accent_color = Color(0.35, 1.00, 0.50, 1.0)
