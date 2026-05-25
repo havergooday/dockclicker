@@ -1,22 +1,19 @@
 extends Control
 
+const GAME_HEIGHT := 300
+
 var _dragging := false
 var _drag_start_mouse := Vector2i.ZERO
 var _drag_start_win := Vector2i.ZERO
 
-
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_position_at_bottom()
+	_fit_to_screen()
 
-
-func _position_at_bottom() -> void:
-	var screen := DisplayServer.screen_get_size()
-	var win := DisplayServer.window_get_size()
-	var x := (screen.x - win.x) / 2
-	var y := screen.y - win.y
-	DisplayServer.window_set_position(Vector2i(x, y))
-
+func _fit_to_screen() -> void:
+	var usable := DisplayServer.screen_get_usable_rect()
+	DisplayServer.window_set_size(Vector2i(usable.size.x, GAME_HEIGHT))
+	DisplayServer.window_set_position(Vector2i(usable.position.x, usable.position.y + usable.size.y - GAME_HEIGHT))
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:

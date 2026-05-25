@@ -25,7 +25,9 @@ var _sel_part_tier: int = -1
 # ── 파츠 조립 탭 ──────────────────────────────────────────
 var _tab_asm_panel: Control
 var _col_slots_inner: VBoxContainer
-var _col_parts_inner: VBoxContainer
+var _col_body_inner: VBoxContainer
+var _col_weapon_inner: VBoxContainer
+var _col_legs_inner: VBoxContainer
 var _col_specs_inner: VBoxContainer
 var _asm_sel := {"body": 0, "weapon": 0, "legs": 0}
 var _asm_slot: int = -1
@@ -58,7 +60,7 @@ func _apply_preselect() -> void:
 func _build_tab_bar() -> void:
 	var tab_bar := HBoxContainer.new()
 	tab_bar.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	tab_bar.offset_bottom = 36.0
+	tab_bar.offset_bottom = 28.0
 	tab_bar.add_theme_constant_override("separation", 4)
 	_body.add_child(tab_bar)
 
@@ -97,7 +99,7 @@ func _refresh_current_tab() -> void:
 func _build_inventory_panel() -> void:
 	_tab_inv_panel = Control.new()
 	_tab_inv_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_tab_inv_panel.offset_top = 40.0
+	_tab_inv_panel.offset_top = 32.0
 	_body.add_child(_tab_inv_panel)
 
 	var hbox := HBoxContainer.new()
@@ -142,18 +144,19 @@ func _refresh_inventory() -> void:
 			var is_sel: bool = (_sel_part_type == part_type and _sel_part_tier == pt)
 			if is_sel:
 				found_sel = true
-			_item_grid.add_child(_make_item_box(part_type, pt, qty, is_sel))
+			for _j in qty:
+				_item_grid.add_child(_make_item_box(part_type, pt, is_sel))
 
 	if not found_sel:
 		_sel_part_type = ""
 		_sel_part_tier = -1
 	_refresh_detail()
 
-func _make_item_box(part_type: String, tier: int, qty: int, is_sel: bool) -> Button:
+func _make_item_box(part_type: String, tier: int, is_sel: bool) -> Button:
 	var data: Dictionary = GameState.PARTS[part_type]
 	var btn := Button.new()
-	btn.custom_minimum_size = Vector2(56, 56)
-	btn.text = "%s\nLv.%d\n×%d" % [data["name"], tier, qty]
+	btn.custom_minimum_size = Vector2(48, 48)
+	btn.text = "%s\nLv.%d" % [data["name"], tier]
 
 	btn.add_theme_stylebox_override("normal",  _tier_stylebox(tier, is_sel, false))
 	btn.add_theme_stylebox_override("hover",   _tier_stylebox(tier, is_sel, true))
@@ -178,7 +181,7 @@ func _tier_stylebox(tier: int, selected: bool, hover: bool) -> StyleBoxFlat:
 	s.border_width_right  = bw
 	s.border_width_top    = bw
 	s.border_width_bottom = bw
-	var base_bg := Color(0.22, 0.18, 0.40, 1.0) if selected else Color(0.10, 0.10, 0.16, 1.0)
+	var base_bg := Color(0.22, 0.18, 0.40, 0.85) if selected else Color(0.10, 0.10, 0.16, 0.78)
 	s.bg_color = base_bg.lightened(0.08) if hover else base_bg
 	s.corner_radius_top_left     = 3
 	s.corner_radius_top_right    = 3
@@ -249,71 +252,93 @@ func _refresh_detail() -> void:
 func _build_assembly_panel() -> void:
 	_tab_asm_panel = Control.new()
 	_tab_asm_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_tab_asm_panel.offset_top = 40.0
+	_tab_asm_panel.offset_top = 32.0
 	_body.add_child(_tab_asm_panel)
 
 	var outer_vbox := VBoxContainer.new()
 	outer_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	outer_vbox.add_theme_constant_override("separation", 5)
+	outer_vbox.add_theme_constant_override("separation", 4)
 	_tab_asm_panel.add_child(outer_vbox)
 
-	# 3-column row
+	# 5열 가로 배치: [격납고] [몸체] [무기] [다리] [SYS SPEC]
 	var col_row := HBoxContainer.new()
 	col_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	col_row.add_theme_constant_override("separation", 4)
 	outer_vbox.add_child(col_row)
 
-	# ── Column 1: HANGAR (stretch 1) ───
+	# ── 격납고 (슬롯 선택) fixed 110 ───────────────────────────
 	var col1 := _make_col_panel(Color(0.07, 0.09, 0.18, 1.0), Color(0.4, 0.6, 1.0))
-	col1.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	col1.size_flags_stretch_ratio = 1.0
+	col1.custom_minimum_size = Vector2(110, 0)
 	col1.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	col_row.add_child(col1)
 	var col1_vbox := VBoxContainer.new()
-	col1_vbox.add_theme_constant_override("separation", 5)
+	col1_vbox.add_theme_constant_override("separation", 4)
 	col1.add_child(col1_vbox)
 	col1_vbox.add_child(_make_col_header("격납고", Color(0.5, 0.72, 1.0)))
 	_col_slots_inner = VBoxContainer.new()
 	_col_slots_inner.add_theme_constant_override("separation", 4)
 	col1_vbox.add_child(_col_slots_inner)
 
-	# ── Column 2: LOADOUT (stretch 2) ──
-	var col2 := _make_col_panel(Color(0.07, 0.13, 0.09, 1.0), Color(0.3, 0.75, 0.45))
+	# ── 몸체 파츠 ──────────────────────────────────────────────
+	var col2 := _make_col_panel(Color(0.09, 0.07, 0.18, 1.0), Color(0.55, 0.4, 1.0))
 	col2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	col2.size_flags_stretch_ratio = 2.0
 	col2.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	col_row.add_child(col2)
 	var col2_vbox := VBoxContainer.new()
-	col2_vbox.add_theme_constant_override("separation", 5)
+	col2_vbox.add_theme_constant_override("separation", 4)
 	col2.add_child(col2_vbox)
-	col2_vbox.add_child(_make_col_header("LOADOUT", Color(0.4, 0.9, 0.55)))
-	var col2_scroll := ScrollContainer.new()
-	col2_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	col2_vbox.add_child(col2_scroll)
-	_col_parts_inner = VBoxContainer.new()
-	_col_parts_inner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_col_parts_inner.add_theme_constant_override("separation", 5)
-	col2_scroll.add_child(_col_parts_inner)
+	col2_vbox.add_child(_make_col_header("몸체", Color(0.7, 0.55, 1.0)))
+	_col_body_inner = VBoxContainer.new()
+	_col_body_inner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_col_body_inner.add_theme_constant_override("separation", 4)
+	col2_vbox.add_child(_col_body_inner)
 
-	# ── Column 3: SYS SPEC (stretch 2) ─
-	var col3 := _make_col_panel(Color(0.13, 0.10, 0.04, 1.0), Color(0.85, 0.65, 0.2))
+	# ── 무기 파츠 ──────────────────────────────────────────────
+	var col3 := _make_col_panel(Color(0.18, 0.07, 0.07, 1.0), Color(1.0, 0.4, 0.4))
 	col3.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	col3.size_flags_stretch_ratio = 2.0
 	col3.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	col_row.add_child(col3)
 	var col3_vbox := VBoxContainer.new()
-	col3_vbox.add_theme_constant_override("separation", 5)
+	col3_vbox.add_theme_constant_override("separation", 4)
 	col3.add_child(col3_vbox)
-	col3_vbox.add_child(_make_col_header("SYS SPEC", Color(1.0, 0.82, 0.35)))
+	col3_vbox.add_child(_make_col_header("무기", Color(1.0, 0.55, 0.55)))
+	_col_weapon_inner = VBoxContainer.new()
+	_col_weapon_inner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_col_weapon_inner.add_theme_constant_override("separation", 4)
+	col3_vbox.add_child(_col_weapon_inner)
+
+	# ── 다리 파츠 ──────────────────────────────────────────────
+	var col4 := _make_col_panel(Color(0.07, 0.14, 0.10, 1.0), Color(0.3, 0.8, 0.5))
+	col4.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col4.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col_row.add_child(col4)
+	var col4_vbox := VBoxContainer.new()
+	col4_vbox.add_theme_constant_override("separation", 4)
+	col4.add_child(col4_vbox)
+	col4_vbox.add_child(_make_col_header("다리", Color(0.4, 0.95, 0.6)))
+	_col_legs_inner = VBoxContainer.new()
+	_col_legs_inner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_col_legs_inner.add_theme_constant_override("separation", 4)
+	col4_vbox.add_child(_col_legs_inner)
+
+	# ── SYS SPEC fixed 160 ────────────────────────────────────
+	var col5 := _make_col_panel(Color(0.13, 0.10, 0.04, 1.0), Color(0.85, 0.65, 0.2))
+	col5.custom_minimum_size = Vector2(160, 0)
+	col5.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col_row.add_child(col5)
+	var col5_vbox := VBoxContainer.new()
+	col5_vbox.add_theme_constant_override("separation", 4)
+	col5.add_child(col5_vbox)
+	col5_vbox.add_child(_make_col_header("SYS SPEC", Color(1.0, 0.82, 0.35)))
 	_col_specs_inner = VBoxContainer.new()
 	_col_specs_inner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_col_specs_inner.add_theme_constant_override("separation", 4)
-	col3_vbox.add_child(_col_specs_inner)
+	col5_vbox.add_child(_col_specs_inner)
 
 	# ── 조립 버튼 (full width) ──────────
 	_asm_btn = Button.new()
 	_asm_btn.text = "▶  조립하기"
-	_asm_btn.custom_minimum_size = Vector2(0, 42)
+	_asm_btn.custom_minimum_size = Vector2(0, 28)
 	_asm_btn.disabled = true
 	_asm_btn.pressed.connect(func():
 		if GameState.assemble_machine(_asm_slot, _asm_sel["body"], _asm_sel["weapon"], _asm_sel["legs"]):
@@ -326,7 +351,7 @@ func _build_assembly_panel() -> void:
 func _make_col_panel(bg: Color, border: Color) -> PanelContainer:
 	var pc := PanelContainer.new()
 	var s := StyleBoxFlat.new()
-	s.bg_color = bg
+	s.bg_color = Color(bg.r, bg.g, bg.b, 0.78)
 	s.border_color = border
 	s.border_width_left   = 1
 	s.border_width_right  = 1
@@ -347,7 +372,7 @@ func _make_col_header(text: String, color: Color) -> PanelContainer:
 	var pc := PanelContainer.new()
 	pc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var s := StyleBoxFlat.new()
-	s.bg_color = Color(color.r * 0.22, color.g * 0.22, color.b * 0.22, 1.0)
+	s.bg_color = Color(color.r * 0.22, color.g * 0.22, color.b * 0.22, 0.82)
 	s.border_color = color
 	s.border_width_bottom = 1
 	s.content_margin_left   = 4
@@ -397,7 +422,7 @@ func _refresh_slot_column() -> void:
 		var is_sel: bool = (_asm_slot == si)
 		var btn := Button.new()
 		btn.text = "No.%d\nEMPTY" % (si + 1)
-		btn.custom_minimum_size = Vector2(0, 52)
+		btn.custom_minimum_size = Vector2(0, 36)
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.toggle_mode = true
 		btn.button_group = grp
@@ -422,7 +447,7 @@ func _slot_stylebox(selected: bool, hover: bool) -> StyleBoxFlat:
 	s.border_width_right  = bw
 	s.border_width_top    = bw
 	s.border_width_bottom = bw
-	var base := Color(0.18, 0.28, 0.52, 1.0) if selected else Color(0.07, 0.09, 0.20, 1.0)
+	var base := Color(0.18, 0.28, 0.52, 0.85) if selected else Color(0.07, 0.09, 0.20, 0.78)
 	s.bg_color = base.lightened(0.07) if hover else base
 	s.corner_radius_top_left     = 3
 	s.corner_radius_top_right    = 3
@@ -435,92 +460,54 @@ func _slot_stylebox(selected: bool, hover: bool) -> StyleBoxFlat:
 	return s
 
 func _refresh_parts_column() -> void:
-	for child in _col_parts_inner.get_children():
+	_fill_part_col("body",   _col_body_inner)
+	_fill_part_col("weapon", _col_weapon_inner)
+	_fill_part_col("legs",   _col_legs_inner)
+
+func _fill_part_col(part_type: String, inner: VBoxContainer) -> void:
+	for child in inner.get_children():
 		child.queue_free()
-	for part_type in ["body", "weapon", "legs"]:
-		_build_loadout_section(part_type)
-
-func _build_loadout_section(part_type: String) -> void:
-	var data: Dictionary = GameState.PARTS[part_type]
 	var qtys: Array = GameState.owned_parts[part_type]
-
-	# 섹션 카드 패널 — 파츠 종류별 시각적 그룹화
-	var sec_panel := PanelContainer.new()
-	sec_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var sec_s := StyleBoxFlat.new()
-	sec_s.bg_color    = Color(0.10, 0.12, 0.17, 1.0)
-	sec_s.border_color = Color(0.35, 0.38, 0.50, 1.0)
-	sec_s.border_width_left   = 2
-	sec_s.border_width_right  = 1
-	sec_s.border_width_top    = 1
-	sec_s.border_width_bottom = 1
-	sec_s.corner_radius_top_left     = 3
-	sec_s.corner_radius_top_right    = 3
-	sec_s.corner_radius_bottom_left  = 3
-	sec_s.corner_radius_bottom_right = 3
-	sec_s.content_margin_left   = 5
-	sec_s.content_margin_right  = 5
-	sec_s.content_margin_top    = 4
-	sec_s.content_margin_bottom = 5
-	sec_panel.add_theme_stylebox_override("panel", sec_s)
-	_col_parts_inner.add_child(sec_panel)
-
-	var sec_vbox := VBoxContainer.new()
-	sec_vbox.add_theme_constant_override("separation", 4)
-	sec_panel.add_child(sec_vbox)
-
-	var sec_lbl := Label.new()
-	sec_lbl.text = data["name"]
-	sec_lbl.modulate = Color(1, 1, 1, 0.65)
-	sec_vbox.add_child(sec_lbl)
-
-	# 보유 파츠 확인
-	var available: Array = []
-	for i: int in qtys.size():
-		if qtys[i] > 0:
-			available.append(i)
-
-	if available.is_empty():
-		var none_lbl := Label.new()
-		none_lbl.text = "없음"
-		none_lbl.modulate = Color(1, 0.45, 0.45, 1)
-		sec_vbox.add_child(none_lbl)
-		return
-
-	var grid := GridContainer.new()
-	grid.columns = 2
-	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	grid.add_theme_constant_override("h_separation", 4)
-	grid.add_theme_constant_override("v_separation", 4)
-	sec_vbox.add_child(grid)
-
 	var grp := ButtonGroup.new()
-	for i: int in available:
-		var tier := i + 1
+	var any := false
+	var sel_assigned := false
+	for i: int in qtys.size():
 		var qty: int = qtys[i]
-
-		var btn := Button.new()
-		btn.custom_minimum_size = Vector2(0, 52)
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		btn.text = "Lv.%d\n×%d" % [tier, qty]
-		btn.toggle_mode = true
-		btn.button_group = grp
-		btn.button_pressed = (_asm_sel.get(part_type, 0) == tier)
-
-		# normal = 미선택, pressed = 선택됨 (ButtonGroup이 pressed 상태 관리)
-		btn.add_theme_stylebox_override("normal",        _tier_stylebox(tier, false, false))
-		btn.add_theme_stylebox_override("hover",         _tier_stylebox(tier, false, true))
-		btn.add_theme_stylebox_override("pressed",       _tier_stylebox(tier, true,  false))
-		btn.add_theme_stylebox_override("hover_pressed", _tier_stylebox(tier, true,  true))
-		btn.add_theme_stylebox_override("focus",         _tier_stylebox(tier, false, false))
-		grid.add_child(btn)
-
-		var pt := part_type
-		var t  := tier
-		btn.pressed.connect(func():
-			_asm_sel[pt] = t
-			_refresh_spec_column()
-		)
+		if qty <= 0:
+			continue
+		any = true
+		var tier := i + 1
+		var sel_tier: int = _asm_sel.get(part_type, 0)
+		for _j in qty:
+			var is_this_sel := (sel_tier == tier and not sel_assigned)
+			if sel_tier == tier:
+				sel_assigned = true
+			var btn := Button.new()
+			btn.custom_minimum_size = Vector2(0, 32)
+			btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			btn.text = "T%d" % tier
+			btn.toggle_mode = true
+			btn.button_group = grp
+			btn.button_pressed = is_this_sel
+			btn.add_theme_stylebox_override("normal",        _tier_stylebox(tier, false, false))
+			btn.add_theme_stylebox_override("hover",         _tier_stylebox(tier, false, true))
+			btn.add_theme_stylebox_override("pressed",       _tier_stylebox(tier, true,  false))
+			btn.add_theme_stylebox_override("hover_pressed", _tier_stylebox(tier, true,  true))
+			btn.add_theme_stylebox_override("focus",         _tier_stylebox(tier, false, false))
+			var pt := part_type
+			var t  := tier
+			btn.pressed.connect(func():
+				_asm_sel[pt] = t
+				_refresh_spec_column()
+			)
+			inner.add_child(btn)
+	if not any:
+		var lbl := Label.new()
+		lbl.text = "없음"
+		lbl.add_theme_font_size_override("font_size", 11)
+		lbl.modulate = Color(1.0, 0.45, 0.45, 1)
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		inner.add_child(lbl)
 
 # ── SYS SPEC 컬럼 ─────────────────────────────────────────
 
@@ -534,31 +521,28 @@ func _refresh_spec_column() -> void:
 	var w: int = _asm_sel.get("weapon", 0)
 	var l: int = _asm_sel.get("legs",   0)
 
-	# RPG 장비 슬롯 3개
-	var equip_row := HBoxContainer.new()
-	equip_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	equip_row.add_theme_constant_override("separation", 3)
-	_col_specs_inner.add_child(equip_row)
-	equip_row.add_child(_make_equip_slot("body",   b))
-	equip_row.add_child(_make_equip_slot("weapon", w))
-	equip_row.add_child(_make_equip_slot("legs",   l))
+	# 선택 요약
+	var sel_lbl := Label.new()
+	sel_lbl.text = "%s / %s / %s" % [
+		("몸체T%d" % b) if b > 0 else "몸체--",
+		("무기T%d" % w) if w > 0 else "무기--",
+		("다리T%d" % l) if l > 0 else "다리--",
+	]
+	sel_lbl.add_theme_font_size_override("font_size", 10)
+	sel_lbl.modulate = Color(0.7, 0.7, 0.85)
+	sel_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_col_specs_inner.add_child(sel_lbl)
 
 	_col_specs_inner.add_child(HSeparator.new())
 
-	# 스탯 계산
 	var preview: Dictionary = GameState.get_machine_preview(b, w, l)
-	var mission_time: float = preview.get("mission_time", 0.0)
-	var return_time: float  = preview.get("return_time",  0.0)
-	var rate: int           = preview.get("rate",         0)
-	var credits: int        = preview.get("credits",      0)
-
-	_add_stat_row("미션",  ("%ds" % int(mission_time)) if b > 0 else "--")
-	_add_stat_row("CR/s",  ("×%d" % rate)              if w > 0 else "--")
-	_add_stat_row("복귀",  ("%ds" % int(return_time))  if l > 0 else "--")
+	_add_stat_row("미션",  ("%ds" % int(preview.get("mission_time", 0.0))) if b > 0 else "--")
+	_add_stat_row("CR/s",  ("×%d" % preview.get("rate", 0))               if w > 0 else "--")
+	_add_stat_row("복귀",  ("%ds" % int(preview.get("return_time",  0.0))) if l > 0 else "--")
 
 	_col_specs_inner.add_child(HSeparator.new())
 
-	_add_stat_row("예상", ("%d CR" % credits)          if (b > 0 and w > 0) else "--")
+	_add_stat_row("예상", ("%d CR" % preview.get("credits", 0)) if (b > 0 and w > 0) else "--")
 
 	var cost := 0
 	if b > 0 and w > 0 and l > 0:
@@ -567,11 +551,11 @@ func _refresh_spec_column() -> void:
 
 	_col_specs_inner.add_child(HSeparator.new())
 
-	# 상태 인디케이터
-	var all_sel: bool   = _asm_slot >= 0 and b > 0 and w > 0 and l > 0
+	var all_sel: bool    = _asm_slot >= 0 and b > 0 and w > 0 and l > 0
 	var can_afford: bool = all_sel and GameState.total_credits >= cost
 	var status_lbl := Label.new()
 	status_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	status_lbl.add_theme_font_size_override("font_size", 11)
 	if not all_sel:
 		status_lbl.text = "◌  STANDBY"
 		status_lbl.modulate = Color(1, 1, 1, 0.3)
@@ -583,69 +567,10 @@ func _refresh_spec_column() -> void:
 		status_lbl.modulate = Color(0.35, 1.0, 0.5, 1.0)
 	_col_specs_inner.add_child(status_lbl)
 
-	# 조립 버튼 상태
 	if _asm_btn != null:
 		_asm_btn.disabled = not can_afford
 		_asm_btn.modulate = Color(0.35, 1.0, 0.55, 1.0) if can_afford else Color(1, 1, 1, 0.6)
 
-func _make_equip_slot(part_type: String, tier: int) -> VBoxContainer:
-	var container := VBoxContainer.new()
-	container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	container.add_theme_constant_override("separation", 2)
-
-	# 슬롯 박스
-	var box := PanelContainer.new()
-	box.custom_minimum_size = Vector2(0, 44)
-	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var s := StyleBoxFlat.new()
-	if tier > 0:
-		var tc: Color = TIER_COLORS[mini(tier - 1, TIER_COLORS.size() - 1)]
-		s.bg_color     = Color(tc.r * 0.18, tc.g * 0.18, tc.b * 0.18, 1.0)
-		s.border_color = tc
-		s.border_width_left   = 2
-		s.border_width_right  = 2
-		s.border_width_top    = 2
-		s.border_width_bottom = 2
-	else:
-		s.bg_color     = Color(0.08, 0.08, 0.12, 1.0)
-		s.border_color = Color(0.28, 0.28, 0.35, 1.0)
-		s.border_width_left   = 1
-		s.border_width_right  = 1
-		s.border_width_top    = 1
-		s.border_width_bottom = 1
-	s.corner_radius_top_left     = 3
-	s.corner_radius_top_right    = 3
-	s.corner_radius_bottom_left  = 3
-	s.corner_radius_bottom_right = 3
-	s.content_margin_left   = 2
-	s.content_margin_right  = 2
-	s.content_margin_top    = 2
-	s.content_margin_bottom = 2
-	box.add_theme_stylebox_override("panel", s)
-
-	var inner_lbl := Label.new()
-	inner_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	inner_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	inner_lbl.size_flags_vertical  = Control.SIZE_EXPAND_FILL
-	if tier > 0:
-		var tc: Color = TIER_COLORS[mini(tier - 1, TIER_COLORS.size() - 1)]
-		inner_lbl.text = "Lv.%d" % tier
-		inner_lbl.add_theme_color_override("font_color", tc)
-	else:
-		inner_lbl.text = "─"
-		inner_lbl.modulate = Color(1, 1, 1, 0.2)
-	box.add_child(inner_lbl)
-
-	# 파츠 타입 레이블
-	var type_lbl := Label.new()
-	type_lbl.text = PART_LABELS.get(part_type, part_type)
-	type_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	type_lbl.add_theme_font_size_override("font_size", 10)
-	type_lbl.modulate = Color(1, 1, 1, 0.6 if tier > 0 else 0.3)
-
-	container.add_child(box)
-	container.add_child(type_lbl)
-	return container
 
 func _add_stat_row(key: String, value: String) -> void:
 	var row := HBoxContainer.new()

@@ -32,117 +32,82 @@ func _ready() -> void:
 	_select_category("click")
 
 func _build_layout() -> void:
-	# Main layout: sidebar + content
-	var hbox := HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 8)
-	hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_body.add_child(hbox)
+	# ── 상단 가로 탭바 ────────────────────────────────────────
+	var tab_bar := HBoxContainer.new()
+	tab_bar.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	tab_bar.offset_bottom = 26.0
+	tab_bar.add_theme_constant_override("separation", 2)
+	_body.add_child(tab_bar)
 
-	# ── Left sidebar ──────────────────────────────────────────
-	var sidebar := VBoxContainer.new()
-	sidebar.add_theme_constant_override("separation", 6)
-	sidebar.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	sidebar.custom_minimum_size = Vector2(108, 0)
-	hbox.add_child(sidebar)
-
-	# Portrait box
-	var portrait_panel := PanelContainer.new()
-	portrait_panel.custom_minimum_size = Vector2(108, 90)
-	var portrait_style := StyleBoxFlat.new()
-	portrait_style.bg_color = Color(0.05, 0.09, 0.16)
-	portrait_style.border_color = Color(0.25, 0.45, 0.72)
-	portrait_style.set_border_width_all(1)
-	portrait_style.set_corner_radius_all(4)
-	portrait_style.content_margin_top = 8
-	portrait_style.content_margin_bottom = 6
-	portrait_panel.add_theme_stylebox_override("panel", portrait_style)
-	sidebar.add_child(portrait_panel)
-
-	var portrait_inner := VBoxContainer.new()
-	portrait_inner.alignment = BoxContainer.ALIGNMENT_CENTER
-	portrait_inner.add_theme_constant_override("separation", 4)
-	portrait_panel.add_child(portrait_inner)
-
-	var portrait_rect := TextureRect.new()
-	portrait_rect.custom_minimum_size = Vector2(48, 48)
-	portrait_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-	portrait_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	portrait_rect.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	portrait_inner.add_child(portrait_rect)
-
-	var portrait_lbl := Label.new()
-	portrait_lbl.text = "COMMANDER"
-	portrait_lbl.add_theme_font_size_override("font_size", 9)
-	portrait_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	portrait_lbl.modulate = Color(0.55, 0.75, 1.0)
-	portrait_inner.add_child(portrait_lbl)
-
-	# Divider
-	sidebar.add_child(HSeparator.new())
-
-	# Category buttons
 	var btn_group := ButtonGroup.new()
 	for cat in CATEGORIES:
 		var btn := Button.new()
 		btn.text = cat["label"]
 		btn.toggle_mode = true
 		btn.button_group = btn_group
-		btn.custom_minimum_size = Vector2(108, 34)
-		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.custom_minimum_size = Vector2(0, 26)
 
 		var norm := StyleBoxFlat.new()
-		norm.bg_color = Color(0.08, 0.13, 0.20)
-		norm.set_border_width_all(0)
-		norm.set_corner_radius_all(3)
-		norm.content_margin_left = 10
+		norm.bg_color = Color(0.06, 0.12, 0.18, 0.80)
+		norm.border_color = Color(0.15, 0.28, 0.42)
+		norm.border_width_bottom = 2
+		norm.corner_radius_top_left    = 3
+		norm.corner_radius_top_right   = 3
+		norm.content_margin_left  = 6
+		norm.content_margin_right = 6
 		btn.add_theme_stylebox_override("normal", norm)
 
 		var sel := StyleBoxFlat.new()
-		sel.bg_color = Color(0.10, 0.20, 0.36)
-		sel.border_color = Color(0.30, 0.55, 0.92)
-		sel.border_width_left = 3
-		sel.set_corner_radius_all(3)
-		sel.content_margin_left = 10
-		btn.add_theme_stylebox_override("pressed", sel)
+		sel.bg_color = Color(0.10, 0.20, 0.36, 0.88)
+		sel.border_color = Color(0.30, 0.60, 1.0)
+		sel.border_width_bottom = 2
+		sel.corner_radius_top_left    = 3
+		sel.corner_radius_top_right   = 3
+		sel.content_margin_left  = 6
+		sel.content_margin_right = 6
+		btn.add_theme_stylebox_override("pressed",       sel)
+		btn.add_theme_stylebox_override("hover_pressed", sel.duplicate())
 
 		var hov := StyleBoxFlat.new()
-		hov.bg_color = Color(0.10, 0.17, 0.26)
-		hov.set_border_width_all(0)
-		hov.set_corner_radius_all(3)
-		hov.content_margin_left = 10
+		hov.bg_color = Color(0.09, 0.16, 0.26, 0.80)
+		hov.border_color = Color(0.22, 0.40, 0.62)
+		hov.border_width_bottom = 2
+		hov.corner_radius_top_left    = 3
+		hov.corner_radius_top_right   = 3
+		hov.content_margin_left  = 6
+		hov.content_margin_right = 6
 		btn.add_theme_stylebox_override("hover", hov)
-
-		btn.add_theme_stylebox_override("hover_pressed", sel.duplicate())
 
 		var cid: String = cat["id"]
 		btn.pressed.connect(func(): _select_category(cid))
 		_cat_buttons[cid] = btn
-		sidebar.add_child(btn)
+		tab_bar.add_child(btn)
 
-	# ── Right content area ────────────────────────────────────
+	# ── 콘텐츠 영역 ───────────────────────────────────────────
 	var content_panel := PanelContainer.new()
-	content_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	content_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	content_panel.offset_top = 30.0
 	var cp_style := StyleBoxFlat.new()
-	cp_style.bg_color = Color(0.04, 0.08, 0.13)
+	cp_style.bg_color = Color(0.04, 0.08, 0.13, 0.80)
 	cp_style.border_color = Color(0.14, 0.24, 0.40)
 	cp_style.set_border_width_all(1)
-	cp_style.set_corner_radius_all(4)
-	cp_style.content_margin_left = 8
-	cp_style.content_margin_right = 8
-	cp_style.content_margin_top = 8
-	cp_style.content_margin_bottom = 8
+	cp_style.set_corner_radius_all(3)
+	cp_style.content_margin_left   = 10
+	cp_style.content_margin_right  = 10
+	cp_style.content_margin_top    = 6
+	cp_style.content_margin_bottom = 6
 	content_panel.add_theme_stylebox_override("panel", cp_style)
-	hbox.add_child(content_panel)
+	_body.add_child(content_panel)
 
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical   = Control.SIZE_EXPAND_FILL
 	content_panel.add_child(scroll)
 
 	_content_vbox = VBoxContainer.new()
 	_content_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_content_vbox.add_theme_constant_override("separation", 6)
+	_content_vbox.add_theme_constant_override("separation", 5)
 	scroll.add_child(_content_vbox)
 
 # ── Category selection ────────────────────────────────────────
@@ -191,7 +156,7 @@ func _build_click_content() -> void:
 	row.add_child(desc)
 
 	var upg_btn := Button.new()
-	upg_btn.custom_minimum_size = Vector2(110, 30)
+	upg_btn.custom_minimum_size = Vector2(100, 26)
 	if cost < 0:
 		upg_btn.text = "최대 달성"
 		upg_btn.disabled = true
@@ -222,7 +187,7 @@ func _build_inventory_content() -> void:
 
 			var card := PanelContainer.new()
 			var s := StyleBoxFlat.new()
-			s.bg_color = Color(0.07, 0.12, 0.19)
+			s.bg_color = Color(0.07, 0.12, 0.19, 0.80)
 			s.border_color = _tier_color(tier)
 			s.border_width_left = 3
 			s.border_width_top = 0
@@ -299,7 +264,7 @@ func _build_parts_content(part_type: String) -> void:
 func _make_part_card(part_type: String, tier: int, tier_data: Dictionary, part_data: Dictionary) -> Control:
 	var outer := PanelContainer.new()
 	var s := StyleBoxFlat.new()
-	s.bg_color = Color(0.07, 0.12, 0.19)
+	s.bg_color = Color(0.07, 0.12, 0.19, 0.80)
 	s.border_color = _tier_color(tier)
 	s.border_width_left = 3
 	s.border_width_top = 0
@@ -308,8 +273,8 @@ func _make_part_card(part_type: String, tier: int, tier_data: Dictionary, part_d
 	s.set_corner_radius_all(3)
 	s.content_margin_left = 10
 	s.content_margin_right = 8
-	s.content_margin_top = 8
-	s.content_margin_bottom = 8
+	s.content_margin_top = 6
+	s.content_margin_bottom = 6
 	outer.add_theme_stylebox_override("panel", s)
 
 	var vbox := VBoxContainer.new()
@@ -369,7 +334,7 @@ func _make_part_card(part_type: String, tier: int, tier_data: Dictionary, part_d
 
 	var locked: bool = req != "" and not GameState.is_planet_unlocked(req)
 	var buy_btn := Button.new()
-	buy_btn.custom_minimum_size = Vector2(100, 30)
+	buy_btn.custom_minimum_size = Vector2(90, 26)
 	if locked:
 		buy_btn.text = "행성 미해금"
 		buy_btn.disabled = true
@@ -392,13 +357,13 @@ func _make_part_card(part_type: String, tier: int, tier_data: Dictionary, part_d
 func _make_card() -> PanelContainer:
 	var panel := PanelContainer.new()
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.07, 0.12, 0.19)
+	style.bg_color = Color(0.07, 0.12, 0.19, 0.80)
 	style.set_border_width_all(0)
 	style.set_corner_radius_all(3)
 	style.content_margin_left = 10
 	style.content_margin_right = 8
-	style.content_margin_top = 8
-	style.content_margin_bottom = 8
+	style.content_margin_top = 6
+	style.content_margin_bottom = 6
 	panel.add_theme_stylebox_override("panel", style)
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 4)

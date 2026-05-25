@@ -85,9 +85,9 @@ func _build_layout() -> void:
 	# ── Planet strip (top, fixed height) ────────────────────
 	var strip := PanelContainer.new()
 	strip.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	strip.offset_bottom = 58
+	strip.offset_bottom = 44
 	var ss := StyleBoxFlat.new()
-	ss.bg_color = Color(0.08, 0.05, 0.14)
+	ss.bg_color = Color(0.08, 0.05, 0.14, 0.80)
 	ss.border_color = Color(0.28, 0.16, 0.45)
 	ss.border_width_bottom = 1
 	ss.content_margin_left = 10
@@ -117,7 +117,7 @@ func _build_layout() -> void:
 
 	_direct_btn = Button.new()
 	_direct_btn.text = "직접 출격  ▶▶"
-	_direct_btn.custom_minimum_size = Vector2(148, 36)
+	_direct_btn.custom_minimum_size = Vector2(130, 28)
 	_direct_btn.pressed.connect(_on_direct_dispatch_pressed)
 	strip_row.add_child(_direct_btn)
 
@@ -125,7 +125,7 @@ func _build_layout() -> void:
 	var slots_hbox := HBoxContainer.new()
 	slots_hbox.add_theme_constant_override("separation", 8)
 	slots_hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	slots_hbox.offset_top = 62
+	slots_hbox.offset_top = 48
 	_body.add_child(slots_hbox)
 
 	for i in 3:
@@ -136,7 +136,7 @@ func _build_layout() -> void:
 		_slot_cards[i] = card
 
 		var inner := VBoxContainer.new()
-		inner.add_theme_constant_override("separation", 8)
+		inner.add_theme_constant_override("separation", 4)
 		card.add_child(inner)
 		_slot_inner[i] = inner
 
@@ -158,7 +158,7 @@ func _rebuild_planet_strip() -> void:
 		var btn := Button.new()
 		btn.toggle_mode = true
 		btn.button_pressed = selected
-		btn.custom_minimum_size = Vector2(118, 36)
+		btn.custom_minimum_size = Vector2(110, 28)
 
 		if unlocked:
 			btn.text = planet["name"]
@@ -167,7 +167,7 @@ func _rebuild_planet_strip() -> void:
 			btn.disabled = GameState.total_credits < int(planet["unlock_cost"])
 
 		var norm := StyleBoxFlat.new()
-		norm.bg_color = Color(0.11, 0.07, 0.20)
+		norm.bg_color = Color(0.11, 0.07, 0.20, 0.80)
 		norm.border_color = Color(0.35, 0.22, 0.55)
 		norm.set_border_width_all(1)
 		norm.set_corner_radius_all(4)
@@ -178,7 +178,7 @@ func _rebuild_planet_strip() -> void:
 		btn.add_theme_stylebox_override("normal", norm)
 
 		var sel := StyleBoxFlat.new()
-		sel.bg_color = Color(0.20, 0.10, 0.38)
+		sel.bg_color = Color(0.20, 0.10, 0.38, 0.88)
 		sel.border_color = Color(0.68, 0.48, 1.0)
 		sel.set_border_width_all(2)
 		sel.set_corner_radius_all(4)
@@ -307,7 +307,7 @@ func _body_locked(parent: VBoxContainer, index: int, slot: DispatchManager.AutoS
 
 	var btn := Button.new()
 	btn.text = "잠금 해제  ▶"
-	btn.custom_minimum_size = Vector2(160, 36)
+	btn.custom_minimum_size = Vector2(140, 28)
 	btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	btn.disabled = GameState.total_credits < slot.unlock_cost
 	btn.pressed.connect(func():
@@ -331,7 +331,7 @@ func _body_empty(parent: VBoxContainer, index: int) -> void:
 
 	var btn := Button.new()
 	btn.text = "공작실에서 조립  ▶"
-	btn.custom_minimum_size = Vector2(180, 36)
+	btn.custom_minimum_size = Vector2(160, 28)
 	btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	btn.pressed.connect(func():
 		GameState.workshop_preselect_slot = index
@@ -342,29 +342,35 @@ func _body_empty(parent: VBoxContainer, index: int) -> void:
 
 func _body_offline(parent: VBoxContainer, index: int) -> void:
 	var is_sel := _sel_slot == index
-
-	# ── 파일럿 선택 ───────────────────────────
-	parent.add_child(_section_lbl("파일럿"))
-
 	var pilot_qtys: Array = GameState.owned_parts["pilot"]
 	var has_pilot := false
 	var pilot_grp := ButtonGroup.new()
-	var pilot_row := HBoxContainer.new()
-	pilot_row.add_theme_constant_override("separation", 6)
-	parent.add_child(pilot_row)
+
+	var sortie_btn := Button.new()
+	sortie_btn.text = "출격 ▶"
+	sortie_btn.custom_minimum_size = Vector2(80, 26)
+	sortie_btn.disabled = true
+
+	# ── 파일럿 행: [파일럿] [T1×N] [T2×N] ... [spacer] [출격▶] ──
+	var pilot_hbox := HBoxContainer.new()
+	pilot_hbox.add_theme_constant_override("separation", 6)
+	parent.add_child(pilot_hbox)
+
+	var pilot_lbl := _section_lbl("파일럿")
+	pilot_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	pilot_hbox.add_child(pilot_lbl)
 
 	for i in pilot_qtys.size():
 		if pilot_qtys[i] <= 0:
 			continue
 		has_pilot = true
 		var pt := i + 1
-		var pd: Dictionary = GameState.PARTS["pilot"]["tiers"][i]
 		var pbtn := Button.new()
-		pbtn.text = "T%d  %s  ×%d" % [pt, pd["name"], pilot_qtys[i]]
+		pbtn.text = "T%d ×%d" % [pt, pilot_qtys[i]]
 		pbtn.toggle_mode = true
 		pbtn.button_group = pilot_grp
 		pbtn.button_pressed = (is_sel and _sel_pilot_tier == pt)
-		pbtn.custom_minimum_size = Vector2(0, 32)
+		pbtn.custom_minimum_size = Vector2(0, 26)
 		var cap_pt: int = pt
 		pbtn.pressed.connect(func():
 			var prev := _sel_slot
@@ -375,35 +381,39 @@ func _body_offline(parent: VBoxContainer, index: int) -> void:
 				_rebuild_slot(prev)
 			_rebuild_slot(index)
 		)
-		pilot_row.add_child(pbtn)
+		pilot_hbox.add_child(pbtn)
 
 	if not has_pilot:
 		var lbl := Label.new()
-		lbl.text = "파일럿 없음  →  PC 터미널에서 고용"
+		lbl.text = "파일럿 없음 → PC 터미널"
 		lbl.add_theme_font_size_override("font_size", 11)
 		lbl.modulate = Color(1.0, 0.55, 0.55)
-		pilot_row.add_child(lbl)
+		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		pilot_hbox.add_child(lbl)
+	else:
+		var hsp := Control.new()
+		hsp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		pilot_hbox.add_child(hsp)
 
-	# ── 파견 지역 (파일럿 선택 후에만 표시) ──
-	var sortie_btn := Button.new()
-	sortie_btn.text = "출격  ▶▶"
-	sortie_btn.custom_minimum_size = Vector2(120, 36)
-	sortie_btn.disabled = true
+	pilot_hbox.add_child(sortie_btn)
 
+	# ── 파견 지역 행 (파일럿 선택 후에만) ──────────────────────
 	if is_sel and _sel_pilot_tier > 0:
-		parent.add_child(_section_lbl("파견 지역"))
+		var planet_hbox := HBoxContainer.new()
+		planet_hbox.add_theme_constant_override("separation", 6)
+		parent.add_child(planet_hbox)
 
-		var planet_row := HBoxContainer.new()
-		planet_row.add_theme_constant_override("separation", 6)
-		parent.add_child(planet_row)
+		var pl_lbl := _section_lbl("파견 지역")
+		pl_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		planet_hbox.add_child(pl_lbl)
 
 		var accessible: Array = GameState.get_pilot_accessible_planets(_sel_pilot_tier)
 		if accessible.is_empty():
 			var lbl := Label.new()
-			lbl.text = "접근 가능 지역 없음  →  PC 터미널에서 해금"
+			lbl.text = "접근 지역 없음 → PC 터미널"
 			lbl.add_theme_font_size_override("font_size", 11)
 			lbl.modulate = Color(1.0, 0.75, 0.40)
-			planet_row.add_child(lbl)
+			planet_hbox.add_child(lbl)
 		else:
 			var planet_grp := ButtonGroup.new()
 			for planet in accessible:
@@ -413,25 +423,15 @@ func _body_offline(parent: VBoxContainer, index: int) -> void:
 				plbtn.toggle_mode = true
 				plbtn.button_group = planet_grp
 				plbtn.button_pressed = (_sel_planet == pid)
-				plbtn.custom_minimum_size = Vector2(0, 32)
+				plbtn.custom_minimum_size = Vector2(0, 26)
 				plbtn.pressed.connect(func():
 					_sel_planet = pid
 					sortie_btn.disabled = false
 				)
-				planet_row.add_child(plbtn)
+				planet_hbox.add_child(plbtn)
 
 		if _sel_planet != "":
 			sortie_btn.disabled = false
-
-	parent.add_child(_vspacer())
-
-	var btn_row := HBoxContainer.new()
-	btn_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var btn_spacer := Control.new()
-	btn_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn_row.add_child(btn_spacer)
-	btn_row.add_child(sortie_btn)
-	parent.add_child(btn_row)
 
 	var cap_slot := index
 	sortie_btn.pressed.connect(func():
@@ -485,14 +485,14 @@ func _body_returned(parent: VBoxContainer, index: int, slot: DispatchManager.Aut
 	var title := Label.new()
 	title.text = "귀환 완료"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 15)
+	title.add_theme_font_size_override("font_size", 13)
 	title.modulate = _state_color("returned")
 	parent.add_child(title)
 
 	var cr_lbl := Label.new()
 	cr_lbl.text = "%d CR 획득" % slot.credits_earned
 	cr_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	cr_lbl.add_theme_font_size_override("font_size", 22)
+	cr_lbl.add_theme_font_size_override("font_size", 18)
 	cr_lbl.modulate = Color(1.0, 0.90, 0.30)
 	parent.add_child(cr_lbl)
 
@@ -500,7 +500,7 @@ func _body_returned(parent: VBoxContainer, index: int, slot: DispatchManager.Aut
 
 	var btn := Button.new()
 	btn.text = "수령  ▶"
-	btn.custom_minimum_size = Vector2(160, 40)
+	btn.custom_minimum_size = Vector2(140, 30)
 	btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	btn.pressed.connect(func():
 		if GameState.collect_auto_slot(index):
@@ -549,15 +549,15 @@ func _state_text(state: String) -> String:
 func _card_style(state: String) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
 	var accent := _state_color(state)
-	s.bg_color = Color(0.07, 0.05, 0.13)
+	s.bg_color = Color(0.07, 0.05, 0.13, 0.80)
 	s.border_color = accent.darkened(0.25)
 	s.set_border_width_all(1)
 	s.border_width_top = 3
 	s.set_corner_radius_all(5)
-	s.content_margin_left = 12
-	s.content_margin_right = 12
-	s.content_margin_top = 10
-	s.content_margin_bottom = 10
+	s.content_margin_left = 10
+	s.content_margin_right = 10
+	s.content_margin_top = 6
+	s.content_margin_bottom = 6
 	return s
 
 func _show_toast(msg: String) -> void:

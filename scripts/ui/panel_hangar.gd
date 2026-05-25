@@ -35,6 +35,14 @@ func _build_player_slot_section() -> void:
 	main_vbox.add_child(title)
 
 	var panel := PanelContainer.new()
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.06, 0.10, 0.18, 0.78)
+	panel_style.set_corner_radius_all(4)
+	panel_style.content_margin_left   = 8
+	panel_style.content_margin_right  = 8
+	panel_style.content_margin_top    = 6
+	panel_style.content_margin_bottom = 6
+	panel.add_theme_stylebox_override("panel", panel_style)
 	main_vbox.add_child(panel)
 
 	var vbox := VBoxContainer.new()

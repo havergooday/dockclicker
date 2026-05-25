@@ -3,12 +3,19 @@ extends Control
 var _missions_vbox: VBoxContainer
 var _countdown_data: Array = []
 
+# ── Util side panel ───────────────────────────────────────────────
+var _active_tab: String = ""
+var _side_panel: PanelContainer
+var _side_content: VBoxContainer
+var _tab_btns: Dictionary = {}
+
 func _ready() -> void:
 	PanelManager.register_panel("bridge", self)
 	GameState.auto_slot_changed.connect(func(_i): _refresh_missions())
 	GameState.auto_dispatch_returned.connect(func(_i): _refresh_missions())
 	_build_mission_panel()
 	_refresh_missions()
+	_build_util_panel()
 
 func _process(_delta: float) -> void:
 	if not visible:
@@ -19,9 +26,9 @@ func _process(_delta: float) -> void:
 		if not is_instance_valid(lbl):
 			continue
 		var remaining: float = maxf(0.0, float(entry["end_time"]) - now)
-		var mins := int(remaining) / 60
-		var secs := int(remaining) % 60
-		lbl.text = "%02d:%02d" % [mins, secs]
+		lbl.text = "%02d:%02d" % [int(remaining) / 60, int(remaining) % 60]
+
+# ── Mission status panel (bottom) ─────────────────────────────────
 
 func _build_mission_panel() -> void:
 	var panel := PanelContainer.new()
@@ -86,3 +93,236 @@ func _refresh_missions() -> void:
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lbl.modulate = Color(1, 1, 1, 0.35)
 		_missions_vbox.add_child(lbl)
+
+# ── Util panel ────────────────────────────────────────────────────
+
+func _build_util_panel() -> void:
+	# Side content panel: anchored right, full height, hidden initially
+	_side_panel = PanelContainer.new()
+	_side_panel.anchor_left   = 1.0
+	_side_panel.anchor_top    = 0.0
+	_side_panel.anchor_right  = 1.0
+	_side_panel.anchor_bottom = 1.0
+	_side_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_side_panel.offset_left   = -244.0  # 200px content + 4px gap + 40px strip
+	_side_panel.offset_top    = 4.0
+	_side_panel.offset_right  = -44.0   # 4px gap + 40px strip
+	_side_panel.offset_bottom = -4.0
+	_side_panel.visible = false
+	_side_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	var ps := StyleBoxFlat.new()
+	ps.bg_color = Color(0.04, 0.07, 0.13, 0.96)
+	ps.border_color = Color(0.22, 0.34, 0.56)
+	ps.set_border_width_all(1)
+	ps.set_corner_radius_all(5)
+	ps.content_margin_left   = 10
+	ps.content_margin_right  = 10
+	ps.content_margin_top    = 8
+	ps.content_margin_bottom = 8
+	_side_panel.add_theme_stylebox_override("panel", ps)
+	add_child(_side_panel)
+
+	_side_content = VBoxContainer.new()
+	_side_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_side_content.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+	_side_content.add_theme_constant_override("separation", 7)
+	_side_panel.add_child(_side_content)
+
+	# Button strip: right edge
+	var strip := VBoxContainer.new()
+	strip.anchor_left   = 1.0
+	strip.anchor_top    = 0.0
+	strip.anchor_right  = 1.0
+	strip.anchor_bottom = 0.0
+	strip.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	strip.offset_left   = -40.0
+	strip.offset_top    = 4.0
+	strip.offset_right  = -4.0
+	strip.offset_bottom = 120.0
+	strip.add_theme_constant_override("separation", 2)
+	add_child(strip)
+
+	for pair: Array in [["⚙", "settings"], ["♪", "sound"]]:
+		var btn := Button.new()
+		btn.text = pair[0]
+		btn.custom_minimum_size = Vector2(32, 32)
+		btn.toggle_mode = true
+		var cap: String = pair[1]
+		_tab_btns[cap] = btn
+		btn.pressed.connect(func(): _toggle_tab(cap))
+		strip.add_child(btn)
+
+	var min_btn := Button.new()
+	min_btn.text = "─"
+	min_btn.custom_minimum_size = Vector2(32, 32)
+	min_btn.tooltip_text = "최소화"
+	min_btn.pressed.connect(func(): get_window().mode = Window.MODE_MINIMIZED)
+	strip.add_child(min_btn)
+
+func _toggle_tab(tab_id: String) -> void:
+	if _active_tab == tab_id:
+		_active_tab = ""
+		_side_panel.visible = false
+		for id: String in _tab_btns:
+			(_tab_btns[id] as Button).set_pressed_no_signal(false)
+	else:
+		_active_tab = tab_id
+		_side_panel.visible = true
+		for id: String in _tab_btns:
+			(_tab_btns[id] as Button).set_pressed_no_signal(id == tab_id)
+		_rebuild_tab_content()
+
+func _rebuild_tab_content() -> void:
+	for c in _side_content.get_children():
+		c.queue_free()
+	match _active_tab:
+		"settings": _build_settings_tab()
+		"sound":    _build_sound_tab()
+
+# ── Settings tab ──────────────────────────────────────────────────
+
+func _build_settings_tab() -> void:
+	_util_header("⚙  설정")
+
+	_util_toggle(
+		"항상 위에",
+		DisplayServer.window_get_flag(DisplayServer.WINDOW_FLAG_ALWAYS_ON_TOP),
+		func(v: bool): DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_ALWAYS_ON_TOP, v)
+	)
+
+	_util_toggle(
+		"드래그 이동",
+		true,
+		func(v: bool):
+			var root: Control = get_parent() as Control
+			if root:
+				root.mouse_filter = Control.MOUSE_FILTER_IGNORE if v else Control.MOUSE_FILTER_STOP
+	)
+
+	_util_separator()
+	_util_label("창 불투명도", Color(0.55, 0.65, 0.85))
+
+	var parent_control := get_parent() as CanvasItem
+	var init_opacity: float = parent_control.modulate.a * 100.0 if parent_control else 100.0
+
+	var op_row := HBoxContainer.new()
+	op_row.add_theme_constant_override("separation", 6)
+	_side_content.add_child(op_row)
+
+	var op_slider := HSlider.new()
+	op_slider.min_value = 20.0
+	op_slider.max_value = 100.0
+	op_slider.step = 1.0
+	op_slider.value = init_opacity
+	op_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	op_row.add_child(op_slider)
+
+	var op_val := Label.new()
+	op_val.text = "%d%%" % int(init_opacity)
+	op_val.custom_minimum_size = Vector2(34, 0)
+	op_val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	op_val.add_theme_font_size_override("font_size", 11)
+	op_row.add_child(op_val)
+
+	op_slider.value_changed.connect(func(v: float) -> void:
+		op_val.text = "%d%%" % int(v)
+		if parent_control:
+			parent_control.modulate.a = v / 100.0
+	)
+
+# ── Sound tab ─────────────────────────────────────────────────────
+
+func _build_sound_tab() -> void:
+	_util_header("♪  사운드")
+
+	_util_toggle(
+		"전체 음소거",
+		AudioServer.is_bus_mute(0),
+		func(v: bool): AudioServer.set_bus_mute(0, v)
+	)
+
+	_util_separator()
+	_util_label("마스터 볼륨", Color(0.55, 0.65, 0.85))
+	_util_volume_slider(0)
+
+	var bgm_idx := AudioServer.get_bus_index("BGM")
+	if bgm_idx >= 0:
+		_util_label("BGM", Color(0.55, 0.65, 0.85))
+		_util_volume_slider(bgm_idx)
+
+	var sfx_idx := AudioServer.get_bus_index("SFX")
+	if sfx_idx >= 0:
+		_util_label("SFX", Color(0.55, 0.65, 0.85))
+		_util_volume_slider(sfx_idx)
+
+# ── Util helpers ──────────────────────────────────────────────────
+
+func _util_header(text: String) -> void:
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.add_theme_font_size_override("font_size", 12)
+	lbl.modulate = Color(0.72, 0.88, 1.0)
+	_side_content.add_child(lbl)
+	_util_separator()
+
+func _util_separator() -> void:
+	_side_content.add_child(HSeparator.new())
+
+func _util_label(text: String, color: Color) -> void:
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.add_theme_font_size_override("font_size", 11)
+	lbl.modulate = color
+	_side_content.add_child(lbl)
+
+func _util_toggle(label_text: String, initial: bool, callback: Callable) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	_side_content.add_child(row)
+
+	var lbl := Label.new()
+	lbl.text = label_text
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl.add_theme_font_size_override("font_size", 12)
+	row.add_child(lbl)
+
+	var btn := Button.new()
+	btn.toggle_mode = true
+	btn.button_pressed = initial
+	btn.text = "ON" if initial else "OFF"
+	btn.custom_minimum_size = Vector2(44, 24)
+	btn.modulate = Color(0.5, 1.0, 0.6) if initial else Color(1.0, 0.5, 0.5)
+	btn.toggled.connect(func(v: bool) -> void:
+		btn.text = "ON" if v else "OFF"
+		btn.modulate = Color(0.5, 1.0, 0.6) if v else Color(1.0, 0.5, 0.5)
+		callback.call(v)
+	)
+	row.add_child(btn)
+
+func _util_volume_slider(bus_idx: int) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	_side_content.add_child(row)
+
+	var cur_vol: float = db_to_linear(AudioServer.get_bus_volume_db(bus_idx))
+
+	var slider := HSlider.new()
+	slider.min_value = 0.0
+	slider.max_value = 1.0
+	slider.step = 0.01
+	slider.value = cur_vol
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(slider)
+
+	var val_lbl := Label.new()
+	val_lbl.text = "%d%%" % int(cur_vol * 100.0)
+	val_lbl.custom_minimum_size = Vector2(34, 0)
+	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	val_lbl.add_theme_font_size_override("font_size", 11)
+	row.add_child(val_lbl)
+
+	slider.value_changed.connect(func(v: float) -> void:
+		val_lbl.text = "%d%%" % int(v * 100.0)
+		AudioServer.set_bus_volume_db(bus_idx, linear_to_db(maxf(v, 0.001)))
+	)
