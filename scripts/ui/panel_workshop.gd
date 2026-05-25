@@ -257,12 +257,14 @@ func _build_assembly_panel() -> void:
 
 	var outer_vbox := VBoxContainer.new()
 	outer_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	outer_vbox.offset_bottom = -32.0  # 조립 버튼 공간 확보
 	outer_vbox.add_theme_constant_override("separation", 4)
 	_tab_asm_panel.add_child(outer_vbox)
 
 	# 5열 가로 배치: [격납고] [몸체] [무기] [다리] [SYS SPEC]
 	var col_row := HBoxContainer.new()
 	col_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	col_row.add_theme_constant_override("separation", 4)
 	outer_vbox.add_child(col_row)
 
@@ -335,10 +337,12 @@ func _build_assembly_panel() -> void:
 	_col_specs_inner.add_theme_constant_override("separation", 4)
 	col5_vbox.add_child(_col_specs_inner)
 
-	# ── 조립 버튼 (full width) ──────────
+	# ── 조립 버튼 — 패널 하단에 앵커 고정 ──────────
 	_asm_btn = Button.new()
 	_asm_btn.text = "▶  조립하기"
-	_asm_btn.custom_minimum_size = Vector2(0, 28)
+	_asm_btn.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	_asm_btn.offset_top    = -28.0
+	_asm_btn.offset_bottom =   0.0
 	_asm_btn.disabled = true
 	_asm_btn.pressed.connect(func():
 		if GameState.assemble_machine(_asm_slot, _asm_sel["body"], _asm_sel["weapon"], _asm_sel["legs"]):
@@ -346,7 +350,7 @@ func _build_assembly_panel() -> void:
 			_asm_sel = {"body": 0, "weapon": 0, "legs": 0}
 			_refresh_assembly()
 	)
-	outer_vbox.add_child(_asm_btn)
+	_tab_asm_panel.add_child(_asm_btn)
 
 func _make_col_panel(bg: Color, border: Color) -> PanelContainer:
 	var pc := PanelContainer.new()
