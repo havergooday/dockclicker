@@ -19,7 +19,7 @@ var _slot_total_time: Array = [0.0,  0.0,  0.0]
 
 # Assignment wizard state
 var _sel_slot: int = -1
-var _sel_pilot_tier: int = 0
+var _sel_pilot_id: String = ""
 var _sel_planet: String = ""
 
 func _ready() -> void:
@@ -67,7 +67,7 @@ func _apply_preselect() -> void:
 		var s: DispatchManager.AutoSlot = GameState.auto_slots[presel] as DispatchManager.AutoSlot
 		if s.state == "offline":
 			_sel_slot = presel
-			_sel_pilot_tier = 0
+			_sel_pilot_id = ""
 			_sel_planet = ""
 			_rebuild_slot(presel)
 
@@ -268,8 +268,10 @@ func _add_header(parent: VBoxContainer, index: int, slot: DispatchManager.AutoSl
 		row.add_child(mach_lbl)
 
 		if slot.state in ["on_mission", "returning", "returned"]:
+			var pilot := GameState.get_hired_pilot(slot.pilot_id)
+			var pilot_name: String = pilot.get("name", slot.pilot_id)
 			var mission_lbl := Label.new()
-			mission_lbl.text = "T%d  •  %s" % [slot.pilot_tier, _planet_name(slot.planet)]
+			mission_lbl.text = "%s  •  %s" % [pilot_name, _planet_name(slot.planet)]
 			mission_lbl.add_theme_font_size_override("font_size", 11)
 			mission_lbl.modulate = Color(0.60, 0.85, 1.0)
 			row.add_child(mission_lbl)
@@ -342,8 +344,8 @@ func _body_empty(parent: VBoxContainer, index: int) -> void:
 
 func _body_offline(parent: VBoxContainer, index: int) -> void:
 	var is_sel := _sel_slot == index
-	var pilot_qtys: Array = GameState.owned_parts["pilot"]
-	var has_pilot := false
+	var idle_pilots := GameState.get_idle_pilots()
+	var has_pilot := idle_pilots.size() > 0
 	var pilot_grp := ButtonGroup.new()
 
 	var sortie_btn := Button.new()
@@ -351,7 +353,7 @@ func _body_offline(parent: VBoxContainer, index: int) -> void:
 	sortie_btn.custom_minimum_size = Vector2(80, 26)
 	sortie_btn.disabled = true
 
-	# ── 파일럿 행: [파일럿] [T1×N] [T2×N] ... [spacer] [출격▶] ──
+	# ── 파일럿 행: [파일럿] [이름버튼...] [spacer] [출격▶] ──
 	var pilot_hbox := HBoxContainer.new()
 	pilot_hbox.add_theme_constant_override("separation", 6)
 	parent.add_child(pilot_hbox)
@@ -360,22 +362,19 @@ func _body_offline(parent: VBoxContainer, index: int) -> void:
 	pilot_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	pilot_hbox.add_child(pilot_lbl)
 
-	for i in pilot_qtys.size():
-		if pilot_qtys[i] <= 0:
-			continue
-		has_pilot = true
-		var pt := i + 1
+	for pilot in idle_pilots:
+		var pid: String = pilot["id"]
 		var pbtn := Button.new()
-		pbtn.text = "T%d ×%d" % [pt, pilot_qtys[i]]
+		pbtn.text = pilot.get("name", pid)
 		pbtn.toggle_mode = true
 		pbtn.button_group = pilot_grp
-		pbtn.button_pressed = (is_sel and _sel_pilot_tier == pt)
+		pbtn.button_pressed = (is_sel and _sel_pilot_id == pid)
 		pbtn.custom_minimum_size = Vector2(0, 26)
-		var cap_pt: int = pt
+		var cap_pid: String = pid
 		pbtn.pressed.connect(func():
 			var prev := _sel_slot
 			_sel_slot = index
-			_sel_pilot_tier = cap_pt
+			_sel_pilot_id = cap_pid
 			_sel_planet = ""
 			if prev != index and prev >= 0:
 				_rebuild_slot(prev)
@@ -385,7 +384,7 @@ func _body_offline(parent: VBoxContainer, index: int) -> void:
 
 	if not has_pilot:
 		var lbl := Label.new()
-		lbl.text = "파일럿 없음 → PC 터미널"
+		lbl.text = "대기 중인 파일럿 없음 → PC 터미널"
 		lbl.add_theme_font_size_override("font_size", 11)
 		lbl.modulate = Color(1.0, 0.55, 0.55)
 		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -398,7 +397,7 @@ func _body_offline(parent: VBoxContainer, index: int) -> void:
 	pilot_hbox.add_child(sortie_btn)
 
 	# ── 파견 지역 행 (파일럿 선택 후에만) ──────────────────────
-	if is_sel and _sel_pilot_tier > 0:
+	if is_sel and _sel_pilot_id != "":
 		var planet_hbox := HBoxContainer.new()
 		planet_hbox.add_theme_constant_override("separation", 6)
 		parent.add_child(planet_hbox)
@@ -407,10 +406,10 @@ func _body_offline(parent: VBoxContainer, index: int) -> void:
 		pl_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		planet_hbox.add_child(pl_lbl)
 
-		var accessible: Array = GameState.get_pilot_accessible_planets(_sel_pilot_tier)
+		var accessible: Array = GameState.get_pilot_accessible_planets(_sel_pilot_id)
 		if accessible.is_empty():
 			var lbl := Label.new()
-			lbl.text = "접근 지역 없음 → PC 터미널"
+			lbl.text = "접근 지역 없음"
 			lbl.add_theme_font_size_override("font_size", 11)
 			lbl.modulate = Color(1.0, 0.75, 0.40)
 			planet_hbox.add_child(lbl)
@@ -435,10 +434,10 @@ func _body_offline(parent: VBoxContainer, index: int) -> void:
 
 	var cap_slot := index
 	sortie_btn.pressed.connect(func():
-		if GameState.start_auto_dispatch(cap_slot, _sel_pilot_tier, _sel_planet):
+		if GameState.start_auto_dispatch(cap_slot, _sel_pilot_id, _sel_planet):
 			_show_toast("슬롯 %d  파견 시작!" % (cap_slot + 1))
 			_sel_slot = -1
-			_sel_pilot_tier = 0
+			_sel_pilot_id = ""
 			_sel_planet = ""
 	)
 

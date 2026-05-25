@@ -3,15 +3,6 @@ class_name PartsData
 const DAMAGE_UPGRADE_COSTS: Array = [20, 50, 100, 200]
 
 const DICT: Dictionary = {
-	"pilot": {
-		"name": "파일럿",
-		"effect": "파견 슬롯 +%d",
-		"tiers": [
-			{"name": "신인 파일럿", "cost": 150, "value": 1, "required_planet": "sector_a"},
-			{"name": "숙련 파일럿", "cost": 350, "value": 2, "required_planet": "sector_b"},
-			{"name": "에이스 파일럿", "cost": 800, "value": 3, "required_planet": "sector_c"},
-		]
-	},
 	"body": {
 		"name": "몸체",
 		"effect": "파견 시간 +%ds",

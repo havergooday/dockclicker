@@ -6,21 +6,21 @@ signal auto_dispatch_returned(slot_index: int)
 
 const BASE_RETURN_TIME: float = 30.0
 
-# ── AutoSlot ──────────────────────────────────────────────
+# ── AutoSlot ──────────────────────────────────────────────────
 # 슬롯 상태: locked | empty | offline | on_mission | returning | returned
 
 class AutoSlot:
 	var state: String = "empty"
 	var unlock_cost: int = 0
 	var machine: Dictionary = {}   # {body: int, weapon: int, legs: int}
-	var pilot_tier: int = 0
+	var pilot_id: String = ""
 	var planet: String = ""
 	var mission_end_time: float = INF
 	var return_end_time: float = INF
 	var credits_earned: int = 0
 	# 자동 재파견 설정 (수령 후 즉시 동일 조건으로 재파견)
 	var auto_redispatch: bool = false
-	var auto_pilot_tier: int = 0
+	var auto_pilot_id: String = ""
 	var auto_planet: String = ""
 
 	static func make_empty() -> AutoSlot:
@@ -33,14 +33,14 @@ class AutoSlot:
 		return s
 
 	func reset_mission_data() -> void:
-		pilot_tier = 0
+		pilot_id = ""
 		planet = ""
 		mission_end_time = INF
 		return_end_time = INF
 		credits_earned = 0
 		# auto_redispatch 설정은 유지
 
-# ── 슬롯 초기화 ───────────────────────────────────────────
+# ── 슬롯 초기화 ───────────────────────────────────────────────
 
 var auto_slots: Array = []
 
@@ -51,7 +51,7 @@ func _ready() -> void:
 		AutoSlot.make_locked(700),
 	]
 
-# ── 타이머 ────────────────────────────────────────────────
+# ── 타이머 ────────────────────────────────────────────────────
 
 func _process(_delta: float) -> void:
 	var now := Time.get_unix_time_from_system()
@@ -64,7 +64,7 @@ func _process(_delta: float) -> void:
 			if now >= slot.return_end_time:
 				_complete_return(i)
 
-# ── 슬롯 잠금 해제 ───────────────────────────────────────
+# ── 슬롯 잠금 해제 ───────────────────────────────────────────
 
 func unlock_auto_slot(index: int) -> bool:
 	if index < 0 or index >= auto_slots.size():
@@ -80,7 +80,7 @@ func unlock_auto_slot(index: int) -> bool:
 	auto_slot_changed.emit(index)
 	return true
 
-# ── 머신 조립 ─────────────────────────────────────────────
+# ── 머신 조립 ─────────────────────────────────────────────────
 
 func get_assembly_cost(body_tier: int, weapon_tier: int, legs_tier: int) -> int:
 	return (body_tier + weapon_tier + legs_tier) * 50
@@ -110,7 +110,7 @@ func assemble_machine(slot_index: int, body_tier: int, weapon_tier: int, legs_ti
 	auto_slot_changed.emit(slot_index)
 	return true
 
-# ── 파견 ──────────────────────────────────────────────────
+# ── 파견 ──────────────────────────────────────────────────────
 
 func get_pilot_accessible_planets(pilot_tier: int) -> Array:
 	var result: Array = []
@@ -119,16 +119,18 @@ func get_pilot_accessible_planets(pilot_tier: int) -> Array:
 			result.append(GameState.PLANETS[i])
 	return result
 
-func start_auto_dispatch(slot_index: int, pilot_tier: int, planet_id: String) -> bool:
+func start_auto_dispatch(slot_index: int, pilot_id: String, planet_id: String) -> bool:
 	if slot_index < 0 or slot_index >= auto_slots.size():
 		return false
 	var slot: AutoSlot = auto_slots[slot_index]
 	if slot.state != "offline":
 		return false
-	if GameState.get_owned_qty("pilot", pilot_tier) <= 0:
+	var pilot := GameState.get_hired_pilot(pilot_id)
+	if pilot.is_empty() or pilot.get("status", "") != "idle":
 		return false
 	if not GameState.is_planet_unlocked(planet_id):
 		return false
+	var pilot_tier: int = int(pilot.get("tier", 1))
 	var ok := false
 	for p in get_pilot_accessible_planets(pilot_tier):
 		if p["id"] == planet_id:
@@ -136,17 +138,21 @@ func start_auto_dispatch(slot_index: int, pilot_tier: int, planet_id: String) ->
 			break
 	if not ok:
 		return false
-	GameState.owned_parts["pilot"][pilot_tier - 1] -= 1
+	pilot["status"] = "on_mission"
+	GameState.pilot_status_changed.emit(pilot_id)
 	var body_tier: int = slot.machine.get("body", 1)
 	var now := Time.get_unix_time_from_system()
 	slot.state = "on_mission"
-	slot.pilot_tier = pilot_tier
+	slot.pilot_id = pilot_id
 	slot.planet = planet_id
-	slot.mission_end_time = now + _get_mission_duration(body_tier)
+	var duration := _get_mission_duration(body_tier)
+	if pilot.get("bonus_type", "") == "speed":
+		duration *= (1.0 - float(pilot.get("bonus_value", 0)) / 100.0)
+	slot.mission_end_time = now + duration
 	auto_slot_changed.emit(slot_index)
 	return true
 
-# ── 수령 ──────────────────────────────────────────────────
+# ── 수령 ──────────────────────────────────────────────────────
 
 func collect_auto_slot(slot_index: int) -> bool:
 	if slot_index < 0 or slot_index >= auto_slots.size():
@@ -154,8 +160,11 @@ func collect_auto_slot(slot_index: int) -> bool:
 	var slot: AutoSlot = auto_slots[slot_index]
 	if slot.state != "returned":
 		return false
-	if slot.pilot_tier >= 1 and slot.pilot_tier <= GameState.owned_parts["pilot"].size():
-		GameState.owned_parts["pilot"][slot.pilot_tier - 1] += 1
+	if slot.pilot_id != "":
+		var pilot := GameState.get_hired_pilot(slot.pilot_id)
+		if not pilot.is_empty():
+			pilot["status"] = "idle"
+			GameState.pilot_status_changed.emit(slot.pilot_id)
 	GameState.total_credits += slot.credits_earned
 	GameState.credits_changed.emit(GameState.total_credits)
 	slot.reset_mission_data()
@@ -163,14 +172,18 @@ func collect_auto_slot(slot_index: int) -> bool:
 	auto_slot_changed.emit(slot_index)
 	return true
 
-# ── 내부 상태 전환 ────────────────────────────────────────
+# ── 내부 상태 전환 ────────────────────────────────────────────
 
 func _start_returning(slot_index: int, now: float) -> void:
 	var slot: AutoSlot = auto_slots[slot_index]
 	var body_tier: int = slot.machine.get("body", 1)
 	var weapon_tier: int = slot.machine.get("weapon", 1)
 	var legs_tier: int = slot.machine.get("legs", 1)
-	slot.credits_earned = _get_mission_credits(weapon_tier, _get_mission_duration(body_tier))
+	var base_credits := _get_mission_credits(weapon_tier, _get_mission_duration(body_tier))
+	var pilot := GameState.get_hired_pilot(slot.pilot_id)
+	if not pilot.is_empty() and pilot.get("bonus_type", "") == "credits":
+		base_credits = int(float(base_credits) * (1.0 + float(pilot.get("bonus_value", 0)) / 100.0))
+	slot.credits_earned = base_credits
 	slot.state = "returning"
 	slot.return_end_time = now + _get_return_duration(legs_tier)
 	auto_slot_changed.emit(slot_index)
@@ -180,10 +193,10 @@ func _complete_return(slot_index: int) -> void:
 	slot.state = "returned"
 	auto_slot_changed.emit(slot_index)
 	auto_dispatch_returned.emit(slot_index)
-	if slot.auto_redispatch and slot.auto_pilot_tier > 0 and slot.auto_planet != "":
+	if slot.auto_redispatch and slot.auto_pilot_id != "" and slot.auto_planet != "":
 		_do_auto_redispatch(slot_index)
 
-# ── 머신 스펙 미리보기 ───────────────────────────────────
+# ── 머신 스펙 미리보기 ───────────────────────────────────────
 
 func get_machine_preview(body_tier: int, weapon_tier: int, legs_tier: int) -> Dictionary:
 	var mission_time := _get_mission_duration(body_tier) if body_tier > 0 else 0.0
@@ -199,7 +212,7 @@ func get_machine_preview(body_tier: int, weapon_tier: int, legs_tier: int) -> Di
 		"rate":         rate,
 	}
 
-# ── 수치 계산 헬퍼 ────────────────────────────────────────
+# ── 수치 계산 헬퍼 ────────────────────────────────────────────
 
 func _get_mission_duration(body_tier: int) -> float:
 	var tiers: Array = PartsData.DICT["body"]["tiers"]
@@ -232,13 +245,13 @@ func apply_save_data(slot_data: Array, save_time: float) -> void:
 		slot.unlock_cost      = int(d.get("unlock_cost",      0))
 		var mraw              = d.get("machine", {})
 		slot.machine          = (mraw as Dictionary).duplicate() if mraw is Dictionary else {}
-		slot.pilot_tier       = int(d.get("pilot_tier",       0))
+		slot.pilot_id         = str(d.get("pilot_id",         ""))
 		slot.planet           = str(d.get("planet",           ""))
 		slot.mission_end_time = _dec(d.get("mission_end_time", INF))
 		slot.return_end_time  = _dec(d.get("return_end_time",  INF))
 		slot.credits_earned   = int(d.get("credits_earned",   0))
 		slot.auto_redispatch  = bool(d.get("auto_redispatch",  false))
-		slot.auto_pilot_tier  = int(d.get("auto_pilot_tier",  0))
+		slot.auto_pilot_id    = str(d.get("auto_pilot_id",    ""))
 		slot.auto_planet      = str(d.get("auto_planet",      ""))
 		auto_slots.append(slot)
 	_fast_forward(Time.get_unix_time_from_system())
@@ -250,8 +263,12 @@ func _fast_forward(now: float) -> void:
 			var b: int = slot.machine.get("body",   1)
 			var w: int = slot.machine.get("weapon", 1)
 			var l: int = slot.machine.get("legs",   1)
-			slot.credits_earned = _get_mission_credits(w, _get_mission_duration(b))
-			slot.state          = "returning"
+			var base_credits := _get_mission_credits(w, _get_mission_duration(b))
+			var pilot := GameState.get_hired_pilot(slot.pilot_id)
+			if not pilot.is_empty() and pilot.get("bonus_type", "") == "credits":
+				base_credits = int(float(base_credits) * (1.0 + float(pilot.get("bonus_value", 0)) / 100.0))
+			slot.credits_earned  = base_credits
+			slot.state           = "returning"
 			slot.return_end_time = slot.mission_end_time + _get_return_duration(l)
 		if slot.state == "returning" and now >= slot.return_end_time:
 			slot.state = "returned"
@@ -260,16 +277,17 @@ func _dec(v) -> float:
 	var f := float(v)
 	return INF if f >= 1e29 else f
 
-# ── 자동 재파견 ───────────────────────────────────────────────────
+# ── 자동 재파견 ───────────────────────────────────────────────────────
 
 func _do_auto_redispatch(slot_index: int) -> void:
 	var slot: AutoSlot = auto_slots[slot_index]
-	# 수령 처리 (파일럿 반환 + 크레딧 지급)
-	if slot.pilot_tier >= 1 and slot.pilot_tier <= GameState.owned_parts["pilot"].size():
-		GameState.owned_parts["pilot"][slot.pilot_tier - 1] += 1
+	if slot.pilot_id != "":
+		var pilot := GameState.get_hired_pilot(slot.pilot_id)
+		if not pilot.is_empty():
+			pilot["status"] = "idle"
+			GameState.pilot_status_changed.emit(slot.pilot_id)
 	GameState.total_credits += slot.credits_earned
 	GameState.credits_changed.emit(GameState.total_credits)
 	slot.reset_mission_data()
 	slot.state = "offline"
-	# 동일 설정으로 즉시 재파견
-	start_auto_dispatch(slot_index, slot.auto_pilot_tier, slot.auto_planet)
+	start_auto_dispatch(slot_index, slot.auto_pilot_id, slot.auto_planet)

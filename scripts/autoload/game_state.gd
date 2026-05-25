@@ -11,13 +11,49 @@ var damage_upgrade_level: int = 0
 var unlocked_planets: Array = ["sector_a"]
 var selected_planet: String = "sector_a"
 var owned_parts: Dictionary = {
-	"pilot": [0, 0, 0],
-	"body":  [0, 0, 0],
-	"weapon":[0, 0, 0],
-	"legs":  [0, 0, 0],
+	"body":   [0, 0, 0],
+	"weapon": [0, 0, 0],
+	"legs":   [0, 0, 0],
 }
 
-# 데이터 상수 — 실제 정의는 data/ 파일에 있음
+# ── 파일럿 ────────────────────────────────────────────────────
+# bonus_type: "none" | "speed" (임무 시간 단축 %) | "credits" (수익 증가 %)
+const PILOTS: Array = [
+	{
+		"id": "kyla_vex",
+		"name": "카이라 벡스",
+		"tier": 1,
+		"cost": 500,
+		"bonus_type": "none",
+		"bonus_value": 0,
+		"portrait_color": "#4499DD",
+		"desc": "신뢰할 수 있는 초보 파일럿",
+	},
+	{
+		"id": "rio_son",
+		"name": "리오 손",
+		"tier": 2,
+		"cost": 1500,
+		"bonus_type": "speed",
+		"bonus_value": 20,
+		"portrait_color": "#DD7733",
+		"desc": "임무 시간 -20%",
+	},
+	{
+		"id": "dona_mar",
+		"name": "도나 마르",
+		"tier": 3,
+		"cost": 3500,
+		"bonus_type": "credits",
+		"bonus_value": 30,
+		"portrait_color": "#44CC66",
+		"desc": "수익 +30%",
+	},
+]
+
+var hired_pilots: Array = []  # Array of pilot instance dicts
+
+# ── 데이터 상수 ───────────────────────────────────────────────
 const _PlanetDataScript = preload("res://data/planet_data.gd")
 const _PartsDataScript  = preload("res://data/parts_data.gd")
 const PLANETS:               Array      = _PlanetDataScript.LIST
@@ -31,6 +67,8 @@ signal planet_unlocked(planet_id: String)
 signal part_purchased(part_type: String, tier: int)
 signal auto_slot_changed(index: int)
 signal auto_dispatch_returned(slot_index: int)
+signal pilot_hired(pilot_id: String)
+signal pilot_status_changed(pilot_id: String)
 
 var _dispatch: DispatchManager
 
@@ -43,7 +81,7 @@ func _ready() -> void:
 	_dispatch.auto_slot_changed.connect(func(i: int): auto_slot_changed.emit(i))
 	_dispatch.auto_dispatch_returned.connect(func(i: int): auto_dispatch_returned.emit(i))
 
-# ── 행성 ──────────────────────────────────────────────────
+# ── 행성 ──────────────────────────────────────────────────────
 
 func get_planet(planet_id: String) -> Dictionary:
 	for p in PLANETS:
@@ -69,7 +107,7 @@ func unlock_planet(planet_id: String) -> bool:
 	planet_unlocked.emit(planet_id)
 	return true
 
-# ── 클릭 데미지 강화 ──────────────────────────────────────
+# ── 클릭 데미지 강화 ──────────────────────────────────────────
 
 func get_damage_upgrade_cost() -> int:
 	if damage_upgrade_level >= DAMAGE_UPGRADE_COSTS.size():
@@ -86,7 +124,7 @@ func upgrade_click_damage() -> bool:
 	credits_changed.emit(total_credits)
 	return true
 
-# ── 직접 파견 ─────────────────────────────────────────────
+# ── 직접 파견 ─────────────────────────────────────────────────
 
 func start_direct_dispatch() -> void:
 	player_status = "on_mission"
@@ -111,7 +149,7 @@ func collect_player_credits(from_global_pos: Vector2) -> void:
 	credits_changed.emit(total_credits)
 	credits_collected.emit(amount, from_global_pos)
 
-# ── 파츠 / 인벤토리 ──────────────────────────────────────
+# ── 파츠 / 인벤토리 ──────────────────────────────────────────
 
 func buy_part(part_type: String, tier: int) -> bool:
 	if part_type not in PARTS:
@@ -134,7 +172,76 @@ func buy_part(part_type: String, tier: int) -> bool:
 func get_owned_qty(part_type: String, tier: int) -> int:
 	return owned_parts.get(part_type, [0, 0, 0])[tier - 1]
 
-# ── 자동 파견 — DispatchManager 위임 ─────────────────────
+# ── 파일럿 시스템 ─────────────────────────────────────────────
+
+func get_pilot_data(pilot_id: String) -> Dictionary:
+	for p in PILOTS:
+		if p["id"] == pilot_id:
+			return p
+	return {}
+
+func is_pilot_hired(pilot_id: String) -> bool:
+	for p in hired_pilots:
+		if p["id"] == pilot_id:
+			return true
+	return false
+
+func get_hired_pilot(pilot_id: String) -> Dictionary:
+	for p in hired_pilots:
+		if p["id"] == pilot_id:
+			return p
+	return {}
+
+func get_idle_pilots() -> Array:
+	var result: Array = []
+	for p in hired_pilots:
+		if p.get("status", "") == "idle":
+			result.append(p)
+	return result
+
+func hire_pilot(pilot_id: String) -> bool:
+	var data := get_pilot_data(pilot_id)
+	if data.is_empty() or is_pilot_hired(pilot_id):
+		return false
+	if total_credits < int(data["cost"]):
+		return false
+	total_credits -= int(data["cost"])
+	hired_pilots.append({
+		"id":             data["id"],
+		"name":           data["name"],
+		"tier":           data["tier"],
+		"bonus_type":     data["bonus_type"],
+		"bonus_value":    data["bonus_value"],
+		"portrait_color": data["portrait_color"],
+		"status":         "idle",
+	})
+	credits_changed.emit(total_credits)
+	pilot_hired.emit(pilot_id)
+	return true
+
+func create_custom_pilot(custom_name: String, color_hex: String) -> bool:
+	if custom_name.strip_edges().is_empty():
+		return false
+	var cost := 300
+	if total_credits < cost:
+		return false
+	total_credits -= cost
+	var uid := "custom_%d" % Time.get_ticks_msec()
+	hired_pilots.append({
+		"id":             uid,
+		"name":           custom_name.strip_edges(),
+		"tier":           1,
+		"bonus_type":     "none",
+		"bonus_value":    0,
+		"portrait_color": color_hex,
+		"status":         "idle",
+		"is_custom":      true,
+	})
+	credits_changed.emit(total_credits)
+	pilot_hired.emit(uid)
+	return true
+
+# ── 자동 파견 — DispatchManager 위임 ─────────────────────────
 
 func unlock_auto_slot(index: int) -> bool:
 	return _dispatch.unlock_auto_slot(index)
@@ -145,11 +252,14 @@ func get_assembly_cost(body_tier: int, weapon_tier: int, legs_tier: int) -> int:
 func assemble_machine(slot_index: int, body_tier: int, weapon_tier: int, legs_tier: int) -> bool:
 	return _dispatch.assemble_machine(slot_index, body_tier, weapon_tier, legs_tier)
 
-func get_pilot_accessible_planets(pilot_tier: int) -> Array:
-	return _dispatch.get_pilot_accessible_planets(pilot_tier)
+func get_pilot_accessible_planets(pilot_id: String) -> Array:
+	var p := get_hired_pilot(pilot_id)
+	if p.is_empty():
+		return []
+	return _dispatch.get_pilot_accessible_planets(int(p.get("tier", 1)))
 
-func start_auto_dispatch(slot_index: int, pilot_tier: int, planet_id: String) -> bool:
-	return _dispatch.start_auto_dispatch(slot_index, pilot_tier, planet_id)
+func start_auto_dispatch(slot_index: int, pilot_id: String, planet_id: String) -> bool:
+	return _dispatch.start_auto_dispatch(slot_index, pilot_id, planet_id)
 
 func collect_auto_slot(slot_index: int) -> bool:
 	return _dispatch.collect_auto_slot(slot_index)

@@ -2,6 +2,7 @@ extends Control
 
 var _missions_vbox: VBoxContainer
 var _countdown_data: Array = []
+var _pilot_strip: HBoxContainer
 
 # ── Util side panel ───────────────────────────────────────────────
 var _active_tab: String = ""
@@ -13,8 +14,12 @@ func _ready() -> void:
 	PanelManager.register_panel("bridge", self)
 	GameState.auto_slot_changed.connect(func(_i): _refresh_missions())
 	GameState.auto_dispatch_returned.connect(func(_i): _refresh_missions())
+	GameState.pilot_hired.connect(func(_id): _refresh_pilots())
+	GameState.pilot_status_changed.connect(func(_id): _refresh_pilots())
+	_build_pilot_strip()
 	_build_mission_panel()
 	_refresh_missions()
+	_refresh_pilots()
 	_build_util_panel()
 
 func _process(_delta: float) -> void:
@@ -27,6 +32,106 @@ func _process(_delta: float) -> void:
 			continue
 		var remaining: float = maxf(0.0, float(entry["end_time"]) - now)
 		lbl.text = "%02d:%02d" % [int(remaining) / 60, int(remaining) % 60]
+
+# ── Pilot roster strip (top-left) ────────────────────────────────
+
+func _build_pilot_strip() -> void:
+	var container := PanelContainer.new()
+	container.anchor_left   = 0.0
+	container.anchor_top    = 0.0
+	container.anchor_right  = 0.0
+	container.anchor_bottom = 0.0
+	container.offset_left   = 4.0
+	container.offset_top    = 4.0
+	container.offset_right  = 380.0
+	container.offset_bottom = 58.0
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.04, 0.07, 0.13, 0.82)
+	style.border_color = Color(0.18, 0.28, 0.44)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(4)
+	style.content_margin_left   = 10
+	style.content_margin_right  = 10
+	style.content_margin_top    = 5
+	style.content_margin_bottom = 5
+	container.add_theme_stylebox_override("panel", style)
+	add_child(container)
+
+	_pilot_strip = HBoxContainer.new()
+	_pilot_strip.add_theme_constant_override("separation", 10)
+	_pilot_strip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_pilot_strip.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+	container.add_child(_pilot_strip)
+
+func _refresh_pilots() -> void:
+	if _pilot_strip == null:
+		return
+	for c in _pilot_strip.get_children():
+		c.queue_free()
+
+	if GameState.hired_pilots.is_empty():
+		var lbl := Label.new()
+		lbl.text = "파일럿 없음  —  PC 터미널에서 고용"
+		lbl.add_theme_font_size_override("font_size", 11)
+		lbl.modulate = Color(1, 1, 1, 0.30)
+		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		_pilot_strip.add_child(lbl)
+		return
+
+	for pilot in GameState.hired_pilots:
+		var col_str: String = pilot.get("portrait_color", "#4499DD")
+		var col := Color(col_str) if col_str.begins_with("#") else Color.CORNFLOWER_BLUE
+		var status: String = pilot.get("status", "idle")
+
+		var card := HBoxContainer.new()
+		card.add_theme_constant_override("separation", 5)
+		card.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		_pilot_strip.add_child(card)
+
+		# Portrait dot
+		var dot_panel := PanelContainer.new()
+		dot_panel.custom_minimum_size = Vector2(28, 28)
+		dot_panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var dot_style := StyleBoxFlat.new()
+		dot_style.bg_color = col.darkened(0.35)
+		dot_style.border_color = col if status == "idle" else col.darkened(0.4)
+		dot_style.set_border_width_all(2)
+		dot_style.set_corner_radius_all(14)
+		dot_panel.add_theme_stylebox_override("panel", dot_style)
+		var init_lbl := Label.new()
+		var pname: String = pilot.get("name", "?")
+		init_lbl.text = pname.substr(0, 1)
+		init_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		init_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		init_lbl.add_theme_font_size_override("font_size", 11)
+		init_lbl.modulate = col.lightened(0.3) if status == "idle" else col.darkened(0.2)
+		dot_panel.add_child(init_lbl)
+		card.add_child(dot_panel)
+
+		# Name + status
+		var info := VBoxContainer.new()
+		info.add_theme_constant_override("separation", 0)
+		info.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		card.add_child(info)
+
+		var name_lbl := Label.new()
+		name_lbl.text = pname
+		name_lbl.add_theme_font_size_override("font_size", 11)
+		name_lbl.modulate = Color(1, 1, 1, 0.9) if status == "idle" else Color(0.6, 0.6, 0.6, 0.8)
+		info.add_child(name_lbl)
+
+		var st_lbl := Label.new()
+		st_lbl.text = "대기중" if status == "idle" else "파견중"
+		st_lbl.add_theme_font_size_override("font_size", 10)
+		st_lbl.modulate = Color(0.45, 0.90, 0.55) if status == "idle" else Color(0.95, 0.70, 0.25)
+		info.add_child(st_lbl)
+
+		# Separator between pilots (not after last)
+		if pilot != GameState.hired_pilots.back():
+			var sep := VSeparator.new()
+			sep.modulate = Color(1, 1, 1, 0.15)
+			_pilot_strip.add_child(sep)
 
 # ── Mission status panel (bottom) ─────────────────────────────────
 

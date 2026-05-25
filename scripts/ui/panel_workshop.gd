@@ -134,7 +134,7 @@ func _refresh_inventory() -> void:
 		child.queue_free()
 
 	var found_sel := false
-	for part_type in ["pilot", "body", "weapon", "legs"]:
+	for part_type in ["body", "weapon", "legs"]:
 		var qtys: Array = GameState.owned_parts[part_type]
 		for i: int in qtys.size():
 			var qty: int = qtys[i]

@@ -18,9 +18,16 @@ const TIER_COLORS: Array = [
 	Color(0.30, 0.55, 0.95),  # T3 — blue
 ]
 
+const CUSTOM_COLORS: Array = [
+	"#DD6644", "#DD9933", "#AACC44",
+	"#44AADD", "#7766DD", "#DD4499",
+]
+
 var _current_category: String = "click"
 var _cat_buttons: Dictionary = {}
 var _content_vbox: VBoxContainer
+var _custom_pilot_name: String = ""
+var _custom_pilot_color: String = "#44AADD"
 
 func _ready() -> void:
 	PanelManager.register_panel("shop", self)
@@ -28,6 +35,8 @@ func _ready() -> void:
 	GameState.credits_changed.connect(func(_v): _refresh())
 	GameState.planet_unlocked.connect(func(_id): _refresh())
 	GameState.part_purchased.connect(func(_pt, _t): _refresh())
+	GameState.pilot_hired.connect(func(_id): _rebuild_content())
+	GameState.pilot_status_changed.connect(func(_id): _rebuild_content())
 	_build_layout()
 	_select_category("click")
 
@@ -110,7 +119,7 @@ func _build_layout() -> void:
 	_content_vbox.add_theme_constant_override("separation", 5)
 	scroll.add_child(_content_vbox)
 
-# ── Category selection ────────────────────────────────────────
+# ── Category selection ────────────────────────────────────────────
 
 func _select_category(cat_id: String) -> void:
 	_current_category = cat_id
@@ -124,6 +133,8 @@ func _rebuild_content() -> void:
 	match _current_category:
 		"click":
 			_build_click_content()
+		"pilot":
+			_build_pilot_content()
 		"inventory":
 			_build_inventory_content()
 		_:
@@ -170,11 +181,287 @@ func _build_click_content() -> void:
 	row.add_child(upg_btn)
 	_content_vbox.add_child(upg_card)
 
+# ── Pilot content ─────────────────────────────────────────────
+
+func _build_pilot_content() -> void:
+	# ── 고용 가능 파일럿 (고정 풀) ──────────────────────────
+	var section_lbl := Label.new()
+	section_lbl.text = "── 파일럿 고용 ──"
+	section_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	section_lbl.add_theme_font_size_override("font_size", 11)
+	section_lbl.modulate = Color(0.55, 0.65, 0.85)
+	_content_vbox.add_child(section_lbl)
+
+	var avail_any := false
+	for pilot_data in GameState.PILOTS:
+		var pid: String = pilot_data["id"]
+		if GameState.is_pilot_hired(pid):
+			continue
+		avail_any = true
+		_content_vbox.add_child(_make_pilot_hire_card(pilot_data))
+
+	if not avail_any:
+		var lbl := Label.new()
+		lbl.text = "모든 파일럿 고용 완료"
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lbl.modulate = Color(1, 1, 1, 0.35)
+		lbl.add_theme_font_size_override("font_size", 12)
+		_content_vbox.add_child(lbl)
+
+	# ── 커스텀 파일럿 생성 ───────────────────────────────────
+	_content_vbox.add_child(HSeparator.new())
+	_content_vbox.add_child(_make_custom_pilot_card())
+
+	# ── 내 파견단 ────────────────────────────────────────────
+	if GameState.hired_pilots.size() > 0:
+		_content_vbox.add_child(HSeparator.new())
+		var roster_lbl := Label.new()
+		roster_lbl.text = "── 내 파견단 ──"
+		roster_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		roster_lbl.add_theme_font_size_override("font_size", 11)
+		roster_lbl.modulate = Color(0.55, 0.65, 0.85)
+		_content_vbox.add_child(roster_lbl)
+		for p in GameState.hired_pilots:
+			_content_vbox.add_child(_make_hired_pilot_card(p))
+
+func _make_pilot_hire_card(pilot_data: Dictionary) -> Control:
+	var outer := PanelContainer.new()
+	var s := StyleBoxFlat.new()
+	var tier: int = int(pilot_data.get("tier", 1))
+	s.bg_color = Color(0.07, 0.12, 0.19, 0.85)
+	s.border_color = _tier_color(tier)
+	s.border_width_left = 3
+	s.border_width_top = 0
+	s.border_width_right = 0
+	s.border_width_bottom = 0
+	s.set_corner_radius_all(4)
+	s.content_margin_left = 10
+	s.content_margin_right = 8
+	s.content_margin_top = 7
+	s.content_margin_bottom = 7
+	outer.add_theme_stylebox_override("panel", s)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	outer.add_child(row)
+
+	# Portrait
+	row.add_child(_make_portrait(pilot_data))
+
+	# Info
+	var info := VBoxContainer.new()
+	info.add_theme_constant_override("separation", 2)
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(info)
+
+	var name_row := HBoxContainer.new()
+	name_row.add_theme_constant_override("separation", 6)
+	info.add_child(name_row)
+
+	var name_lbl := Label.new()
+	name_lbl.text = str(pilot_data.get("name", ""))
+	name_lbl.add_theme_font_size_override("font_size", 13)
+	name_row.add_child(name_lbl)
+
+	var tier_lbl := Label.new()
+	tier_lbl.text = "T%d" % tier
+	tier_lbl.add_theme_font_size_override("font_size", 11)
+	tier_lbl.modulate = _tier_color(tier)
+	name_row.add_child(tier_lbl)
+
+	var bonus_type: String = pilot_data.get("bonus_type", "none")
+	if bonus_type != "none":
+		var bonus_lbl := Label.new()
+		bonus_lbl.text = str(pilot_data.get("desc", ""))
+		bonus_lbl.add_theme_font_size_override("font_size", 11)
+		bonus_lbl.modulate = Color(0.65, 0.85, 1.0) if bonus_type == "speed" else Color(0.65, 1.0, 0.70)
+		info.add_child(bonus_lbl)
+	else:
+		var desc_lbl := Label.new()
+		desc_lbl.text = str(pilot_data.get("desc", ""))
+		desc_lbl.add_theme_font_size_override("font_size", 11)
+		desc_lbl.modulate = Color(0.55, 0.55, 0.55)
+		info.add_child(desc_lbl)
+
+	# Hire button
+	var cost: int = int(pilot_data.get("cost", 0))
+	var hire_btn := Button.new()
+	hire_btn.text = "%d CR  고용" % cost
+	hire_btn.custom_minimum_size = Vector2(110, 28)
+	hire_btn.disabled = GameState.total_credits < cost
+	var pid: String = pilot_data.get("id", "")
+	hire_btn.pressed.connect(func():
+		GameState.hire_pilot(pid)
+	)
+	row.add_child(hire_btn)
+
+	return outer
+
+func _make_custom_pilot_card() -> Control:
+	var outer := _make_card()
+	var inner: VBoxContainer = outer.get_child(0) as VBoxContainer
+
+	var title_lbl := Label.new()
+	title_lbl.text = "── 커스텀 파일럿 생성  (300 CR) ──"
+	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_lbl.add_theme_font_size_override("font_size", 11)
+	title_lbl.modulate = Color(0.72, 0.72, 0.85)
+	inner.add_child(title_lbl)
+
+	# Name input row
+	var name_row := HBoxContainer.new()
+	name_row.add_theme_constant_override("separation", 6)
+	inner.add_child(name_row)
+
+	var name_hint := Label.new()
+	name_hint.text = "이름"
+	name_hint.add_theme_font_size_override("font_size", 11)
+	name_hint.modulate = Color(0.55, 0.55, 0.72)
+	name_hint.custom_minimum_size = Vector2(28, 0)
+	name_row.add_child(name_hint)
+
+	var name_edit := LineEdit.new()
+	name_edit.text = _custom_pilot_name
+	name_edit.placeholder_text = "파일럿 이름 입력"
+	name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_edit.max_length = 12
+	name_edit.text_changed.connect(func(v: String): _custom_pilot_name = v)
+	name_row.add_child(name_edit)
+
+	# Color picker row
+	var color_row := HBoxContainer.new()
+	color_row.add_theme_constant_override("separation", 4)
+	inner.add_child(color_row)
+
+	var col_hint := Label.new()
+	col_hint.text = "색상"
+	col_hint.add_theme_font_size_override("font_size", 11)
+	col_hint.modulate = Color(0.55, 0.55, 0.72)
+	col_hint.custom_minimum_size = Vector2(28, 0)
+	color_row.add_child(col_hint)
+
+	for hex in CUSTOM_COLORS:
+		var cbtn := Button.new()
+		cbtn.custom_minimum_size = Vector2(22, 22)
+		cbtn.toggle_mode = true
+		cbtn.button_pressed = (_custom_pilot_color == hex)
+		var btn_style := StyleBoxFlat.new()
+		btn_style.bg_color = Color(hex)
+		btn_style.set_corner_radius_all(3)
+		btn_style.set_border_width_all(0)
+		cbtn.add_theme_stylebox_override("normal", btn_style)
+		var sel_style := StyleBoxFlat.new()
+		sel_style.bg_color = Color(hex)
+		sel_style.set_corner_radius_all(3)
+		sel_style.set_border_width_all(2)
+		sel_style.border_color = Color.WHITE
+		cbtn.add_theme_stylebox_override("pressed", sel_style)
+		cbtn.add_theme_stylebox_override("hover_pressed", sel_style.duplicate())
+		var cap_hex: String = hex
+		cbtn.pressed.connect(func():
+			_custom_pilot_color = cap_hex
+			_rebuild_content()
+		)
+		color_row.add_child(cbtn)
+
+	# Create button
+	var create_btn := Button.new()
+	create_btn.text = "생성  ▶"
+	create_btn.custom_minimum_size = Vector2(100, 26)
+	create_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
+	create_btn.disabled = GameState.total_credits < 300
+	create_btn.pressed.connect(func():
+		if GameState.create_custom_pilot(_custom_pilot_name, _custom_pilot_color):
+			_custom_pilot_name = ""
+			_rebuild_content()
+	)
+	inner.add_child(create_btn)
+
+	return outer
+
+func _make_hired_pilot_card(pilot: Dictionary) -> Control:
+	var outer := PanelContainer.new()
+	var s := StyleBoxFlat.new()
+	var tier: int = int(pilot.get("tier", 1))
+	var status: String = pilot.get("status", "idle")
+	s.bg_color = Color(0.06, 0.10, 0.16, 0.80)
+	s.border_color = _tier_color(tier).darkened(0.3) if status != "idle" else _tier_color(tier)
+	s.border_width_left = 3
+	s.border_width_top = 0
+	s.border_width_right = 0
+	s.border_width_bottom = 0
+	s.set_corner_radius_all(4)
+	s.content_margin_left = 10
+	s.content_margin_right = 8
+	s.content_margin_top = 5
+	s.content_margin_bottom = 5
+	outer.add_theme_stylebox_override("panel", s)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	outer.add_child(row)
+
+	row.add_child(_make_portrait(pilot))
+
+	var info := VBoxContainer.new()
+	info.add_theme_constant_override("separation", 1)
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(info)
+
+	var name_lbl := Label.new()
+	name_lbl.text = str(pilot.get("name", ""))
+	name_lbl.add_theme_font_size_override("font_size", 12)
+	if status != "idle":
+		name_lbl.modulate = Color(0.6, 0.6, 0.6)
+	info.add_child(name_lbl)
+
+	var bonus_type: String = pilot.get("bonus_type", "none")
+	if bonus_type != "none":
+		var bl := Label.new()
+		bl.text = str(pilot.get("desc", ""))
+		bl.add_theme_font_size_override("font_size", 10)
+		bl.modulate = Color(0.65, 0.85, 1.0) if bonus_type == "speed" else Color(0.65, 1.0, 0.70)
+		info.add_child(bl)
+
+	var status_lbl := Label.new()
+	status_lbl.text = "대기중" if status == "idle" else "파견중"
+	status_lbl.add_theme_font_size_override("font_size", 11)
+	status_lbl.modulate = Color(0.45, 0.90, 0.55) if status == "idle" else Color(0.95, 0.70, 0.25)
+	status_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(status_lbl)
+
+	return outer
+
+func _make_portrait(pilot: Dictionary) -> Control:
+	var col_str: String = pilot.get("portrait_color", "#4499DD")
+	var col := Color(col_str) if col_str.begins_with("#") else Color.CORNFLOWER_BLUE
+
+	var portrait := PanelContainer.new()
+	portrait.custom_minimum_size = Vector2(36, 36)
+	portrait.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var ps := StyleBoxFlat.new()
+	ps.bg_color = col.darkened(0.3)
+	ps.border_color = col
+	ps.set_border_width_all(2)
+	ps.set_corner_radius_all(18)
+	portrait.add_theme_stylebox_override("panel", ps)
+
+	var initial_lbl := Label.new()
+	var name: String = pilot.get("name", "?")
+	initial_lbl.text = name.substr(0, 1) if name.length() > 0 else "?"
+	initial_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	initial_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	initial_lbl.add_theme_font_size_override("font_size", 14)
+	initial_lbl.modulate = col.lightened(0.4)
+	portrait.add_child(initial_lbl)
+
+	return portrait
+
 # ── Inventory content ────────────────────────────────────────
 
 func _build_inventory_content() -> void:
 	var has_any := false
-	for part_type in ["pilot", "body", "weapon", "legs"]:
+	for part_type in ["body", "weapon", "legs"]:
 		var data: Dictionary = GameState.PARTS[part_type]
 		var tiers: Array = data["tiers"]
 		for i in tiers.size():
@@ -281,7 +568,6 @@ func _make_part_card(part_type: String, tier: int, tier_data: Dictionary, part_d
 	vbox.add_theme_constant_override("separation", 5)
 	outer.add_child(vbox)
 
-	# Top row: tier badge + name + effect
 	var top := HBoxContainer.new()
 	top.add_theme_constant_override("separation", 8)
 	vbox.add_child(top)
@@ -305,7 +591,6 @@ func _make_part_card(part_type: String, tier: int, tier_data: Dictionary, part_d
 	eff_lbl.add_theme_font_size_override("font_size", 11)
 	top.add_child(eff_lbl)
 
-	# Bottom row: stock + lock notice + buy button
 	var bot := HBoxContainer.new()
 	bot.add_theme_constant_override("separation", 8)
 	vbox.add_child(bot)
