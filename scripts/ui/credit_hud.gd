@@ -5,6 +5,8 @@ var _dispatch_label: Label
 var _dispatch_icon: Label
 var _return_label: Label
 var _return_icon: Label
+var _waiting_label: Label
+var _waiting_icon: Label
 var _displayed_credits: int = 0
 
 func _ready() -> void:
@@ -65,6 +67,12 @@ func _build_hud() -> void:
 	_return_icon = _make_icon(hbox, "↩", Color(1.00, 0.65, 0.20))
 	_return_label = _make_val(hbox)
 
+	_sep(hbox)
+
+	# ── 대기 (격납고 수령 대기) ──────────────────────────────────
+	_waiting_icon = _make_icon(hbox, "◉", Color(0.28, 1.00, 0.48))
+	_waiting_label = _make_val(hbox)
+
 func _make_icon(parent: HBoxContainer, glyph: String, color: Color) -> Label:
 	var lbl := Label.new()
 	lbl.text = glyph
@@ -121,14 +129,15 @@ func _on_credits_collected(amount: int, from_global_pos: Vector2) -> void:
 func _refresh_dispatch() -> void:
 	var active := 0
 	var returning := 0
+	var waiting := 0
 	var total_unlocked := 0
 	for slot: DispatchManager.AutoSlot in GameState.auto_slots:
 		if slot.state != "locked":
 			total_unlocked += 1
-		if slot.state == "on_mission":
-			active += 1
-		elif slot.state == "returning":
-			returning += 1
+		match slot.state:
+			"on_mission": active   += 1
+			"returning":  returning += 1
+			"returned":   waiting   += 1
 
 	_dispatch_label.text = "파견  %d / %d" % [active, total_unlocked]
 	var dispatch_active := active > 0
@@ -139,3 +148,8 @@ func _refresh_dispatch() -> void:
 	var return_active := returning > 0
 	_return_icon.modulate  = Color(1.00, 0.65, 0.20) if return_active else Color(1, 1, 1, 0.22)
 	_return_label.modulate = Color(0.90, 0.95, 1.00) if return_active else Color(1, 1, 1, 0.35)
+
+	_waiting_label.text = "대기  %d" % waiting
+	var waiting_active := waiting > 0
+	_waiting_icon.modulate  = Color(0.28, 1.00, 0.48) if waiting_active else Color(1, 1, 1, 0.22)
+	_waiting_label.modulate = Color(0.28, 1.00, 0.48) if waiting_active else Color(1, 1, 1, 0.35)

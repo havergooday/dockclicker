@@ -1,6 +1,6 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene format=3 uid="uid://1jo82y32imhq"]
 
-[ext_resource type="Script" path="res://scripts/core/app_root.gd" id="1_apprt"]
+[ext_resource type="Script" uid="uid://de7teplit7sji" path="res://scripts/core/app_root.gd" id="1_apprt"]
 [ext_resource type="PackedScene" path="res://scenes/ui/bridge_view.tscn" id="2_bview"]
 [ext_resource type="PackedScene" path="res://scenes/ui/panel_hangar.tscn" id="3_hangar"]
 [ext_resource type="PackedScene" path="res://scenes/ui/panel_workshop.tscn" id="4_wshop"]
@@ -9,7 +9,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/panel_clicker.tscn" id="7_click"]
 [ext_resource type="PackedScene" path="res://scenes/ui/credit_hud.tscn" id="8_hud"]
 
-[node name="AppRoot" type="Control"]
+[node name="AppRoot" type="Control" unique_id=1271790017]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -19,45 +19,28 @@ grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("1_apprt")
 
-[node name="BridgeView" parent="." instance=ExtResource("2_bview")]
+[node name="BridgeView" parent="." unique_id=1997322803 instance=ExtResource("2_bview")]
 layout_mode = 1
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_bottom = 0.0
 
-[node name="PanelHangar" parent="." instance=ExtResource("3_hangar")]
-layout_mode = 1
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_bottom = 0.0
+[node name="PanelHangar" parent="." unique_id=1672233966 instance=ExtResource("3_hangar")]
 visible = false
-
-[node name="PanelWorkshop" parent="." instance=ExtResource("4_wshop")]
 layout_mode = 1
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_bottom = 0.0
-visible = false
 
-[node name="PanelShop" parent="." instance=ExtResource("5_shop")]
+[node name="PanelWorkshop" parent="." unique_id=200634329 instance=ExtResource("4_wshop")]
+visible = false
 layout_mode = 1
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_bottom = 0.0
-visible = false
 
-[node name="PanelDispatch" parent="." instance=ExtResource("6_dspch")]
+[node name="PanelShop" parent="." unique_id=1369138411 instance=ExtResource("5_shop")]
+visible = false
 layout_mode = 1
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_bottom = 0.0
-visible = false
 
-[node name="PanelClicker" parent="." instance=ExtResource("7_click")]
+[node name="PanelDispatch" parent="." unique_id=2022855124 instance=ExtResource("6_dspch")]
+visible = false
 layout_mode = 1
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_bottom = 0.0
-visible = false
 
-[node name="CreditHUD" parent="." instance=ExtResource("8_hud")]
+[node name="PanelClicker" parent="." unique_id=1709556797 instance=ExtResource("7_click")]
+visible = false
+layout_mode = 1
+
+[node name="CreditHUD" parent="." unique_id=445231608 instance=ExtResource("8_hud")]
+anchors_preset = 12

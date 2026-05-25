@@ -116,9 +116,9 @@ func assemble_machine(slot_index: int, body_tier: int, weapon_tier: int, legs_ti
 	if GameState.total_credits < cost:
 		return false
 	GameState.total_credits -= cost
-	GameState.owned_parts["body"][body_tier - 1] -= 1
-	GameState.owned_parts["weapon"][weapon_tier - 1] -= 1
-	GameState.owned_parts["legs"][legs_tier - 1] -= 1
+	GameState.consume_part("body", body_tier)
+	GameState.consume_part("weapon", weapon_tier)
+	GameState.consume_part("legs", legs_tier)
 	slot.state = "offline"
 	slot.machine = {"body": body_tier, "weapon": weapon_tier, "legs": legs_tier}
 	GameState.credits_changed.emit(GameState.total_credits)

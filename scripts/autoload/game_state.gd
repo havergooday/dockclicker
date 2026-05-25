@@ -10,11 +10,7 @@ var click_damage: int = 1
 var damage_upgrade_level: int = 0
 var unlocked_planets: Array = ["sector_a"]
 var selected_planet: String = "sector_a"
-var owned_parts: Dictionary = {
-	"body":   [0, 0, 0],
-	"weapon": [0, 0, 0],
-	"legs":   [0, 0, 0],
-}
+var part_inventory: Array = []  # Array of {iid, type, tier}
 
 # ── 파일럿 ────────────────────────────────────────────────────
 # bonus_type: "none" | "speed" (임무 시간 단축 %) | "credits" (수익 증가 %)
@@ -170,13 +166,25 @@ func buy_part(part_type: String, tier: int) -> bool:
 	if total_credits < cost:
 		return false
 	total_credits -= cost
-	owned_parts[part_type][tier - 1] += 1
+	part_inventory.append({"iid": "p_%d" % Time.get_ticks_usec(), "type": part_type, "tier": tier})
 	credits_changed.emit(total_credits)
 	part_purchased.emit(part_type, tier)
 	return true
 
 func get_owned_qty(part_type: String, tier: int) -> int:
-	return owned_parts.get(part_type, [0, 0, 0])[tier - 1]
+	var count := 0
+	for item: Dictionary in part_inventory:
+		if item.get("type") == part_type and int(item.get("tier", 0)) == tier:
+			count += 1
+	return count
+
+func consume_part(part_type: String, tier: int) -> bool:
+	for i in part_inventory.size():
+		var item: Dictionary = part_inventory[i]
+		if item.get("type") == part_type and int(item.get("tier", 0)) == tier:
+			part_inventory.remove_at(i)
+			return true
+	return false
 
 # ── 파일럿 시스템 ─────────────────────────────────────────────
 

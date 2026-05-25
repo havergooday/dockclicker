@@ -1,7 +1,7 @@
 extends Node
 
 const SAVE_PATH    := "user://save.json"
-const SAVE_VERSION := 2
+const SAVE_VERSION := 3
 const _INF_SUB     := 1e30  # INF를 JSON에 저장할 때 대체값
 
 func _ready() -> void:
@@ -24,11 +24,7 @@ func save() -> void:
 		"damage_upgrade_level": GameState.damage_upgrade_level,
 		"selected_planet":      GameState.selected_planet,
 		"unlocked_planets":     GameState.unlocked_planets.duplicate(),
-		"owned_parts": {
-			"body":   GameState.owned_parts["body"].duplicate(),
-			"weapon": GameState.owned_parts["weapon"].duplicate(),
-			"legs":   GameState.owned_parts["legs"].duplicate(),
-		},
+		"part_inventory": GameState.part_inventory.duplicate(true),
 		"hired_pilots": _serialize_pilots(),
 		"auto_slots":   _serialize_slots(),
 		"ui_positions": GameState.ui_positions.duplicate(),
@@ -65,10 +61,29 @@ func load_save() -> bool:
 	GameState.selected_planet      = str(d.get("selected_planet",      "sector_a"))
 	GameState.unlocked_planets     = (d.get("unlocked_planets", ["sector_a"]) as Array).duplicate()
 
-	var parts: Dictionary = d.get("owned_parts", {})
-	for pt: String in ["body", "weapon", "legs"]:
-		if parts.has(pt):
-			GameState.owned_parts[pt] = (parts[pt] as Array).duplicate()
+	GameState.part_inventory.clear()
+	if d.has("part_inventory"):
+		for raw in (d["part_inventory"] as Array):
+			var item: Dictionary = raw as Dictionary
+			GameState.part_inventory.append({
+				"iid":  str(item.get("iid",  "p_%d" % Time.get_ticks_usec())),
+				"type": str(item.get("type", "")),
+				"tier": int(item.get("tier", 1)),
+			})
+	elif d.has("owned_parts"):
+		# v2 → v3 마이그레이션: 수량 배열을 인스턴스 배열로 변환
+		var parts_old: Dictionary = d["owned_parts"] as Dictionary
+		for pt: String in ["body", "weapon", "legs"]:
+			if not parts_old.has(pt):
+				continue
+			var counts: Array = parts_old[pt] as Array
+			for i in counts.size():
+				for _j in int(counts[i]):
+					GameState.part_inventory.append({
+						"iid":  "migrated_%d" % Time.get_ticks_usec(),
+						"type": pt,
+						"tier": i + 1,
+					})
 
 	var pilots_raw: Array = d.get("hired_pilots", [])
 	GameState.hired_pilots.clear()
