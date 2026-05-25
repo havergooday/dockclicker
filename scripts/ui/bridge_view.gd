@@ -5,6 +5,8 @@ var _countdown_data: Array = []
 var _pilot_strip: HBoxContainer
 
 # ── Util side panel ───────────────────────────────────────────────
+var _util_open: bool = false
+var _util_strip: VBoxContainer
 var _active_tab: String = ""
 var _side_panel: PanelContainer
 var _side_content: VBoxContainer
@@ -200,18 +202,21 @@ func _refresh_missions() -> void:
 		_missions_vbox.add_child(lbl)
 
 # ── Util panel ────────────────────────────────────────────────────
+#
+# 레이아웃 (우측 → 좌측):
+#   핸들(10px) | 버튼 스트립(36px, 숨김) | 콘텐츠 패널(200px, 숨김)
 
 func _build_util_panel() -> void:
-	# Side content panel: anchored right, full height, hidden initially
+	# ── 콘텐츠 패널 (탭 선택 시 표시) ───────────────────────
 	_side_panel = PanelContainer.new()
 	_side_panel.anchor_left   = 1.0
 	_side_panel.anchor_top    = 0.0
 	_side_panel.anchor_right  = 1.0
 	_side_panel.anchor_bottom = 1.0
 	_side_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	_side_panel.offset_left   = -244.0  # 200px content + 4px gap + 40px strip
+	_side_panel.offset_left   = -250.0  # 200px + 4px gap + 36px strip + 10px handle
 	_side_panel.offset_top    = 4.0
-	_side_panel.offset_right  = -44.0   # 4px gap + 40px strip
+	_side_panel.offset_right  = -50.0   # 36px strip + 4px gap + 10px handle
 	_side_panel.offset_bottom = -4.0
 	_side_panel.visible = false
 	_side_panel.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -233,36 +238,93 @@ func _build_util_panel() -> void:
 	_side_content.add_theme_constant_override("separation", 7)
 	_side_panel.add_child(_side_content)
 
-	# Button strip: right edge
-	var strip := VBoxContainer.new()
-	strip.anchor_left   = 1.0
-	strip.anchor_top    = 0.0
-	strip.anchor_right  = 1.0
-	strip.anchor_bottom = 0.0
-	strip.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	strip.offset_left   = -40.0
-	strip.offset_top    = 4.0
-	strip.offset_right  = -4.0
-	strip.offset_bottom = 120.0
-	strip.add_theme_constant_override("separation", 2)
-	add_child(strip)
+	# ── 버튼 스트립 (핸들 열면 표시) ────────────────────────
+	_util_strip = VBoxContainer.new()
+	_util_strip.anchor_left   = 1.0
+	_util_strip.anchor_top    = 0.0
+	_util_strip.anchor_right  = 1.0
+	_util_strip.anchor_bottom = 0.0
+	_util_strip.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_util_strip.offset_left   = -46.0   # 36px 버튼 + 10px 핸들
+	_util_strip.offset_top    = 4.0
+	_util_strip.offset_right  = -10.0   # 핸들 바로 옆
+	_util_strip.offset_bottom = 116.0
+	_util_strip.add_theme_constant_override("separation", 2)
+	_util_strip.modulate.a = 0.0
+	_util_strip.visible = false
+	add_child(_util_strip)
 
 	for pair: Array in [["⚙", "settings"], ["♪", "sound"]]:
 		var btn := Button.new()
 		btn.text = pair[0]
-		btn.custom_minimum_size = Vector2(32, 32)
+		btn.custom_minimum_size = Vector2(34, 34)
 		btn.toggle_mode = true
 		var cap: String = pair[1]
 		_tab_btns[cap] = btn
 		btn.pressed.connect(func(): _toggle_tab(cap))
-		strip.add_child(btn)
+		_util_strip.add_child(btn)
 
 	var min_btn := Button.new()
 	min_btn.text = "─"
-	min_btn.custom_minimum_size = Vector2(32, 32)
+	min_btn.custom_minimum_size = Vector2(34, 34)
 	min_btn.tooltip_text = "최소화"
 	min_btn.pressed.connect(func(): get_window().mode = Window.MODE_MINIMIZED)
-	strip.add_child(min_btn)
+	_util_strip.add_child(min_btn)
+
+	# ── 핸들 탭 (항상 표시) ──────────────────────────────────
+	var handle := Button.new()
+	handle.anchor_left   = 1.0
+	handle.anchor_top    = 0.0
+	handle.anchor_right  = 1.0
+	handle.anchor_bottom = 1.0
+	handle.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	handle.offset_left   = -10.0
+	handle.offset_right  =   0.0
+	handle.tooltip_text  = "설정 열기 / 닫기"
+	handle.mouse_filter  = Control.MOUSE_FILTER_STOP
+
+	var h_norm := StyleBoxFlat.new()
+	h_norm.bg_color = Color(0.14, 0.22, 0.38, 0.70)
+	h_norm.border_color = Color(0.28, 0.42, 0.68, 0.60)
+	h_norm.border_width_left = 1
+	h_norm.corner_radius_top_left    = 4
+	h_norm.corner_radius_bottom_left = 4
+	handle.add_theme_stylebox_override("normal", h_norm)
+
+	var h_hov := StyleBoxFlat.new()
+	h_hov.bg_color = Color(0.22, 0.36, 0.60, 0.88)
+	h_hov.border_color = Color(0.45, 0.65, 1.00, 0.90)
+	h_hov.border_width_left = 1
+	h_hov.corner_radius_top_left    = 4
+	h_hov.corner_radius_bottom_left = 4
+	handle.add_theme_stylebox_override("hover", h_hov)
+
+	var h_prs := StyleBoxFlat.new()
+	h_prs.bg_color = Color(0.18, 0.30, 0.52, 0.95)
+	h_prs.border_color = Color(0.50, 0.75, 1.00)
+	h_prs.border_width_left = 2
+	h_prs.corner_radius_top_left    = 4
+	h_prs.corner_radius_bottom_left = 4
+	handle.add_theme_stylebox_override("pressed", h_prs)
+
+	handle.pressed.connect(_toggle_util_open)
+	add_child(handle)
+
+func _toggle_util_open() -> void:
+	_util_open = not _util_open
+	if _util_open:
+		_util_strip.visible = true
+		var tw := create_tween()
+		tw.tween_property(_util_strip, "modulate:a", 1.0, 0.15)
+	else:
+		# 탭과 패널도 함께 닫기
+		_active_tab = ""
+		_side_panel.visible = false
+		for id: String in _tab_btns:
+			(_tab_btns[id] as Button).set_pressed_no_signal(false)
+		var tw := create_tween()
+		tw.tween_property(_util_strip, "modulate:a", 0.0, 0.10)
+		tw.tween_callback(func(): _util_strip.visible = false)
 
 func _toggle_tab(tab_id: String) -> void:
 	if _active_tab == tab_id:
