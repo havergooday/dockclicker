@@ -7,7 +7,7 @@
 
 ## 현재 문서
 
-- [파견 루프 시스템](D:/Project/side/dockclicker/docs/systems/dispatch-loop.md)
+- [파견 루프 시스템](dispatch-loop.md)
 직접 파견, 복귀, 정산으로 이어지는 기본 루프 정리
 
 ## 추후 추가 예정 문서

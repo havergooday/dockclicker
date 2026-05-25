@@ -31,12 +31,12 @@
 
 상황에 따라 아래 문서 중 하나 이상을 같이 갱신한다.
 
-- [구현된 기능](D:/Project/side/dockclicker/docs/implemented-features.md)
-- [아직 없는 기능](D:/Project/side/dockclicker/docs/missing-features.md)
-- [현재 우선순위](D:/Project/side/dockclicker/docs/current-priorities.md)
-- [프로젝트 정보](D:/Project/side/dockclicker/docs/project-information.md)
-- [기술 결정 기록](D:/Project/side/dockclicker/docs/technical-decisions.md)
-- [시스템 문서](D:/Project/side/dockclicker/docs/systems/README.md)
+- [구현된 기능](implemented-features.md)
+- [아직 없는 기능](missing-features.md)
+- [현재 우선순위](current-priorities.md)
+- [프로젝트 정보](project-information.md)
+- [기술 결정 기록](technical-decisions.md)
+- [시스템 문서](systems/README.md)
 
 ## 설정 방법
 

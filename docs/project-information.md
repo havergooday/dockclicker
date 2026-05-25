@@ -26,31 +26,32 @@
 
 ## 현재 엔트리 포인트
 
-- 메인 씬: [scenes/main/main.tscn](D:/Project/side/dockclicker/scenes/main/main.tscn)
-- 앱 루트 스크립트: [scripts/core/app_root.gd](D:/Project/side/dockclicker/scripts/core/app_root.gd)
-- 전역 상태 오토로드: [scripts/autoload/game_state.gd](D:/Project/side/dockclicker/scripts/autoload/game_state.gd)
+- 메인 씬: `scenes/main/main.tscn`
+- 앱 루트 스크립트: `scripts/core/app_root.gd`
+- 오토로드: `scripts/autoload/game_state.gd`, `panel_manager.gd`, `dispatch_manager.gd`, `save_manager.gd`
 
 ## 현재 메인 씬 상태
 
-- 가로형 메인 레이아웃의 최소 뼈대만 존재한다.
-- `Hangar`, `Operations Panel`, `Bridge Lounge` 3구역 자리가 잡혀 있다.
-- 실제 파견 플레이, 정산, 캐릭터 연출, 레이아웃 전환 로직은 아직 없다.
+- 브릿지 뷰 + 서브 패널 4개(격납고, 공작실, PC 터미널, 파견 관제) + 클리커 패널로 구성.
+- 직접 파견 + 자동 파견 기본 플레이 루프 완성.
+- 파츠 구매 → 조립 → 파견 → 귀환 → 수령 → 재투자 전체 사이클 동작.
+- 저장/불러오기, 오프라인 진행 계산 구현 완료.
 
 ## 문서 구조
 
-- 시작 문서: [문서 인덱스](D:/Project/side/dockclicker/docs/document-index.md)
-- 시스템 기획: [Dispatch Clicker 기획서](D:/Project/side/dockclicker/docs/dispatch-clicker-design.md)
-- 화면/와이어프레임: [Dispatch Clicker 디자인 문서](D:/Project/side/dockclicker/docs/dispatch-clicker-visual-design.md)
-- 프로젝트 구조: [Godot 프로젝트 구조](D:/Project/side/dockclicker/docs/godot-project-structure.md)
-- 구현 계획: [Godot Bootstrap 구현 계획](D:/Project/side/dockclicker/docs/plans/2026-05-21-godot-bootstrap.md)
-- 구현 상태: [구현된 기능](D:/Project/side/dockclicker/docs/implemented-features.md)
-- 작업 예정: [아직 없는 기능](D:/Project/side/dockclicker/docs/missing-features.md)
-- AI 작업 시작점: [AI 작업 가이드](D:/Project/side/dockclicker/docs/ai-workflow.md)
-- 현재 작업 순서: [현재 우선순위](D:/Project/side/dockclicker/docs/current-priorities.md)
+- 시작 문서: [문서 인덱스](document-index.md)
+- 시스템 기획: [Dispatch Clicker 기획서](dispatch-clicker-design.md)
+- 화면/와이어프레임: [Dispatch Clicker 디자인 문서](dispatch-clicker-visual-design.md)
+- 프로젝트 구조: [Godot 프로젝트 구조](godot-project-structure.md)
+- 구현 계획: [Godot Bootstrap 구현 계획](plans/2026-05-21-godot-bootstrap.md)
+- 구현 상태: [구현된 기능](implemented-features.md)
+- 작업 예정: [아직 없는 기능](missing-features.md)
+- AI 작업 시작점: [AI 작업 가이드](ai-workflow.md)
+- 현재 작업 순서: [현재 우선순위](current-priorities.md)
 
 ## 현재 검증 방식
 
-- 테스트 파일: [tests/test_project_structure.py](D:/Project/side/dockclicker/tests/test_project_structure.py)
+- 테스트 파일: `tests/test_project_structure.py`
 - 검증 목적:
   - 필수 프로젝트 파일 존재 여부 확인
   - `Godot 4.6` 프로젝트 표기 확인
@@ -59,7 +60,7 @@
 
 ## 최근 기준 상태
 
-- 프로젝트는 초기 부트스트랩 단계다.
-- 핵심 문서와 기본 Godot 구조가 준비되어 있다.
-- 이후 작업은 실제 파견 MVP 루프와 UI 구체화 방향으로 이어질 수 있다.
-- AI가 작업할 때는 `문서 인덱스 → 프로젝트 정보 → 구현된 기능 → 아직 없는 기능 → AI 작업 가이드 → 현재 우선순위` 순서가 가장 효율적이다.
+- MVP 플레이 루프 및 자동 파견 기반 구현 완료.
+- 파일럿 시스템, 파츠 개별 인스턴스(v3), 저장/불러오기, 오프라인 진행 구현 완료.
+- 현재 작업: PC 터미널 강화·파츠 탭 레이아웃 확정, 사운드 시스템.
+- AI가 작업할 때는 `구현된 기능 → 아직 없는 기능 → 현재 우선순위` 순서로 파악하는 것이 가장 효율적이다.
