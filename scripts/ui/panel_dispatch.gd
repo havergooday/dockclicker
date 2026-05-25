@@ -395,6 +395,26 @@ func _body_offline(parent: VBoxContainer, index: int) -> void:
 		hsp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		pilot_hbox.add_child(hsp)
 
+		var slot_ref: DispatchManager.AutoSlot = GameState.auto_slots[index] as DispatchManager.AutoSlot
+		var auto_lbl := _section_lbl("자동")
+		auto_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		pilot_hbox.add_child(auto_lbl)
+
+		var auto_btn := Button.new()
+		auto_btn.toggle_mode = true
+		auto_btn.button_pressed = slot_ref.auto_redispatch
+		auto_btn.text = "ON" if slot_ref.auto_redispatch else "OFF"
+		auto_btn.custom_minimum_size = Vector2(40, 26)
+		auto_btn.modulate = Color(0.5, 1.0, 0.6) if slot_ref.auto_redispatch else Color(1.0, 0.5, 0.5)
+		var cap_auto := index
+		auto_btn.toggled.connect(func(v: bool) -> void:
+			var s: DispatchManager.AutoSlot = GameState.auto_slots[cap_auto] as DispatchManager.AutoSlot
+			s.auto_redispatch = v
+			auto_btn.text = "ON" if v else "OFF"
+			auto_btn.modulate = Color(0.5, 1.0, 0.6) if v else Color(1.0, 0.5, 0.5)
+		)
+		pilot_hbox.add_child(auto_btn)
+
 	pilot_hbox.add_child(sortie_btn)
 
 	# ── 파견 지역 행 (파일럿 선택 후에만) ──────────────────────
@@ -435,6 +455,10 @@ func _body_offline(parent: VBoxContainer, index: int) -> void:
 
 	var cap_slot := index
 	sortie_btn.pressed.connect(func():
+		var s: DispatchManager.AutoSlot = GameState.auto_slots[cap_slot] as DispatchManager.AutoSlot
+		if s.auto_redispatch:
+			s.auto_pilot_tier = _sel_pilot_tier
+			s.auto_planet     = _sel_planet
 		if GameState.start_auto_dispatch(cap_slot, _sel_pilot_tier, _sel_planet):
 			_show_toast("슬롯 %d  파견 시작!" % (cap_slot + 1))
 			_sel_slot = -1

@@ -18,6 +18,10 @@ class AutoSlot:
 	var mission_end_time: float = INF
 	var return_end_time: float = INF
 	var credits_earned: int = 0
+	# 자동 재파견 설정 (수령 후 즉시 동일 조건으로 재파견)
+	var auto_redispatch: bool = false
+	var auto_pilot_tier: int = 0
+	var auto_planet: String = ""
 
 	static func make_empty() -> AutoSlot:
 		return AutoSlot.new()
@@ -34,6 +38,7 @@ class AutoSlot:
 		mission_end_time = INF
 		return_end_time = INF
 		credits_earned = 0
+		# auto_redispatch 설정은 유지
 
 # ── 슬롯 초기화 ───────────────────────────────────────────
 
@@ -175,6 +180,8 @@ func _complete_return(slot_index: int) -> void:
 	slot.state = "returned"
 	auto_slot_changed.emit(slot_index)
 	auto_dispatch_returned.emit(slot_index)
+	if slot.auto_redispatch and slot.auto_pilot_tier > 0 and slot.auto_planet != "":
+		_do_auto_redispatch(slot_index)
 
 # ── 머신 스펙 미리보기 ───────────────────────────────────
 
@@ -213,3 +220,56 @@ func _get_mission_credits(weapon_tier: int, mission_duration: float) -> int:
 		return int(mission_duration)
 	var rate: int = tiers[weapon_tier - 1]["value"]
 	return int(float(rate) * mission_duration)
+
+# ── 저장/불러오기 ─────────────────────────────────────────────────
+
+func apply_save_data(slot_data: Array, save_time: float) -> void:
+	auto_slots.clear()
+	for sd in slot_data:
+		var d: Dictionary = sd as Dictionary
+		var slot := AutoSlot.new()
+		slot.state            = str(d.get("state",            "empty"))
+		slot.unlock_cost      = int(d.get("unlock_cost",      0))
+		var mraw              = d.get("machine", {})
+		slot.machine          = (mraw as Dictionary).duplicate() if mraw is Dictionary else {}
+		slot.pilot_tier       = int(d.get("pilot_tier",       0))
+		slot.planet           = str(d.get("planet",           ""))
+		slot.mission_end_time = _dec(d.get("mission_end_time", INF))
+		slot.return_end_time  = _dec(d.get("return_end_time",  INF))
+		slot.credits_earned   = int(d.get("credits_earned",   0))
+		slot.auto_redispatch  = bool(d.get("auto_redispatch",  false))
+		slot.auto_pilot_tier  = int(d.get("auto_pilot_tier",  0))
+		slot.auto_planet      = str(d.get("auto_planet",      ""))
+		auto_slots.append(slot)
+	_fast_forward(Time.get_unix_time_from_system())
+
+func _fast_forward(now: float) -> void:
+	for i: int in auto_slots.size():
+		var slot: AutoSlot = auto_slots[i]
+		if slot.state == "on_mission" and now >= slot.mission_end_time:
+			var b: int = slot.machine.get("body",   1)
+			var w: int = slot.machine.get("weapon", 1)
+			var l: int = slot.machine.get("legs",   1)
+			slot.credits_earned = _get_mission_credits(w, _get_mission_duration(b))
+			slot.state          = "returning"
+			slot.return_end_time = slot.mission_end_time + _get_return_duration(l)
+		if slot.state == "returning" and now >= slot.return_end_time:
+			slot.state = "returned"
+
+func _dec(v) -> float:
+	var f := float(v)
+	return INF if f >= 1e29 else f
+
+# ── 자동 재파견 ───────────────────────────────────────────────────
+
+func _do_auto_redispatch(slot_index: int) -> void:
+	var slot: AutoSlot = auto_slots[slot_index]
+	# 수령 처리 (파일럿 반환 + 크레딧 지급)
+	if slot.pilot_tier >= 1 and slot.pilot_tier <= GameState.owned_parts["pilot"].size():
+		GameState.owned_parts["pilot"][slot.pilot_tier - 1] += 1
+	GameState.total_credits += slot.credits_earned
+	GameState.credits_changed.emit(GameState.total_credits)
+	slot.reset_mission_data()
+	slot.state = "offline"
+	# 동일 설정으로 즉시 재파견
+	start_auto_dispatch(slot_index, slot.auto_pilot_tier, slot.auto_planet)

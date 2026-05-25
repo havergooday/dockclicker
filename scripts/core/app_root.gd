@@ -9,6 +9,12 @@ var _drag_start_win := Vector2i.ZERO
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_fit_to_screen()
+	get_tree().set_auto_accept_quit(false)
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		SaveManager.save()
+		get_tree().quit()
 
 func _fit_to_screen() -> void:
 	var usable := DisplayServer.screen_get_usable_rect()

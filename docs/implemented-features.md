@@ -172,10 +172,30 @@
 - 귀환중 슬롯: 시안 + 복귀까지 카운트다운 (MM:SS)
 - 파견 없음: 흐린 안내 문구
 
+## 저장/불러오기 및 루프 내구성 구현 완료
+
+- **SaveManager autoload** (`scripts/autoload/save_manager.gd`)
+  - 저장: `user://save.json` (JSON, 탭 들여쓰기)
+  - 자동 저장: `credits_changed`, `auto_slot_changed` 시그널 연결 — 주요 이벤트마다 즉시 저장
+  - 앱 종료(`NOTIFICATION_WM_CLOSE_REQUEST`) 시 최종 저장 후 종료
+- **자동로드 순서**: GameState → PanelManager → SaveManager (패널 초기화 전에 세이브 데이터 적용)
+- **오프라인 진행 계산**: 로드 시 `now - save_time` 경과 시간으로 임무/귀환 상태 패스트포워드
+  - `on_mission` → 임무 완료 시점 지났으면 credits_earned 계산 후 `returning` 전환
+  - `returning` → 귀환 완료 시점 지났으면 `returned` 전환
+
+## 자동 재파견 구현 완료
+
+- `AutoSlot`에 `auto_redispatch / auto_pilot_tier / auto_planet` 필드 추가
+- 파견 관제 패널 — offline 카드 우측에 **자동 ON/OFF 토글** 추가
+  - 출격 시 auto=ON이면 사용한 파일럿·행성 설정 자동 저장
+- 귀환 완료(`_complete_return`) 시 auto=ON이면: 크레딧 수령 + 파일럿 반환 + 즉시 동일 조건 재파견
+- 저장/불러오기에 auto 설정 포함 — 재시작 후에도 자동재파견 설정 유지
+
 ## 현재 상태 요약
 
 - 직접 파견 + 자동 파견 기본 플레이 루프 모두 완성.
 - 파츠 구매 → 조립 → 파견 → 귀환 → 수령 → 재투자 전체 사이클 동작.
 - 전 패널 UI 1920×300 해상도 최적화 완료 (배경 이미지 + 반투명 UI).
 - 브릿지 유틸 사이드 패널 — 설정·사운드 기능 구현 완료.
-- 저장/불러오기, 자동 재파견, 행성별 그래픽은 미구현.
+- 저장/불러오기, 오프라인 진행, 자동 재파견 구현 완료.
+- 행성별 그래픽, BGM/SFX, 자동 재파견 다중 사이클 오프라인 계산은 미구현.

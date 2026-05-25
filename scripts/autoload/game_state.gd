@@ -156,3 +156,6 @@ func collect_auto_slot(slot_index: int) -> bool:
 
 func get_machine_preview(body_tier: int, weapon_tier: int, legs_tier: int) -> Dictionary:
 	return _dispatch.get_machine_preview(body_tier, weapon_tier, legs_tier)
+
+func apply_dispatch_save(slot_data: Array, save_time: float) -> void:
+	_dispatch.apply_save_data(slot_data, save_time)
