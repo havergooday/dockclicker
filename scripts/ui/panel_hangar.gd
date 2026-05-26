@@ -7,6 +7,7 @@ var _scroll_ref: ScrollContainer = null
 var _drag_start_x: float = -1.0
 var _drag_start_h: int = 0
 var _was_dragging: bool = false
+var _selected_slot: int = -1
 
 const LEFT_ZONE_RATIO  := 0.20
 const CARD_W           := 108
@@ -17,6 +18,7 @@ const ROW_GAP          := 12
 const ROWS             := 2
 const DRAG_THRESHOLD   := 6.0
 
+
 func _ready() -> void:
 	PanelManager.register_panel("hangar", self)
 	back_button.pressed.connect(func(): PanelManager.go_back())
@@ -26,19 +28,23 @@ func _ready() -> void:
 	)
 	GameState.auto_slot_changed.connect(func(_i): _needs_rebuild = true)
 	GameState.auto_dispatch_returned.connect(func(_i): _needs_rebuild = true)
+	GameState.slot_pilot_assigned.connect(func(_i): _needs_rebuild = true)
 	visibility_changed.connect(func():
 		if visible: _build_hangar()
 	)
 	_build_hangar()
 
+
 func _update_back_label() -> void:
 	back_button.text = "← %s" % PanelManager.get_back_label()
+
 
 func _process(_dt: float) -> void:
 	if not visible or not _needs_rebuild:
 		return
 	_needs_rebuild = false
 	_build_hangar()
+
 
 func _input(event: InputEvent) -> void:
 	if _scroll_ref == null or not visible:
@@ -61,6 +67,7 @@ func _input(event: InputEvent) -> void:
 			_was_dragging = true
 			_scroll_ref.scroll_horizontal = _drag_start_h + int(delta)
 
+
 # ── 레이아웃 ──────────────────────────────────────────────────────
 
 func _build_hangar() -> void:
@@ -72,21 +79,32 @@ func _build_hangar() -> void:
 	_drag_start_x = -1.0
 	_was_dragging = false
 
-	# 우측 2/3 영역
-	var zone := Control.new()
-	zone.name = "BayLayout"
-	zone.anchor_left   = LEFT_ZONE_RATIO
-	zone.anchor_top    = 0.0
-	zone.anchor_right  = 1.0
-	zone.anchor_bottom = 1.0
-	zone.offset_left   = 0.0
-	zone.offset_right  = 0.0
-	zone.offset_top    = 0.0
-	zone.offset_bottom = 0.0
-	zone.mouse_filter  = Control.MOUSE_FILTER_IGNORE
-	add_child(zone)
+	var root := Control.new()
+	root.name = "BayLayout"
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(root)
 
-	# 스크롤 컨테이너 — 스크롤바 숨김, 드래그로 이동
+	var left_zone := Control.new()
+	left_zone.anchor_left   = 0.0
+	left_zone.anchor_top    = 0.0
+	left_zone.anchor_right  = LEFT_ZONE_RATIO
+	left_zone.anchor_bottom = 1.0
+	left_zone.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	root.add_child(left_zone)
+	_build_left_panel(left_zone)
+
+	var right_zone := Control.new()
+	right_zone.anchor_left   = LEFT_ZONE_RATIO
+	right_zone.anchor_top    = 0.0
+	right_zone.anchor_right  = 1.0
+	right_zone.anchor_bottom = 1.0
+	right_zone.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	root.add_child(right_zone)
+	_build_grid(right_zone)
+
+
+func _build_grid(zone: Control) -> void:
 	var scroll := ScrollContainer.new()
 	scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
@@ -95,7 +113,6 @@ func _build_hangar() -> void:
 	zone.add_child(scroll)
 	_scroll_ref = scroll
 
-	# 상하 여백을 명시적으로 고정 (SIZE_SHRINK_CENTER는 ScrollContainer 내부에서 불안정)
 	var margin := MarginContainer.new()
 	margin.add_theme_constant_override("margin_top",    32)
 	margin.add_theme_constant_override("margin_bottom", 20)
@@ -104,13 +121,11 @@ func _build_hangar() -> void:
 	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	scroll.add_child(margin)
 
-	# 열 컨테이너
 	var cols := HBoxContainer.new()
 	cols.add_theme_constant_override("separation", COL_GAP)
 	cols.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_child(cols)
 
-	# 좌측 여백
 	var lpad := Control.new()
 	lpad.custom_minimum_size = Vector2(40, 0)
 	lpad.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -130,13 +145,270 @@ func _build_hangar() -> void:
 			else:
 				col_box.add_child(_make_slot_placeholder())
 
-	# 우측 여백
 	var rpad := Control.new()
 	rpad.custom_minimum_size = Vector2(28, 0)
 	rpad.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cols.add_child(rpad)
 
-# ── 베이 카드 ─────────────────────────────────────────────────────
+
+# ── 좌측 관리 패널 ────────────────────────────────────────────────
+
+func _build_left_panel(zone: Control) -> void:
+	var panel := PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	panel.offset_left   =  8
+	panel.offset_right  = -6
+	panel.offset_top    =  8
+	panel.offset_bottom = -8
+
+	var valid := _selected_slot >= 0 and _selected_slot < GameState.auto_slots.size()
+	var accent := Color(0.22, 0.24, 0.36)
+
+	if valid:
+		accent = _border_color((GameState.auto_slots[_selected_slot] as DispatchManager.AutoSlot).state)
+
+	var sty := StyleBoxFlat.new()
+	sty.bg_color = Color(0.04, 0.06, 0.12, 0.85)
+	sty.border_color = accent
+	sty.set_border_width_all(1)
+	sty.border_width_left = 3
+	sty.set_corner_radius_all(5)
+	panel.add_theme_stylebox_override("panel", sty)
+	zone.add_child(panel)
+
+	if not valid:
+		var hint := Label.new()
+		hint.text = "← 베이를\n선택하세요"
+		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		hint.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+		hint.set_anchors_preset(Control.PRESET_FULL_RECT)
+		hint.add_theme_font_size_override("font_size", 11)
+		hint.modulate = Color(0.30, 0.32, 0.40)
+		panel.add_child(hint)
+		return
+
+	var slot: DispatchManager.AutoSlot = GameState.auto_slots[_selected_slot]
+
+	var vb := VBoxContainer.new()
+	vb.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vb.offset_left   = 10
+	vb.offset_right  = -10
+	vb.offset_top    = 10
+	vb.offset_bottom = -10
+	vb.add_theme_constant_override("separation", 6)
+	panel.add_child(vb)
+
+	var hdr := HBoxContainer.new()
+	hdr.add_theme_constant_override("separation", 6)
+	vb.add_child(hdr)
+
+	var bay_lbl := Label.new()
+	bay_lbl.text = "BAY %02d" % (_selected_slot + 1)
+	bay_lbl.add_theme_font_size_override("font_size", 13)
+	bay_lbl.modulate = Color(0.70, 0.72, 0.85)
+	bay_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hdr.add_child(bay_lbl)
+
+	var state_lbl := Label.new()
+	state_lbl.text = _state_label(slot.state)
+	state_lbl.add_theme_font_size_override("font_size", 9)
+	state_lbl.modulate = accent
+	state_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	hdr.add_child(state_lbl)
+
+	var div := ColorRect.new()
+	div.color = Color(accent.r, accent.g, accent.b, 0.35)
+	div.custom_minimum_size = Vector2(0, 1)
+	div.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vb.add_child(div)
+
+	match slot.state:
+		"locked":              _left_locked(vb, slot)
+		"empty":               _left_empty(vb)
+		"offline":             _left_offline(vb, slot)
+		"on_mission", "returning": _left_active(vb, slot)
+		"returned":            _left_returned(vb, slot)
+
+
+func _left_locked(vb: VBoxContainer, slot: DispatchManager.AutoSlot) -> void:
+	var hint_lbl := Label.new()
+	hint_lbl.text = "해금 비용"
+	hint_lbl.add_theme_font_size_override("font_size", 10)
+	hint_lbl.modulate = Color(0.50, 0.52, 0.62)
+	vb.add_child(hint_lbl)
+
+	var cr_lbl := Label.new()
+	cr_lbl.text = "%s CR" % _fmt(slot.unlock_cost)
+	cr_lbl.add_theme_font_size_override("font_size", 16)
+	cr_lbl.modulate = Color(0.85, 0.75, 0.50)
+	vb.add_child(cr_lbl)
+
+	vb.add_child(_vspacer())
+
+	var btn := Button.new()
+	btn.text = "잠금 해제"
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.disabled = GameState.total_credits < slot.unlock_cost
+	var idx := _selected_slot
+	btn.pressed.connect(func(): GameState.unlock_auto_slot(idx))
+	vb.add_child(btn)
+
+
+func _left_empty(vb: VBoxContainer) -> void:
+	var lbl := Label.new()
+	lbl.text = "머신 없음"
+	lbl.add_theme_font_size_override("font_size", 12)
+	lbl.modulate = Color(0.45, 0.45, 0.60)
+	vb.add_child(lbl)
+
+	vb.add_child(_vspacer())
+
+	var btn := Button.new()
+	btn.text = "공작실에서 조립  ▶"
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var idx := _selected_slot
+	btn.pressed.connect(func():
+		GameState.workshop_preselect_slot = idx
+		PanelManager.show_panel("workshop")
+	)
+	vb.add_child(btn)
+
+
+func _left_offline(vb: VBoxContainer, slot: DispatchManager.AutoSlot) -> void:
+	var b: int = slot.machine.get("body", 0)
+	var w: int = slot.machine.get("weapon", 0)
+	var l: int = slot.machine.get("legs", 0)
+	var spec_lbl := Label.new()
+	spec_lbl.text = "몸체T%d · 무기T%d · 다리T%d" % [b, w, l]
+	spec_lbl.add_theme_font_size_override("font_size", 10)
+	spec_lbl.modulate = Color(0.65, 0.70, 0.82)
+	vb.add_child(spec_lbl)
+
+	var pilot_hdr := Label.new()
+	pilot_hdr.text = "파일럿 배정"
+	pilot_hdr.add_theme_font_size_override("font_size", 9)
+	pilot_hdr.modulate = Color(0.40, 0.42, 0.55)
+	vb.add_child(pilot_hdr)
+
+	var assigned_id := slot.assigned_pilot_id
+	if assigned_id != "":
+		var pilot := GameState.get_hired_pilot(assigned_id)
+		var pname := str(pilot.get("name", assigned_id)) if not pilot.is_empty() else assigned_id
+		var lbl := Label.new()
+		lbl.text = "👤 " + pname
+		lbl.add_theme_font_size_override("font_size", 11)
+		lbl.modulate = Color(0.65, 0.88, 1.0)
+		vb.add_child(lbl)
+	else:
+		var lbl := Label.new()
+		lbl.text = "미배정"
+		lbl.add_theme_font_size_override("font_size", 11)
+		lbl.modulate = Color(0.72, 0.40, 0.40)
+		vb.add_child(lbl)
+
+	var idle := GameState.get_idle_pilots()
+	if not idle.is_empty():
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 4)
+		vb.add_child(row)
+		for p in idle:
+			var pid: String = str(p.get("id", ""))
+			var pbtn := Button.new()
+			pbtn.text = str(p.get("name", pid))
+			pbtn.toggle_mode = true
+			pbtn.button_pressed = (assigned_id == pid)
+			pbtn.custom_minimum_size = Vector2(0, 22)
+			pbtn.add_theme_font_size_override("font_size", 10)
+			var cap_idx := _selected_slot
+			var cap_pid := pid
+			var cap_aid := assigned_id
+			pbtn.pressed.connect(func():
+				var new_id := "" if cap_aid == cap_pid else cap_pid
+				GameState.assign_pilot_to_slot(cap_idx, new_id)
+			)
+			row.add_child(pbtn)
+	elif assigned_id == "":
+		var no_lbl := Label.new()
+		no_lbl.text = "대기 파일럿 없음"
+		no_lbl.add_theme_font_size_override("font_size", 10)
+		no_lbl.modulate = Color(0.55, 0.35, 0.35)
+		vb.add_child(no_lbl)
+
+	vb.add_child(_vspacer())
+
+	var dispatch_btn := Button.new()
+	dispatch_btn.text = "파견 관제로  ▶"
+	dispatch_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var cap_idx := _selected_slot
+	dispatch_btn.pressed.connect(func():
+		GameState.dispatch_preselect_slot = cap_idx
+		PanelManager.show_panel("dispatch")
+	)
+	vb.add_child(dispatch_btn)
+
+	var dis_btn := Button.new()
+	dis_btn.text = "머신 분해"
+	dis_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dis_btn.modulate = Color(1.0, 0.62, 0.62)
+	var cap_idx2 := _selected_slot
+	dis_btn.pressed.connect(func(): GameState.disassemble_machine(cap_idx2))
+	vb.add_child(dis_btn)
+
+
+func _left_active(vb: VBoxContainer, slot: DispatchManager.AutoSlot) -> void:
+	var b: int = slot.machine.get("body", 0)
+	var w: int = slot.machine.get("weapon", 0)
+	var l: int = slot.machine.get("legs", 0)
+
+	var spec_lbl := Label.new()
+	spec_lbl.text = "몸체T%d · 무기T%d · 다리T%d" % [b, w, l]
+	spec_lbl.add_theme_font_size_override("font_size", 10)
+	spec_lbl.modulate = Color(0.65, 0.70, 0.82)
+	vb.add_child(spec_lbl)
+
+	if slot.pilot_id != "":
+		var pilot := GameState.get_hired_pilot(slot.pilot_id)
+		var pname := str(pilot.get("name", slot.pilot_id)) if not pilot.is_empty() else slot.pilot_id
+		var lbl := Label.new()
+		lbl.text = "👤 " + pname
+		lbl.add_theme_font_size_override("font_size", 11)
+		lbl.modulate = Color(0.65, 0.88, 1.0)
+		vb.add_child(lbl)
+
+	if slot.planet != "":
+		var planet := GameState.get_planet(slot.planet)
+		var lbl := Label.new()
+		lbl.text = "→ " + str(planet.get("name", slot.planet))
+		lbl.add_theme_font_size_override("font_size", 10)
+		lbl.modulate = Color(0.75, 0.65, 1.0)
+		vb.add_child(lbl)
+
+	var preview := GameState.get_machine_preview(b, w, l)
+	var cr_lbl := Label.new()
+	cr_lbl.text = "예상 수익 %d CR" % preview["credits"]
+	cr_lbl.add_theme_font_size_override("font_size", 10)
+	cr_lbl.modulate = Color(0.50, 0.90, 0.55)
+	vb.add_child(cr_lbl)
+
+
+func _left_returned(vb: VBoxContainer, slot: DispatchManager.AutoSlot) -> void:
+	var cr_lbl := Label.new()
+	cr_lbl.text = "+ %s CR" % _fmt(slot.credits_earned)
+	cr_lbl.add_theme_font_size_override("font_size", 18)
+	cr_lbl.modulate = Color(0.28, 1.00, 0.48)
+	vb.add_child(cr_lbl)
+
+	vb.add_child(_vspacer())
+
+	var btn := Button.new()
+	btn.text = "수령  ▶"
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var idx := _selected_slot
+	btn.pressed.connect(func(): GameState.collect_auto_slot(idx))
+	vb.add_child(btn)
+
+
+# ── 베이 카드 ──────────────────────────────────────────────────────
 
 func _make_slot_placeholder() -> Control:
 	var ph := Control.new()
@@ -144,25 +416,25 @@ func _make_slot_placeholder() -> Control:
 	ph.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return ph
 
+
 func _make_bay_card(index: int) -> Button:
 	var slot: DispatchManager.AutoSlot = GameState.auto_slots[index]
 	var state      := slot.state
 	var border_col := _border_color(state)
 	var glowing    := state == "returned"
-	var interactive: bool = state not in ["on_mission", "returning"]
+	var is_sel     := index == _selected_slot
 
 	var btn := Button.new()
 	btn.text = ""
 	btn.custom_minimum_size = Vector2(CARD_W, CARD_H)
 	btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-	btn.mouse_default_cursor_shape = \
-		Control.CURSOR_POINTING_HAND if interactive else Control.CURSOR_ARROW
+	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
-	var norm := _sty(border_col, false, glowing)
-	var hov  := _sty(border_col, true,  glowing)
+	var norm := _sty(border_col, false, glowing, is_sel)
+	var hov  := _sty(border_col, true,  glowing, is_sel)
 	btn.add_theme_stylebox_override("normal",   norm)
-	btn.add_theme_stylebox_override("hover",    hov if interactive else norm)
+	btn.add_theme_stylebox_override("hover",    hov)
 	btn.add_theme_stylebox_override("pressed",  norm)
 	btn.add_theme_stylebox_override("disabled", norm)
 	btn.add_theme_stylebox_override("focus",    norm)
@@ -187,7 +459,6 @@ func _make_bay_card(index: int) -> Button:
 	inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	btn.add_child(inner)
 
-	# 상단: 베이 번호 + 상태 텍스트
 	var top_row := HBoxContainer.new()
 	top_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	inner.add_child(top_row)
@@ -233,7 +504,7 @@ func _make_bay_card(index: int) -> Button:
 		lock_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		sprite_ph.add_child(lock_lbl)
 
-	# 하단 금액
+	# 하단 정보
 	if state == "returned":
 		var cr_lbl := Label.new()
 		cr_lbl.text = "+ %s CR" % _fmt(slot.credits_earned)
@@ -250,35 +521,65 @@ func _make_bay_card(index: int) -> Button:
 		cost_lbl.modulate = Color(0.50, 0.52, 0.62)
 		cost_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		inner.add_child(cost_lbl)
+	elif state == "offline":
+		var pilot_row := HBoxContainer.new()
+		pilot_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		inner.add_child(pilot_row)
 
-	if interactive:
-		match state:
-			"locked":
-				btn.pressed.connect(func(): GameState.unlock_auto_slot(index))
-			"empty":
-				btn.pressed.connect(func():
-					GameState.workshop_preselect_slot = index
-					PanelManager.show_panel("workshop")
-				)
-			"offline":
-				btn.pressed.connect(func():
-					GameState.dispatch_preselect_slot = index
-					PanelManager.show_panel("dispatch")
-				)
-			"returned":
-				btn.pressed.connect(func(): GameState.collect_auto_slot(index))
+		var icon_lbl := Label.new()
+		icon_lbl.text = "👤"
+		icon_lbl.add_theme_font_size_override("font_size", 9)
+		icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		pilot_row.add_child(icon_lbl)
 
+		var name_lbl := Label.new()
+		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		name_lbl.add_theme_font_size_override("font_size", 9)
+		name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		if slot.assigned_pilot_id != "":
+			var pilot := GameState.get_hired_pilot(slot.assigned_pilot_id)
+			var pname := str(pilot.get("name", slot.assigned_pilot_id)) if not pilot.is_empty() else slot.assigned_pilot_id
+			name_lbl.text = pname.substr(0, 5) if pname.length() > 5 else pname
+			name_lbl.modulate = Color(0.65, 0.88, 1.0)
+		else:
+			name_lbl.text = "—"
+			name_lbl.modulate = Color(0.55, 0.38, 0.38)
+		pilot_row.add_child(name_lbl)
+
+	btn.pressed.connect(func(): _select_slot(index))
 	return btn
 
-# ── 헬퍼 ─────────────────────────────────────────────────────────
 
-func _sty(col: Color, hover: bool, glowing: bool) -> StyleBoxFlat:
+func _select_slot(index: int) -> void:
+	_selected_slot = index
+	_build_hangar()
+
+
+# ── 헬퍼 ──────────────────────────────────────────────────────────
+
+func _vspacer() -> Control:
+	var s := Control.new()
+	s.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	return s
+
+
+func _sty(col: Color, hover: bool, glowing: bool, selected: bool = false) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
-	s.bg_color     = Color(0.06, 0.09, 0.17, 0.96) if hover else Color(0.04, 0.06, 0.13, 0.96)
-	s.border_color = col if glowing else (col.lightened(0.18) if hover else col.darkened(0.38))
-	s.set_border_width_all(2 if glowing else 1)
+	if selected:
+		s.bg_color     = Color(0.08, 0.12, 0.22, 0.96)
+		s.border_color = col.lightened(0.25)
+		s.set_border_width_all(2)
+	elif hover:
+		s.bg_color     = Color(0.06, 0.09, 0.17, 0.96)
+		s.border_color = col.lightened(0.18) if not glowing else col
+		s.set_border_width_all(2 if glowing else 1)
+	else:
+		s.bg_color     = Color(0.04, 0.06, 0.13, 0.96)
+		s.border_color = col if glowing else col.darkened(0.38)
+		s.set_border_width_all(2 if glowing else 1)
 	s.set_corner_radius_all(5)
 	return s
+
 
 func _status_color(state: String) -> Color:
 	match state:
@@ -290,6 +591,7 @@ func _status_color(state: String) -> Color:
 		"locked":     return Color(0.42, 0.44, 0.54)
 		_:            return Color(0.60, 0.60, 0.65)
 
+
 func _border_color(state: String) -> Color:
 	match state:
 		"locked":     return Color(0.33, 0.35, 0.48)
@@ -299,6 +601,7 @@ func _border_color(state: String) -> Color:
 		"returning":  return Color(0.95, 0.74, 0.20)
 		"returned":   return Color(0.26, 0.95, 0.46)
 		_:            return Color(0.45, 0.45, 0.55)
+
 
 func _state_label(state: String) -> String:
 	match state:
@@ -310,12 +613,14 @@ func _state_label(state: String) -> String:
 		"returned":   return "RETURNED"
 		_:            return state.to_upper()
 
+
 func _sprite_bg(machine: Dictionary, state: String) -> Color:
 	if machine.is_empty() or machine.get("body", 0) == 0:
 		return Color(0.08, 0.10, 0.16)
 	var avg: float = (int(machine.get("body", 1)) + int(machine.get("weapon", 1)) + int(machine.get("legs", 1))) / 3.0
 	var base := Color(0.12, 0.24, 0.40).lerp(Color(0.10, 0.42, 0.62), (avg - 1.0) / 2.0)
 	return base.darkened(0.45) if state in ["on_mission", "returning"] else base
+
 
 func _fmt(n: int) -> String:
 	var s := str(n)

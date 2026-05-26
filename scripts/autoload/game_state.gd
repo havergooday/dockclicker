@@ -71,6 +71,7 @@ signal auto_slot_changed(index: int)
 signal auto_dispatch_returned(slot_index: int)
 signal pilot_hired(pilot_id: String)
 signal pilot_status_changed(pilot_id: String)
+signal slot_pilot_assigned(index: int)
 
 var _dispatch: DispatchManager
 
@@ -280,6 +281,17 @@ func collect_auto_slot(slot_index: int) -> bool:
 
 func get_machine_preview(body_tier: int, weapon_tier: int, legs_tier: int) -> Dictionary:
 	return _dispatch.get_machine_preview(body_tier, weapon_tier, legs_tier)
+
+
+func assign_pilot_to_slot(slot_index: int, pilot_id: String) -> bool:
+	var ok := _dispatch.assign_pilot_to_slot(slot_index, pilot_id)
+	if ok:
+		slot_pilot_assigned.emit(slot_index)
+	return ok
+
+
+func disassemble_machine(slot_index: int) -> bool:
+	return _dispatch.disassemble_machine(slot_index)
 
 func apply_dispatch_save(slot_data: Array, save_time: float) -> void:
 	_dispatch.apply_save_data(slot_data, save_time)

@@ -136,6 +136,7 @@ func _serialize_slots() -> Array:
 			"unlock_cost":      s.unlock_cost,
 			"machine":          s.machine.duplicate(),
 			"pilot_id":         s.pilot_id,
+			"assigned_pilot_id": s.assigned_pilot_id,
 			"planet":           s.planet,
 			"mission_start_time": s.mission_start_time,
 			"mission_end_time":   _enc(s.mission_end_time),

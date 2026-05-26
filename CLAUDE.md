@@ -16,9 +16,10 @@ Validation: `python -m unittest tests.test_project_structure`
 | Pilot system (instances, hire, custom, bridge roaming) | 메크 스프라이트 조합 시스템 |
 | Parts individual instance system (v3, save migration) | 자동 재파견 다중 사이클 오프라인 |
 | Workshop (5-col assembly + inventory tab) | 시설/기지 확장 시스템 |
-| Hangar (16-slot scroll grid, bay cards) | 가로형/세로형 전환 로직 |
-| Save/load (JSON v3, offline passthrough) | PC 터미널 강화·파츠 탭 레이아웃 미확정 |
-| Global credit HUD (floating pill), bridge util panel | 스팀 배포 설정 |
+| Hangar (management hub: bay select, pilot assign, disassemble) | 가로형/세로형 전환 로직 |
+| Save/load (JSON v3, offline passthrough) | 스팀 배포 설정 |
+| Global credit HUD (floating pill), bridge util panel | |
+| PC terminal (left menu: parts / upgrade / pilot) | |
 
 ## Panel Structure (confirmed design)
 
@@ -33,8 +34,7 @@ Main ship view = bridge (pilots idle here). Click interactive objects to flip in
 
 ## Next Priorities
 
-1. **PC 터미널 강화·파츠 탭 레이아웃** — 2컬럼 구조 확정, 시각 언어 미정 (참고 게임 리서치 후 결정)
-2. BGM/SFX — AudioServer 버스 설정, 클릭·수령·파견음 SFX
+1. **BGM/SFX** — AudioServer 버스 설정, 클릭·수령·파견음 SFX
 3. 행성별 고유 생물 그래픽, 플레이어 기체 추가 업그레이드
 4. 자동 파견 수익 상세 내역, 전원 출격 버튼
 

@@ -13,6 +13,7 @@ class AutoSlot:
 	var state: String = "empty"
 	var unlock_cost: int = 0
 	var machine: Dictionary = {}   # {body: int, weapon: int, legs: int}
+	var assigned_pilot_id: String = ""  # 베이 사전 배정 파일럿 (임무와 무관하게 유지)
 	var pilot_id: String = ""
 	var planet: String = ""
 	var mission_start_time: float = 0.0
@@ -263,6 +264,7 @@ func apply_save_data(slot_data: Array, save_time: float) -> void:
 		var mraw              = d.get("machine", {})
 		slot.machine          = (mraw as Dictionary).duplicate() if mraw is Dictionary else {}
 		slot.pilot_id         = str(d.get("pilot_id",         ""))
+		slot.assigned_pilot_id = str(d.get("assigned_pilot_id", ""))
 		slot.planet           = str(d.get("planet",           ""))
 		slot.mission_start_time = float(d.get("mission_start_time", 0.0))
 		slot.mission_end_time   = _dec(d.get("mission_end_time", INF))
@@ -310,3 +312,46 @@ func _do_auto_redispatch(slot_index: int) -> void:
 	slot.reset_mission_data()
 	slot.state = "offline"
 	start_auto_dispatch(slot_index, slot.auto_pilot_id, slot.auto_planet)
+
+
+func assign_pilot_to_slot(slot_index: int, pilot_id: String) -> bool:
+	if slot_index < 0 or slot_index >= auto_slots.size():
+		return false
+	var slot: AutoSlot = auto_slots[slot_index]
+	if slot.state != "offline":
+		return false
+	if pilot_id != "":
+		var pilot := GameState.get_hired_pilot(pilot_id)
+		if pilot.is_empty():
+			return false
+		for i in auto_slots.size():
+			if i != slot_index:
+				var s: AutoSlot = auto_slots[i]
+				if s.assigned_pilot_id == pilot_id:
+					s.assigned_pilot_id = ""
+					auto_slot_changed.emit(i)
+	slot.assigned_pilot_id = pilot_id
+	auto_slot_changed.emit(slot_index)
+	return true
+
+
+func disassemble_machine(slot_index: int) -> bool:
+	if slot_index < 0 or slot_index >= auto_slots.size():
+		return false
+	var slot: AutoSlot = auto_slots[slot_index]
+	if slot.state != "offline":
+		return false
+	var b: int = slot.machine.get("body", 0)
+	var w: int = slot.machine.get("weapon", 0)
+	var l: int = slot.machine.get("legs", 0)
+	if b > 0:
+		GameState.part_inventory.append({"iid": "dis_%d" % Time.get_ticks_usec(), "type": "body", "tier": b})
+	if w > 0:
+		GameState.part_inventory.append({"iid": "dis_%d" % Time.get_ticks_usec(), "type": "weapon", "tier": w})
+	if l > 0:
+		GameState.part_inventory.append({"iid": "dis_%d" % Time.get_ticks_usec(), "type": "legs", "tier": l})
+	slot.machine = {}
+	slot.assigned_pilot_id = ""
+	slot.state = "empty"
+	auto_slot_changed.emit(slot_index)
+	return true
