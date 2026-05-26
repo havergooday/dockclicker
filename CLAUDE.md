@@ -12,12 +12,13 @@ Validation: `python -m unittest tests.test_project_structure`
 |---|---|
 | Panel flip navigation + history stack | SD 캐릭터 픽셀 아트 스프라이트 |
 | Direct dispatch clicker (planet select, wave, upgrade) | BGM/SFX 사운드 |
-| Auto dispatch (3 slots, timer, offline progress) | 상태 표시줄 위치 옵션 |
+| Auto dispatch (16 slots, timer, offline progress) | 상태 표시줄 위치 옵션 |
 | Pilot system (instances, hire, custom, bridge roaming) | 메크 스프라이트 조합 시스템 |
 | Parts individual instance system (v3, save migration) | 자동 재파견 다중 사이클 오프라인 |
 | Workshop (5-col assembly + inventory tab) | 시설/기지 확장 시스템 |
 | Hangar (management hub: bay select, pilot assign, disassemble) | 가로형/세로형 전환 로직 |
-| Save/load (JSON v3, offline passthrough) | 스팀 배포 설정 |
+| Dispatch panel (2-state layout, anchor tween, all-slot scroll) | 스팀 배포 설정 |
+| Save/load (JSON v3, offline passthrough) | |
 | Global credit HUD (floating pill), bridge util panel | |
 | PC terminal (left menu: parts / upgrade / pilot) | |
 
@@ -35,8 +36,8 @@ Main ship view = bridge (pilots idle here). Click interactive objects to flip in
 ## Next Priorities
 
 1. **BGM/SFX** — AudioServer 버스 설정, 클릭·수령·파견음 SFX
-3. 행성별 고유 생물 그래픽, 플레이어 기체 추가 업그레이드
-4. 자동 파견 수익 상세 내역, 전원 출격 버튼
+2. 행성별 고유 생물 그래픽, 플레이어 기체 추가 업그레이드
+3. 자동 파견 수익 상세 내역, 전원 출격 버튼
 
 ## Reference Docs (read when the task requires it)
 
