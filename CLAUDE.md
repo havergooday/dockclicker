@@ -10,21 +10,36 @@ Validation: `python -m unittest tests.test_project_structure`
 
 | Exists | Not yet |
 |---|---|
-| Panel flip navigation + history stack | SD 캐릭터 픽셀 아트 스프라이트 |
-| Direct dispatch clicker (planet select, wave, upgrade) | BGM/SFX 사운드 |
-| Auto dispatch (16 slots, timer, offline progress) | 상태 표시줄 위치 옵션 |
-| Pilot system (instances, hire, custom, bridge roaming) | 메크 스프라이트 조합 시스템 |
-| Parts individual instance system (v3, save migration) | 자동 재파견 다중 사이클 오프라인 |
-| Workshop (5-col assembly + inventory tab) | 시설/기지 확장 시스템 |
-| Hangar (management hub: bay select, pilot assign, disassemble) | 가로형/세로형 전환 로직 |
-| Dispatch panel (2-state layout, anchor tween, all-slot scroll) | 스팀 배포 설정 |
+| ShipCanvas panoramic canvas (3 zones, tab nav, drag pan) | SD 캐릭터 픽셀 아트 스프라이트 |
+| HangarZone (bay grid right-aligned, state detail panel) | BGM/SFX 사운드 |
+| StarMapPopup (planet grid, slot 4-row grid, bay popup) | 상태 표시줄 위치 옵션 |
+| Panel flip navigation + history stack (legacy, still used) | 메크 스프라이트 조합 시스템 |
+| Direct dispatch clicker (planet select, wave, upgrade) | 자동 재파견 다중 사이클 오프라인 |
+| Auto dispatch (16 slots, timer, offline progress) | 시설/기지 확장 시스템 |
+| Pilot system (instances, hire, custom, bridge roaming) | 가로형/세로형 전환 로직 |
+| Parts individual instance system (v3, save migration) | 스팀 배포 설정 |
+| Workshop (5-col assembly + inventory tab) | Bay detail popup UX (재설계 논의 예정) |
+| Hangar panel (management hub, legacy panel_hangar.gd) | |
+| Dispatch panel (2-state layout, anchor tween, all-slot scroll) | |
 | Save/load (JSON v3, offline passthrough) | |
 | Global credit HUD (floating pill), bridge util panel | |
 | PC terminal (left menu: parts / upgrade / pilot) | |
 
-## Panel Structure (current implementation)
+## Navigation Structure (current implementation)
 
-Main ship view = bridge (pilots idle here). Click interactive objects to flip into panels:
+Primary: `ShipCanvas` panoramic canvas — `격납고 / 브릿지 / 관제실` tabs + right-click drag.
+
+| Zone | File | Status |
+|---|---|---|
+| 격납고 | `scripts/ui/hangar_zone.gd` | ✓ Implemented — bay grid, state detail panel |
+| 브릿지/파일럿 라운지 | `ship_canvas.gd` inline | Placeholder content |
+| 관제실 | `ship_canvas.gd` inline + `star_map_popup.tscn` | ✓ Implemented — star map popup |
+
+Workshop functions will open as hangar popups; shop/hiring as control-room popups (Phase 3, not yet migrated). Legacy panel flip panels (`panel_hangar`, `panel_workshop`, `panel_shop`, `panel_dispatch`) still exist and are used for some flows.
+
+## Legacy Panel Structure (still active, pending migration)
+
+Click interactive objects on bridge to flip into panels:
 
 | Object | Panel | Role |
 |---|---|---|
@@ -32,20 +47,6 @@ Main ship view = bridge (pilots idle here). Click interactive objects to flip in
 | 공작실 입구 | 공작실 | Assemble mech from parts |
 | PC 터미널 | 상점 | Buy parts, hire pilots |
 | 관제 콘솔 | 파견 관제 | Mission board, unit assignment, sortie |
-
-## Planned Navigation Structure (current priority)
-
-The next UX redesign replaces panel flipping with a panoramic ship canvas and camera movement:
-
-| Zone | Position | Role |
-|---|---|---|
-| 격납고 | Left, expandable leftward | Bays, machines, return collection, maintenance |
-| 브릿지/파일럿 라운지 | Center home | Pilot roaming, ship decoration, companion/living space |
-| 관제실 | Right | Star map popup entry, dispatch command, shop/hiring popup entry |
-
-Navigation uses `격납고 / 브릿지 / 관제실` tabs plus right-click drag panning. The control room opens a descending star map popup for planet selection, planet detail, slot selection, and ship selection. The map uses an icon-centered horizontal scrolling grid, restores the last selected planet position by default, collapses the left area to about 15% on planet selection, and shows a 2-row slot grid on the right. Workshop functions open as hangar popups; shop/hiring functions open as command-room popups. Vertical movement is reserved for future lower-deck dorm/living expansion.
-
-Current code has a 1st-pass `ShipCanvas` root and control-room `StarMapPopup` wired into the main scene. Legacy panel flip code still exists for the clicker and as transition scaffolding.
 
 ## Next Priorities
 
