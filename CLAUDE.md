@@ -45,6 +45,8 @@ The next UX redesign replaces panel flipping with a panoramic ship canvas and ca
 
 Navigation uses `격납고 / 브릿지 / 관제실` tabs plus right-click drag panning. The control room opens a descending star map popup for planet selection, planet detail, slot selection, and ship selection. The map uses an icon-centered horizontal scrolling grid, restores the last selected planet position by default, collapses the left area to about 15% on planet selection, and shows a 2-row slot grid on the right. Workshop functions open as hangar popups; shop/hiring functions open as command-room popups. Vertical movement is reserved for future lower-deck dorm/living expansion.
 
+Current code has a 1st-pass `ShipCanvas` root and control-room `StarMapPopup` wired into the main scene. Legacy panel flip code still exists for the clicker and as transition scaffolding.
+
 ## Next Priorities
 
 1. **UI/UX 통합 재설계** — `docs/plans/2026-05-27-ux-redesign.md`

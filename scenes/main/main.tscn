@@ -1,13 +1,9 @@
 [gd_scene format=3 uid="uid://1jo82y32imhq"]
 
 [ext_resource type="Script" uid="uid://de7teplit7sji" path="res://scripts/core/app_root.gd" id="1_apprt"]
-[ext_resource type="PackedScene" path="res://scenes/ui/bridge_view.tscn" id="2_bview"]
-[ext_resource type="PackedScene" path="res://scenes/ui/panel_hangar.tscn" id="3_hangar"]
-[ext_resource type="PackedScene" path="res://scenes/ui/panel_workshop.tscn" id="4_wshop"]
-[ext_resource type="PackedScene" path="res://scenes/ui/panel_shop.tscn" id="5_shop"]
-[ext_resource type="PackedScene" path="res://scenes/ui/panel_dispatch.tscn" id="6_dspch"]
-[ext_resource type="PackedScene" path="res://scenes/ui/panel_clicker.tscn" id="7_click"]
-[ext_resource type="PackedScene" path="res://scenes/ui/credit_hud.tscn" id="8_hud"]
+[ext_resource type="PackedScene" path="res://scenes/ui/ship_canvas.tscn" id="2_ship"]
+[ext_resource type="PackedScene" path="res://scenes/ui/panel_clicker.tscn" id="3_click"]
+[ext_resource type="PackedScene" path="res://scenes/ui/credit_hud.tscn" id="4_hud"]
 
 [node name="AppRoot" type="Control" unique_id=1271790017]
 layout_mode = 3
@@ -19,28 +15,12 @@ grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("1_apprt")
 
-[node name="BridgeView" parent="." unique_id=1997322803 instance=ExtResource("2_bview")]
+[node name="ShipCanvas" parent="." unique_id=1997322803 instance=ExtResource("2_ship")]
 layout_mode = 1
 
-[node name="PanelHangar" parent="." unique_id=1672233966 instance=ExtResource("3_hangar")]
+[node name="PanelClicker" parent="." unique_id=1709556797 instance=ExtResource("3_click")]
 visible = false
 layout_mode = 1
 
-[node name="PanelWorkshop" parent="." unique_id=200634329 instance=ExtResource("4_wshop")]
-visible = false
-layout_mode = 1
-
-[node name="PanelShop" parent="." unique_id=1369138411 instance=ExtResource("5_shop")]
-visible = false
-layout_mode = 1
-
-[node name="PanelDispatch" parent="." unique_id=2022855124 instance=ExtResource("6_dspch")]
-visible = false
-layout_mode = 1
-
-[node name="PanelClicker" parent="." unique_id=1709556797 instance=ExtResource("7_click")]
-visible = false
-layout_mode = 1
-
-[node name="CreditHUD" parent="." unique_id=445231608 instance=ExtResource("8_hud")]
+[node name="CreditHUD" parent="." unique_id=445231608 instance=ExtResource("4_hud")]
 anchors_preset = 12
