@@ -34,9 +34,6 @@ var _slot_drag_scroll_start: int = 0
 var _bay_panel: PanelContainer
 var _bay_grid: GridContainer
 var _bay_scroll: ScrollContainer
-var _bay_confirm_label: Label
-var _bay_dispatch_btn: Button
-var _selected_bay_for_dispatch: int = -1
 var _bay_panel_dragging: bool = false
 var _bay_drag_anchor_x: float = 0.0
 var _bay_drag_scroll_start: int = 0
@@ -336,30 +333,6 @@ func _build_bay_panel() -> void:
 	_bay_grid.add_theme_constant_override("v_separation", 12)
 	_bay_scroll.add_child(_bay_grid)
 
-	var sep := HSeparator.new()
-	right_vbox.add_child(sep)
-
-	var confirm_bar := HBoxContainer.new()
-	confirm_bar.add_theme_constant_override("separation", 8)
-	right_vbox.add_child(confirm_bar)
-
-	_bay_confirm_label = Label.new()
-	_bay_confirm_label.text = "베이를 선택하세요"
-	_bay_confirm_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_bay_confirm_label.add_theme_font_size_override("font_size", 12)
-	_bay_confirm_label.modulate = Color(0.70, 0.80, 1.0)
-	_bay_confirm_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	confirm_bar.add_child(_bay_confirm_label)
-
-	_bay_dispatch_btn = Button.new()
-	_bay_dispatch_btn.text = "출격 ▶"
-	_bay_dispatch_btn.custom_minimum_size = Vector2(80, 32)
-	_bay_dispatch_btn.disabled = true
-	_bay_dispatch_btn.pressed.connect(func():
-		if _selected_bay_for_dispatch >= 0:
-			_dispatch_from_bay(_selected_bay_for_dispatch)
-	)
-	confirm_bar.add_child(_bay_dispatch_btn)
 
 
 func _build_float_popups() -> void:
@@ -612,9 +585,7 @@ func _exit_detail_mode() -> void:
 
 func _show_bay_panel(slot_idx: int) -> void:
 	_bay_select_mode = true
-	_selected_bay_for_dispatch = -1
 	_refresh_bay_grid()
-	_update_confirm_bar()
 
 	var off := maxf(size.x, 800.0)
 	_bay_panel.offset_left = off
@@ -647,33 +618,9 @@ func _refresh_bay_grid() -> void:
 			_bay_grid.add_child(_make_bay_card(bay_i, slot))
 
 
-func _select_bay_for_dispatch(bay_index: int) -> void:
-	_selected_bay_for_dispatch = bay_index
-	_refresh_bay_grid()
-	_update_confirm_bar()
-
-
-func _update_confirm_bar() -> void:
-	if _selected_bay_for_dispatch < 0:
-		_bay_confirm_label.text = "베이를 선택하세요"
-		_bay_dispatch_btn.disabled = true
-		return
-	var slot := GameState.auto_slots[_selected_bay_for_dispatch] as DispatchManager.AutoSlot
-	var pilot_id := _get_first_idle_pilot_id()
-	var pilot_name := "파일럿 없음"
-	if pilot_id != "":
-		for p in GameState.hired_pilots:
-			if str(p.get("id", "")) == pilot_id:
-				pilot_name = str(p.get("name", pilot_id))
-				break
-	_bay_confirm_label.text = "BAY %02d  —  %s" % [_selected_bay_for_dispatch + 1, pilot_name]
-	_bay_dispatch_btn.disabled = slot.state != "offline" or pilot_id == ""
-
-
 func _hide_bay_panel() -> void:
 	_bay_select_mode = false
 	_bay_panel_dragging = false
-	_selected_bay_for_dispatch = -1
 	var off := maxf(size.x, 800.0)
 	var tween := create_tween()
 	tween.set_parallel(true)
@@ -682,14 +629,7 @@ func _hide_bay_panel() -> void:
 	tween.chain().tween_callback(func(): _bay_panel.visible = false)
 
 
-func _make_bay_card(bay_index: int, slot: DispatchManager.AutoSlot) -> Button:
-	var btn := Button.new()
-	btn.custom_minimum_size = Vector2(100, 72)
-	btn.add_theme_font_size_override("font_size", 11)
-	btn.text = "BAY %02d\n%s" % [bay_index + 1, _slot_state_text(slot.state, false, "")]
-	btn.disabled = slot.state != "offline"
-	btn.pressed.connect(func(): _select_bay_for_dispatch(bay_index))
-	var is_selected := bay_index == _selected_bay_for_dispatch
+func _make_bay_card(bay_index: int, slot: DispatchManager.AutoSlot) -> PanelContainer:
 	var accent: Color
 	match slot.state:
 		"offline":    accent = Color(0.38, 0.56, 0.78, 0.95)
@@ -697,23 +637,53 @@ func _make_bay_card(bay_index: int, slot: DispatchManager.AutoSlot) -> Button:
 		"returning":  accent = Color(0.92, 0.72, 0.32, 0.95)
 		"returned":   accent = Color(0.78, 0.92, 0.44, 0.95)
 		_:            accent = Color(0.30, 0.30, 0.38, 0.85)
+	var card := PanelContainer.new()
+	card.custom_minimum_size = Vector2(96, 80)
 	var style := StyleBoxFlat.new()
-	if is_selected:
-		style.bg_color = Color(accent.r * 0.38, accent.g * 0.38, accent.b * 0.38, 0.95)
-		style.border_color = Color(1.0, 1.0, 1.0, 0.88)
-		style.set_border_width_all(2)
-	else:
-		style.bg_color = Color(accent.r * 0.22, accent.g * 0.22, accent.b * 0.22, 0.92)
-		style.border_color = accent
-		style.set_border_width_all(1)
+	style.bg_color = Color(accent.r * 0.20, accent.g * 0.20, accent.b * 0.20, 0.92)
+	style.border_color = accent
+	style.set_border_width_all(1)
 	style.set_corner_radius_all(5)
 	style.content_margin_left = 8
 	style.content_margin_right = 8
 	style.content_margin_top = 6
 	style.content_margin_bottom = 6
-	btn.add_theme_stylebox_override("normal", style)
-	btn.add_theme_stylebox_override("pressed", style)
-	return btn
+	card.add_theme_stylebox_override("panel", style)
+	var vbox := VBoxContainer.new()
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 5)
+	card.add_child(vbox)
+	var num_lbl := Label.new()
+	num_lbl.text = "BAY %02d" % (bay_index + 1)
+	num_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	num_lbl.add_theme_font_size_override("font_size", 11)
+	vbox.add_child(num_lbl)
+	match slot.state:
+		"offline":
+			var btn := Button.new()
+			btn.text = "출격"
+			btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			btn.custom_minimum_size = Vector2(0, 28)
+			btn.pressed.connect(func(): _dispatch_from_bay(bay_index))
+			vbox.add_child(btn)
+		"returned":
+			var btn := Button.new()
+			btn.text = "수령"
+			btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			btn.custom_minimum_size = Vector2(0, 28)
+			btn.pressed.connect(func(): _collect_bay(bay_index))
+			vbox.add_child(btn)
+		_:
+			var state_lbl := Label.new()
+			state_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			state_lbl.add_theme_font_size_override("font_size", 10)
+			state_lbl.modulate = accent
+			match slot.state:
+				"on_mission": state_lbl.text = "파견 중"
+				"returning":  state_lbl.text = "복귀 중"
+				_:            state_lbl.text = slot.state
+			vbox.add_child(state_lbl)
+	return card
 
 
 func _dispatch_from_bay(bay_index: int) -> void:
