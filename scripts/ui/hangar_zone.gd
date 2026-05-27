@@ -13,16 +13,17 @@ const ROWS          := 2
 const DRAG_THRESHOLD := 6.0
 const TWEEN_DUR     := 0.22
 
-var _selected_slot: int   = -1
-var _detail_open:   bool  = false
-var _needs_rebuild: bool  = false
-var _scroll_ref:    ScrollContainer = null
-var _drag_start_x:  float = -1.0
-var _drag_start_h:  int   = 0
-var _was_dragging:  bool  = false
-var _grid_zone:     Control = null
-var _detail_zone:   Control = null
-var _layout_root:   Control = null
+var _selected_slot:  int   = -1
+var _detail_open:    bool  = false
+var _needs_rebuild:  bool  = false
+var _scroll_ref:     ScrollContainer = null
+var _drag_start_x:   float = -1.0
+var _drag_start_h:   int   = 0
+var _was_dragging:   bool  = false
+var _grid_zone:      Control = null
+var _detail_zone:    Control = null
+var _layout_root:    Control = null
+var _bay_scroll_pos: int   = 999999
 
 
 func _ready() -> void:
@@ -81,11 +82,10 @@ func _build() -> void:
 	_layout_root = root
 
 	_build_background(root)
-	_build_header(root)
 
 	var content := Control.new()
 	content.set_anchors_preset(Control.PRESET_FULL_RECT)
-	content.offset_top = 86.0
+	content.offset_top = 50.0
 	content.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(content)
 
@@ -128,59 +128,6 @@ func _build_background(root: Control) -> void:
 	root.add_child(bg)
 
 
-func _build_header(root: Control) -> void:
-	var bar := Control.new()
-	bar.anchor_left   = 0.0
-	bar.anchor_top    = 0.0
-	bar.anchor_right  = 1.0
-	bar.anchor_bottom = 0.0
-	bar.offset_top    = 48.0
-	bar.offset_bottom = 86.0
-	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	var bar_bg := ColorRect.new()
-	bar_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bar_bg.color = Color(0.06, 0.09, 0.15, 0.92)
-	bar_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	bar.add_child(bar_bg)
-
-	var sep := ColorRect.new()
-	sep.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	sep.offset_top = -1.0
-	sep.color = Color(0.22, 0.34, 0.52, 0.65)
-	sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	bar.add_child(sep)
-
-	var hbox := HBoxContainer.new()
-	hbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	hbox.offset_left   = 14
-	hbox.offset_right  = -10
-	hbox.offset_top    = 7
-	hbox.offset_bottom = -7
-	hbox.add_theme_constant_override("separation", 8)
-	bar.add_child(hbox)
-
-	var title := Label.new()
-	title.text = "격납고"
-	title.add_theme_font_size_override("font_size", 12)
-	title.modulate = Color(0.72, 0.84, 1.0)
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hbox.add_child(title)
-
-	var workshop_btn := Button.new()
-	workshop_btn.text = "공작실"
-	workshop_btn.custom_minimum_size = Vector2(0, 24)
-	workshop_btn.add_theme_font_size_override("font_size", 10)
-	workshop_btn.pressed.connect(func():
-		if _selected_slot >= 0:
-			GameState.workshop_preselect_slot = _selected_slot
-		PanelManager.show_panel("workshop")
-	)
-	hbox.add_child(workshop_btn)
-
-	root.add_child(bar)
-
-
 func _build_grid(zone: Control) -> void:
 	var scroll := ScrollContainer.new()
 	scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -191,8 +138,8 @@ func _build_grid(zone: Control) -> void:
 	_scroll_ref = scroll
 
 	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_top",    20)
-	margin.add_theme_constant_override("margin_bottom", 16)
+	margin.add_theme_constant_override("margin_top",    12)
+	margin.add_theme_constant_override("margin_bottom", 12)
 	margin.add_theme_constant_override("margin_left",   0)
 	margin.add_theme_constant_override("margin_right",  0)
 	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -200,19 +147,17 @@ func _build_grid(zone: Control) -> void:
 
 	var cols := HBoxContainer.new()
 	cols.add_theme_constant_override("separation", COL_GAP)
+	cols.alignment = BoxContainer.ALIGNMENT_BEGIN
 	cols.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_child(cols)
 
-	var lpad := Control.new()
-	lpad.custom_minimum_size = Vector2(14, 0)
-	lpad.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	cols.add_child(lpad)
-
+	# 우측 정렬: 낮은 인덱스(slot 0)가 우측에 오도록 역순으로 추가
 	var slots := GameState.auto_slots
 	var num_cols: int = ceili(float(slots.size()) / float(ROWS))
-	for c in range(num_cols):
+	for c in range(num_cols - 1, -1, -1):
 		var col_box := VBoxContainer.new()
 		col_box.add_theme_constant_override("separation", ROW_GAP)
+		col_box.alignment = BoxContainer.ALIGNMENT_CENTER
 		col_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		cols.add_child(col_box)
 		for r in range(ROWS):
@@ -223,9 +168,11 @@ func _build_grid(zone: Control) -> void:
 				col_box.add_child(_make_slot_placeholder())
 
 	var rpad := Control.new()
-	rpad.custom_minimum_size = Vector2(16, 0)
+	rpad.custom_minimum_size = Vector2(12, 0)
 	rpad.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cols.add_child(rpad)
+
+	call_deferred("_restore_bay_scroll")
 
 
 func _rebuild_detail() -> void:
@@ -239,12 +186,19 @@ func _rebuild_detail() -> void:
 func _rebuild_grid_content() -> void:
 	if not is_instance_valid(_grid_zone):
 		return
+	if is_instance_valid(_scroll_ref):
+		_bay_scroll_pos = _scroll_ref.scroll_horizontal
 	for child in _grid_zone.get_children():
 		child.queue_free()
 	_scroll_ref   = null
 	_drag_start_x = -1.0
 	_was_dragging = false
 	_build_grid(_grid_zone)
+
+
+func _restore_bay_scroll() -> void:
+	if is_instance_valid(_scroll_ref):
+		_scroll_ref.scroll_horizontal = _bay_scroll_pos
 
 
 # ── 상세 패널 ────────────────────────────────────────────────

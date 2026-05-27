@@ -52,6 +52,7 @@ func _build_ui() -> void:
 
 	_build_background()
 	_build_zone_panels()
+	_build_zone_dividers()
 	_build_nav_bar()
 	_build_star_map_popup()
 
@@ -222,6 +223,36 @@ func _make_zone_base(x_start: float, x_end: float, title: String) -> Control:
 
 	_content.add_child(zone)
 	return zone
+
+
+func _build_zone_dividers() -> void:
+	for x in [1200.0, 2420.0]:
+		var wall := ColorRect.new()
+		wall.anchor_left   = 0.0
+		wall.anchor_top    = 0.0
+		wall.anchor_right  = 0.0
+		wall.anchor_bottom = 1.0
+		wall.offset_left   = x - 8.0
+		wall.offset_right  = x + 8.0
+		wall.offset_top    = 0.0
+		wall.offset_bottom = 0.0
+		wall.color = Color(0.07, 0.09, 0.13, 1.0)
+		wall.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_content.add_child(wall)
+
+		for dx in [-7.0, 6.0]:
+			var edge := ColorRect.new()
+			edge.anchor_left   = 0.0
+			edge.anchor_top    = 0.0
+			edge.anchor_right  = 0.0
+			edge.anchor_bottom = 1.0
+			edge.offset_left   = x + dx
+			edge.offset_right  = x + dx + 2.0
+			edge.offset_top    = 0.0
+			edge.offset_bottom = 0.0
+			edge.color = Color(0.18, 0.26, 0.40, 0.85)
+			edge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			_content.add_child(edge)
 
 
 func _build_star_map_popup() -> void:
