@@ -309,8 +309,7 @@ func _build_bay_panel() -> void:
 
 	var cancel_btn := Button.new()
 	cancel_btn.text = "×"
-	cancel_btn.flat = true
-	cancel_btn.custom_minimum_size = Vector2(28, 0)
+	cancel_btn.custom_minimum_size = Vector2(40, 0)
 	cancel_btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	cancel_btn.pressed.connect(_hide_bay_panel)
 	row.add_child(cancel_btn)
