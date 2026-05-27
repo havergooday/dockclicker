@@ -94,27 +94,31 @@ func _build_hangar() -> void:
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
+	# BackButton을 BayLayout 위(최상단)에 유지
+	move_child(back_button, get_child_count() - 1)
 
-	var grid_right  := DETAIL_SPLIT if _detail_open else 1.0
-	var detail_left := DETAIL_SPLIT if _detail_open else 1.0
+	var detail_right := DETAIL_SPLIT if _detail_open else 0.0
+	var grid_left    := DETAIL_SPLIT if _detail_open else 0.0
 
-	_grid_zone = Control.new()
-	_grid_zone.anchor_left   = 0.0
-	_grid_zone.anchor_top    = 0.0
-	_grid_zone.anchor_right  = grid_right
-	_grid_zone.anchor_bottom = 1.0
-	_grid_zone.mouse_filter  = Control.MOUSE_FILTER_IGNORE
-	root.add_child(_grid_zone)
-	_build_grid(_grid_zone)
-
+	# Detail zone - 좌측, 기본 zero-width (숨김)
 	_detail_zone = Control.new()
-	_detail_zone.anchor_left   = detail_left
+	_detail_zone.anchor_left   = 0.0
 	_detail_zone.anchor_top    = 0.0
-	_detail_zone.anchor_right  = 1.0
+	_detail_zone.anchor_right  = detail_right
 	_detail_zone.anchor_bottom = 1.0
 	_detail_zone.visible       = _detail_open
 	_detail_zone.mouse_filter  = Control.MOUSE_FILTER_PASS
 	root.add_child(_detail_zone)
+
+	# Grid zone - 기본 전체 너비, 상세 패널 열리면 우측으로 밀림
+	_grid_zone = Control.new()
+	_grid_zone.anchor_left   = grid_left
+	_grid_zone.anchor_top    = 0.0
+	_grid_zone.anchor_right  = 1.0
+	_grid_zone.anchor_bottom = 1.0
+	_grid_zone.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_grid_zone)
+	_build_grid(_grid_zone)
 
 	if _detail_open:
 		_rebuild_detail_content()
@@ -267,15 +271,15 @@ func _open_detail() -> void:
 	_rebuild_detail_content()
 	_rebuild_grid_content()
 	var tw := create_tween().set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-	tw.parallel().tween_property(_grid_zone,   "anchor_right", DETAIL_SPLIT, TWEEN_DUR)
-	tw.parallel().tween_property(_detail_zone, "anchor_left",  DETAIL_SPLIT, TWEEN_DUR)
+	tw.parallel().tween_property(_detail_zone, "anchor_right", DETAIL_SPLIT, TWEEN_DUR)
+	tw.parallel().tween_property(_grid_zone,   "anchor_left",  DETAIL_SPLIT, TWEEN_DUR)
 
 
 func _close_detail() -> void:
 	_detail_open = false
 	var tw := create_tween().set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_CUBIC)
-	tw.parallel().tween_property(_grid_zone,   "anchor_right", 1.0, TWEEN_DUR * 0.85)
-	tw.parallel().tween_property(_detail_zone, "anchor_left",  1.0, TWEEN_DUR * 0.85)
+	tw.parallel().tween_property(_detail_zone, "anchor_right", 0.0, TWEEN_DUR * 0.85)
+	tw.parallel().tween_property(_grid_zone,   "anchor_left",  0.0, TWEEN_DUR * 0.85)
 	tw.tween_callback(func():
 		_detail_zone.visible = false
 		_selected_slot = -1
