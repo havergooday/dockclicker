@@ -34,6 +34,9 @@ var _slot_drag_scroll_start: int = 0
 var _bay_panel: PanelContainer
 var _bay_grid: GridContainer
 var _bay_scroll: ScrollContainer
+var _bay_confirm_label: Label
+var _bay_dispatch_btn: Button
+var _selected_bay_for_dispatch: int = -1
 var _bay_panel_dragging: bool = false
 var _bay_drag_anchor_x: float = 0.0
 var _bay_drag_scroll_start: int = 0
@@ -314,18 +317,49 @@ func _build_bay_panel() -> void:
 	cancel_btn.pressed.connect(_hide_bay_panel)
 	row.add_child(cancel_btn)
 
+	var right_vbox := VBoxContainer.new()
+	right_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	right_vbox.add_theme_constant_override("separation", 6)
+	row.add_child(right_vbox)
+
 	_bay_scroll = ScrollContainer.new()
 	_bay_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_bay_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_bay_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	_bay_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	row.add_child(_bay_scroll)
+	right_vbox.add_child(_bay_scroll)
 
 	_bay_grid = GridContainer.new()
 	_bay_grid.columns = 2
 	_bay_grid.add_theme_constant_override("h_separation", 16)
 	_bay_grid.add_theme_constant_override("v_separation", 12)
 	_bay_scroll.add_child(_bay_grid)
+
+	var sep := HSeparator.new()
+	right_vbox.add_child(sep)
+
+	var confirm_bar := HBoxContainer.new()
+	confirm_bar.add_theme_constant_override("separation", 8)
+	right_vbox.add_child(confirm_bar)
+
+	_bay_confirm_label = Label.new()
+	_bay_confirm_label.text = "베이를 선택하세요"
+	_bay_confirm_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_bay_confirm_label.add_theme_font_size_override("font_size", 12)
+	_bay_confirm_label.modulate = Color(0.70, 0.80, 1.0)
+	_bay_confirm_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	confirm_bar.add_child(_bay_confirm_label)
+
+	_bay_dispatch_btn = Button.new()
+	_bay_dispatch_btn.text = "출격 ▶"
+	_bay_dispatch_btn.custom_minimum_size = Vector2(80, 32)
+	_bay_dispatch_btn.disabled = true
+	_bay_dispatch_btn.pressed.connect(func():
+		if _selected_bay_for_dispatch >= 0:
+			_dispatch_from_bay(_selected_bay_for_dispatch)
+	)
+	confirm_bar.add_child(_bay_dispatch_btn)
 
 
 func _build_float_popups() -> void:
@@ -578,15 +612,28 @@ func _exit_detail_mode() -> void:
 
 func _show_bay_panel(slot_idx: int) -> void:
 	_bay_select_mode = true
+	_selected_bay_for_dispatch = -1
+	_refresh_bay_grid()
+	_update_confirm_bar()
+
+	var off := maxf(size.x, 800.0)
+	_bay_panel.offset_left = off
+	_bay_panel.offset_right = off
+	_bay_panel.visible = true
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(_bay_panel, "offset_left", 300.0, 0.20).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(_bay_panel, "offset_right", 0.0, 0.20).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
+
+
+func _refresh_bay_grid() -> void:
 	for child in _bay_grid.get_children():
 		child.queue_free()
-
 	var available: Array = []
 	for i in GameState.auto_slots.size():
 		var s := GameState.auto_slots[i] as DispatchManager.AutoSlot
 		if s.state != "locked":
 			available.append(i)
-
 	if available.is_empty():
 		var lbl := Label.new()
 		lbl.text = "사용 가능한 베이 없음"
@@ -599,19 +646,34 @@ func _show_bay_panel(slot_idx: int) -> void:
 			var slot := GameState.auto_slots[bay_i] as DispatchManager.AutoSlot
 			_bay_grid.add_child(_make_bay_card(bay_i, slot))
 
-	var off := maxf(size.x, 800.0)
-	_bay_panel.offset_left = off
-	_bay_panel.offset_right = off
-	_bay_panel.visible = true
-	var tween := create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(_bay_panel, "offset_left", 300.0, 0.20).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
-	tween.tween_property(_bay_panel, "offset_right", 0.0, 0.20).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
+
+func _select_bay_for_dispatch(bay_index: int) -> void:
+	_selected_bay_for_dispatch = bay_index
+	_refresh_bay_grid()
+	_update_confirm_bar()
+
+
+func _update_confirm_bar() -> void:
+	if _selected_bay_for_dispatch < 0:
+		_bay_confirm_label.text = "베이를 선택하세요"
+		_bay_dispatch_btn.disabled = true
+		return
+	var slot := GameState.auto_slots[_selected_bay_for_dispatch] as DispatchManager.AutoSlot
+	var pilot_id := _get_first_idle_pilot_id()
+	var pilot_name := "파일럿 없음"
+	if pilot_id != "":
+		for p in GameState.hired_pilots:
+			if str(p.get("id", "")) == pilot_id:
+				pilot_name = str(p.get("name", pilot_id))
+				break
+	_bay_confirm_label.text = "BAY %02d  —  %s" % [_selected_bay_for_dispatch + 1, pilot_name]
+	_bay_dispatch_btn.disabled = slot.state != "offline" or pilot_id == ""
 
 
 func _hide_bay_panel() -> void:
 	_bay_select_mode = false
 	_bay_panel_dragging = false
+	_selected_bay_for_dispatch = -1
 	var off := maxf(size.x, 800.0)
 	var tween := create_tween()
 	tween.set_parallel(true)
@@ -626,7 +688,8 @@ func _make_bay_card(bay_index: int, slot: DispatchManager.AutoSlot) -> Button:
 	btn.add_theme_font_size_override("font_size", 11)
 	btn.text = "BAY %02d\n%s" % [bay_index + 1, _slot_state_text(slot.state, false, "")]
 	btn.disabled = slot.state != "offline"
-	btn.pressed.connect(func(): _dispatch_from_bay(bay_index))
+	btn.pressed.connect(func(): _select_bay_for_dispatch(bay_index))
+	var is_selected := bay_index == _selected_bay_for_dispatch
 	var accent: Color
 	match slot.state:
 		"offline":    accent = Color(0.38, 0.56, 0.78, 0.95)
@@ -635,9 +698,14 @@ func _make_bay_card(bay_index: int, slot: DispatchManager.AutoSlot) -> Button:
 		"returned":   accent = Color(0.78, 0.92, 0.44, 0.95)
 		_:            accent = Color(0.30, 0.30, 0.38, 0.85)
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(accent.r * 0.22, accent.g * 0.22, accent.b * 0.22, 0.92)
-	style.border_color = accent
-	style.set_border_width_all(1)
+	if is_selected:
+		style.bg_color = Color(accent.r * 0.38, accent.g * 0.38, accent.b * 0.38, 0.95)
+		style.border_color = Color(1.0, 1.0, 1.0, 0.88)
+		style.set_border_width_all(2)
+	else:
+		style.bg_color = Color(accent.r * 0.22, accent.g * 0.22, accent.b * 0.22, 0.92)
+		style.border_color = accent
+		style.set_border_width_all(1)
 	style.set_corner_radius_all(5)
 	style.content_margin_left = 8
 	style.content_margin_right = 8
