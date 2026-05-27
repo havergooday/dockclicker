@@ -34,6 +34,7 @@ var _saved_planet_scroll_x: int = 0
 var _planet_dragging: bool = false
 var _planet_drag_anchor_x: float = 0.0
 var _planet_drag_scroll_start: int = 0
+var _detail_overlay: ColorRect
 
 
 func _ready() -> void:
@@ -53,6 +54,7 @@ func open_for_control_room() -> void:
 	_slide_panel.visible = false
 	_slide_panel.offset_left = 2000.0
 	_slide_panel.offset_right = 2000.0
+	_detail_overlay.visible = false
 	_select_default_planet()
 	_rebuild_planets()
 	call_deferred("_restore_saved_scroll")
@@ -76,6 +78,8 @@ func close_popup() -> void:
 		_hide_ship_popup()
 		_hide_confirm_popup()
 		_hide_toast()
+		_slide_panel.visible = false
+		_detail_overlay.visible = false
 		_planet_dragging = false
 		_selected_slot_index = -1
 		_selected_bay_index = -1
@@ -123,13 +127,9 @@ func _build_ui() -> void:
 	root.add_theme_constant_override("separation", 6)
 	_main_panel.add_child(root)
 
-	# Minimal header — just close button right-aligned
 	var header := HBoxContainer.new()
+	header.alignment = BoxContainer.ALIGNMENT_CENTER
 	root.add_child(header)
-
-	var hdr_spacer := Control.new()
-	hdr_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.add_child(hdr_spacer)
 
 	var close_btn := Button.new()
 	close_btn.text = "× 닫기"
@@ -150,6 +150,7 @@ func _build_ui() -> void:
 	_body_wrapper.add_child(_planet_area)
 
 	_build_planet_area()
+	_build_detail_overlay()
 	_build_slide_panel()
 	_build_float_popups()
 	_build_toast()
@@ -173,14 +174,29 @@ func _build_planet_area() -> void:
 	_planet_row = HBoxContainer.new()
 	_planet_row.add_theme_constant_override("separation", 20)
 	_planet_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_planet_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_planet_scroll.add_child(_planet_row)
+
+
+func _build_detail_overlay() -> void:
+	_detail_overlay = ColorRect.new()
+	_detail_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_detail_overlay.color = Color(0, 0, 0, 0.60)
+	_detail_overlay.visible = false
+	_detail_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	_main_panel.add_child(_detail_overlay)
 
 
 func _build_slide_panel() -> void:
 	_slide_panel = PanelContainer.new()
-	_slide_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_slide_panel.offset_left = 2000.0
-	_slide_panel.offset_right = 2000.0
+	_slide_panel.anchor_left = 0.25
+	_slide_panel.anchor_top = 0.0
+	_slide_panel.anchor_right = 1.0
+	_slide_panel.anchor_bottom = 1.0
+	_slide_panel.offset_left = 0.0
+	_slide_panel.offset_right = 0.0
+	_slide_panel.offset_top = 0.0
+	_slide_panel.offset_bottom = 0.0
 	_slide_panel.visible = false
 	var slide_style := StyleBoxFlat.new()
 	slide_style.bg_color = Color(0.05, 0.08, 0.14, 0.98)
@@ -189,46 +205,29 @@ func _build_slide_panel() -> void:
 	slide_style.border_width_top = 0
 	slide_style.border_width_right = 0
 	slide_style.border_width_bottom = 0
-	slide_style.content_margin_left = 16
-	slide_style.content_margin_right = 0
+	slide_style.content_margin_left = 12
+	slide_style.content_margin_right = 16
 	slide_style.content_margin_top = 8
 	slide_style.content_margin_bottom = 8
 	_slide_panel.add_theme_stylebox_override("panel", slide_style)
-	_body_wrapper.add_child(_slide_panel)
+	_main_panel.add_child(_slide_panel)
 
 	var row := HBoxContainer.new()
 	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	row.add_theme_constant_override("separation", 14)
 	_slide_panel.add_child(row)
 
-	# Left: dispatch slot section (2-row grid, scrollable horizontally)
-	var slot_wrap := VBoxContainer.new()
-	slot_wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	slot_wrap.add_theme_constant_override("separation", 4)
-	row.add_child(slot_wrap)
+	# Left: X close button
+	var x_btn := Button.new()
+	x_btn.text = "×"
+	x_btn.custom_minimum_size = Vector2(40, 0)
+	x_btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	x_btn.pressed.connect(_deselect_planet)
+	row.add_child(x_btn)
 
-	var slot_title := Label.new()
-	slot_title.text = "파견 슬롯"
-	slot_title.add_theme_font_size_override("font_size", 12)
-	slot_title.modulate = Color(0.68, 0.80, 1.0)
-	slot_wrap.add_child(slot_title)
-
-	var slot_scroll := ScrollContainer.new()
-	slot_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	slot_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	slot_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	slot_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	slot_wrap.add_child(slot_scroll)
-
-	_slot_grid = GridContainer.new()
-	_slot_grid.columns = 4
-	_slot_grid.add_theme_constant_override("h_separation", 6)
-	_slot_grid.add_theme_constant_override("v_separation", 6)
-	slot_scroll.add_child(_slot_grid)
-
-	# Middle: planet info
+	# Middle: planet detail info
 	var info_section := VBoxContainer.new()
-	info_section.custom_minimum_size = Vector2(240, 0)
+	info_section.custom_minimum_size = Vector2(220, 0)
 	info_section.add_theme_constant_override("separation", 8)
 	row.add_child(info_section)
 
@@ -244,13 +243,30 @@ func _build_slide_panel() -> void:
 	direct_btn.pressed.connect(func(): _confirm_dispatch(-1))
 	info_section.add_child(direct_btn)
 
-	# Right: X close button full-height
-	var x_btn := Button.new()
-	x_btn.text = "×"
-	x_btn.custom_minimum_size = Vector2(44, 0)
-	x_btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	x_btn.pressed.connect(_deselect_planet)
-	row.add_child(x_btn)
+	# Right: planet slot section
+	var slot_wrap := VBoxContainer.new()
+	slot_wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slot_wrap.add_theme_constant_override("separation", 4)
+	row.add_child(slot_wrap)
+
+	var slot_title := Label.new()
+	slot_title.text = "행성 슬롯"
+	slot_title.add_theme_font_size_override("font_size", 12)
+	slot_title.modulate = Color(0.68, 0.80, 1.0)
+	slot_wrap.add_child(slot_title)
+
+	var slot_scroll := ScrollContainer.new()
+	slot_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	slot_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	slot_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slot_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	slot_wrap.add_child(slot_scroll)
+
+	_slot_grid = GridContainer.new()
+	_slot_grid.columns = 4
+	_slot_grid.add_theme_constant_override("h_separation", 8)
+	_slot_grid.add_theme_constant_override("v_separation", 8)
+	slot_scroll.add_child(_slot_grid)
 
 
 func _build_float_popups() -> void:
@@ -447,31 +463,45 @@ func _rebuild_detail() -> void:
 func _rebuild_slots() -> void:
 	for child in _slot_grid.get_children():
 		child.queue_free()
-	var unlocked_bays: Array = []
+	var planet := GameState.get_planet(_selected_planet_id)
+	if planet.is_empty():
+		return
+	var max_slots := int(planet.get("max_slots", 1))
+	var active_bays: Array = []
 	for i in GameState.auto_slots.size():
-		var slot := GameState.auto_slots[i] as DispatchManager.AutoSlot
-		if slot.state != "locked":
-			unlocked_bays.append(i)
-	_slot_grid.columns = max(2, ceili(float(unlocked_bays.size()) / 2.0))
-	for bay_index in unlocked_bays:
-		_slot_grid.add_child(_make_slot_card(bay_index))
+		var s := GameState.auto_slots[i] as DispatchManager.AutoSlot
+		if s.planet == _selected_planet_id and s.state in ["on_mission", "returning", "returned"]:
+			active_bays.append(i)
+	_slot_grid.columns = max_slots
+	for i in max_slots:
+		var bay_index := active_bays[i] if i < active_bays.size() else -1
+		_slot_grid.add_child(_make_planet_slot_card(i, bay_index))
 
 
-func _make_slot_card(bay_index: int) -> Button:
-	var slot := GameState.auto_slots[bay_index] as DispatchManager.AutoSlot
-	var is_this_planet := slot.state in ["on_mission", "returning", "returned"] and slot.planet == _selected_planet_id
+func _make_planet_slot_card(slot_idx: int, bay_index: int) -> Button:
 	var btn := Button.new()
-	btn.toggle_mode = true
-	btn.custom_minimum_size = Vector2(110, 40)
-	btn.add_theme_font_size_override("font_size", 10)
-	var line1 := "BAY %02d" % (bay_index + 1)
-	var line2 := _slot_state_text(slot.state, is_this_planet, slot.planet)
-	btn.text = "%s\n%s" % [line1, line2]
-	btn.button_pressed = is_this_planet
-	if slot.state == "offline":
-		btn.pressed.connect(func(): _open_ship_popup(bay_index, btn))
-	_apply_slot_style(btn, slot.state, is_this_planet)
+	btn.toggle_mode = false
+	btn.custom_minimum_size = Vector2(140, 52)
+	btn.add_theme_font_size_override("font_size", 11)
+	if bay_index < 0:
+		btn.text = "슬롯 %d\n+ 파견" % (slot_idx + 1)
+		btn.pressed.connect(func(): _open_ship_popup(slot_idx, btn))
+		_apply_slot_style(btn, "offline", false)
+	else:
+		var slot := GameState.auto_slots[bay_index] as DispatchManager.AutoSlot
+		btn.text = "슬롯 %d  BAY %02d\n%s" % [slot_idx + 1, bay_index + 1, _slot_state_text(slot.state, true, slot.planet)]
+		if slot.state == "returned":
+			btn.pressed.connect(func(): _collect_bay(bay_index))
+		_apply_slot_style(btn, slot.state, true)
 	return btn
+
+
+func _collect_bay(bay_index: int) -> void:
+	if not GameState.collect_auto_slot(bay_index):
+		_show_toast("수령 실패")
+		return
+	_show_toast("수령 완료")
+	_rebuild_slots()
 
 
 func _slot_state_text(state: String, is_this_planet: bool, planet_id: String) -> String:
@@ -536,9 +566,10 @@ func _deselect_planet() -> void:
 
 
 func _enter_detail_mode() -> void:
-	var start_x := maxf(_body_wrapper.size.x, 600.0)
-	_slide_panel.offset_left = start_x
-	_slide_panel.offset_right = start_x
+	var off := maxf(_main_panel.size.x, 800.0)
+	_detail_overlay.visible = true
+	_slide_panel.offset_left = off
+	_slide_panel.offset_right = off
 	_slide_panel.visible = true
 	var tween := create_tween()
 	tween.set_parallel(true)
@@ -547,13 +578,14 @@ func _enter_detail_mode() -> void:
 
 
 func _exit_detail_mode() -> void:
-	var end_x := maxf(_body_wrapper.size.x, 600.0)
+	var off := maxf(_main_panel.size.x, 800.0)
 	var tween := create_tween()
 	tween.set_parallel(true)
-	tween.tween_property(_slide_panel, "offset_left", end_x, 0.20).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_SINE)
-	tween.tween_property(_slide_panel, "offset_right", end_x, 0.20).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(_slide_panel, "offset_left", off, 0.20).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(_slide_panel, "offset_right", off, 0.20).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_SINE)
 	tween.chain().tween_callback(func():
 		_slide_panel.visible = false
+		_detail_overlay.visible = false
 	)
 
 

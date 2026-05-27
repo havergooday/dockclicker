@@ -49,8 +49,8 @@ func _build_ui() -> void:
 	scroll.add_child(_content)
 
 	_build_background()
-	_build_nav_bar()
 	_build_zone_panels()
+	_build_nav_bar()
 	_build_star_map_popup()
 
 
@@ -69,8 +69,14 @@ func _build_background() -> void:
 
 func _build_nav_bar() -> void:
 	var bar := PanelContainer.new()
-	bar.position = Vector2(16, 10)
-	bar.size = Vector2(520, 36)
+	bar.anchor_left = 0.5
+	bar.anchor_top = 0.0
+	bar.anchor_right = 0.5
+	bar.anchor_bottom = 0.0
+	bar.offset_left = -260.0
+	bar.offset_right = 260.0
+	bar.offset_top = 10.0
+	bar.offset_bottom = 46.0
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.04, 0.06, 0.10, 0.78)
@@ -78,7 +84,7 @@ func _build_nav_bar() -> void:
 	style.set_border_width_all(1)
 	style.set_corner_radius_all(6)
 	bar.add_theme_stylebox_override("panel", style)
-	_content.add_child(bar)
+	add_child(bar)
 
 	var row := HBoxContainer.new()
 	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
