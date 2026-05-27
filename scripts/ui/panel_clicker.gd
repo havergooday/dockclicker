@@ -102,4 +102,5 @@ func _refresh_session_label() -> void:
 func _on_return_pressed() -> void:
 	_clear_enemies()
 	GameState.return_from_dispatch()
-	PanelManager.show_panel("hangar")
+	GameState.collect_player_credits(return_button.global_position)
+	PanelManager.show_panel("dispatch")
