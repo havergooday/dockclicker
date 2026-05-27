@@ -637,8 +637,15 @@ func _make_bay_card(bay_index: int, slot: DispatchManager.AutoSlot) -> PanelCont
 		"returning":  accent = Color(0.92, 0.72, 0.32, 0.95)
 		"returned":   accent = Color(0.78, 0.92, 0.44, 0.95)
 		_:            accent = Color(0.30, 0.30, 0.38, 0.85)
+	var pilot_name := "—"
+	if slot.pilot != "":
+		for p in GameState.hired_pilots:
+			if str(p.get("id", "")) == slot.pilot:
+				pilot_name = str(p.get("name", slot.pilot))
+				break
+
 	var card := PanelContainer.new()
-	card.custom_minimum_size = Vector2(96, 80)
+	card.custom_minimum_size = Vector2(96, 100)
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(accent.r * 0.20, accent.g * 0.20, accent.b * 0.20, 0.92)
 	style.border_color = accent
@@ -651,13 +658,20 @@ func _make_bay_card(bay_index: int, slot: DispatchManager.AutoSlot) -> PanelCont
 	card.add_theme_stylebox_override("panel", style)
 	var vbox := VBoxContainer.new()
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.add_theme_constant_override("separation", 5)
+	vbox.add_theme_constant_override("separation", 4)
 	card.add_child(vbox)
 	var num_lbl := Label.new()
 	num_lbl.text = "BAY %02d" % (bay_index + 1)
 	num_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	num_lbl.add_theme_font_size_override("font_size", 11)
 	vbox.add_child(num_lbl)
+	var pilot_lbl := Label.new()
+	pilot_lbl.text = pilot_name
+	pilot_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pilot_lbl.add_theme_font_size_override("font_size", 10)
+	pilot_lbl.modulate = Color(0.72, 0.84, 1.0)
+	pilot_lbl.clip_text = true
+	vbox.add_child(pilot_lbl)
 	match slot.state:
 		"offline":
 			var btn := Button.new()
