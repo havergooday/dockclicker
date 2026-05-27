@@ -22,7 +22,7 @@ Validation: `python -m unittest tests.test_project_structure`
 | Global credit HUD (floating pill), bridge util panel | |
 | PC terminal (left menu: parts / upgrade / pilot) | |
 
-## Panel Structure (confirmed design)
+## Panel Structure (current implementation)
 
 Main ship view = bridge (pilots idle here). Click interactive objects to flip into panels:
 
@@ -33,16 +33,30 @@ Main ship view = bridge (pilots idle here). Click interactive objects to flip in
 | PC 터미널 | 상점 | Buy parts, hire pilots |
 | 관제 콘솔 | 파견 관제 | Mission board, unit assignment, sortie |
 
+## Planned Navigation Structure (current priority)
+
+The next UX redesign replaces panel flipping with a panoramic ship canvas and camera movement:
+
+| Zone | Position | Role |
+|---|---|---|
+| 격납고 | Left, expandable leftward | Bays, machines, return collection, maintenance |
+| 브릿지/파일럿 라운지 | Center home | Pilot roaming, ship decoration, companion/living space |
+| 관제실 | Right | Star map popup entry, dispatch command, shop/hiring popup entry |
+
+Navigation uses `격납고 / 브릿지 / 관제실` tabs plus right-click drag panning. The control room opens a descending star map popup for planet selection, planet detail, slot selection, and ship selection. The map uses an icon-centered horizontal scrolling grid, restores the last selected planet position by default, collapses the left area to about 15% on planet selection, and shows a 2-row slot grid on the right. Workshop functions open as hangar popups; shop/hiring functions open as command-room popups. Vertical movement is reserved for future lower-deck dorm/living expansion.
+
 ## Next Priorities
 
-1. **BGM/SFX** — AudioServer 버스 설정, 클릭·수령·파견음 SFX
-2. 행성별 고유 생물 그래픽, 플레이어 기체 추가 업그레이드
-3. 자동 파견 수익 상세 내역, 전원 출격 버튼
+1. **UI/UX 통합 재설계** — `docs/plans/2026-05-27-ux-redesign.md`
+2. **BGM/SFX** — AudioServer 버스 설정, 클릭·수령·파견음 SFX
+3. 행성별 고유 생물 그래픽, 플레이어 기체 추가 업그레이드
+4. 자동 파견 수익 상세 내역, 전원 출격 버튼
 
 ## Reference Docs (read when the task requires it)
 
 - Game design: `docs/dispatch-clicker-design.md`
 - UI / wireframes: `docs/dispatch-clicker-visual-design.md`
+- Current UX redesign plan: `docs/plans/2026-05-27-ux-redesign.md`
 - Folder/file responsibility: `docs/godot-project-structure.md`
 - Technical decisions (already settled): `docs/technical-decisions.md`
 - System designs: `docs/systems/`
