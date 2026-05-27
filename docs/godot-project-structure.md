@@ -33,7 +33,17 @@
 ## 씬 구조
 
 - `scenes/main/`: 메인 앱 씬
-- `scenes/ui/`: 모든 UI 패널 씬 (브릿지, 격납고, 공작실, PC 터미널, 파견 관제, 클리커 등)
+- `scenes/ui/`: 모든 UI 패널 씬 (브릿지, 격납고, 공작실, PC 터미널, 파견 관제, 클리커, ShipCanvas, StarMapPopup 등)
+
+## ShipCanvas 구역 구조 (현재 우선 구조)
+
+패널 플립 대신 가로 파노라마 함선 뷰로 전환 중. `ship_canvas.gd` + `scenes/ui/ship_canvas.tscn`이 메인.
+
+| 파일 | 역할 |
+|---|---|
+| `scripts/ui/ship_canvas.gd` | ShipCanvas 루트 (스크롤, 네비게이션 탭, 3구역 빌드) |
+| `scripts/ui/hangar_zone.gd` | 격납고 구역 (베이 그리드, 상세 패널, 귀환 수령) |
+| `scripts/ui/star_map_popup.gd` | 항성지도 팝업 (관제실에서 호출) |
 
 ## 초기 MVP 범위 (완료)
 

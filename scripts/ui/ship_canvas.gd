@@ -4,7 +4,7 @@ const STAR_MAP_SCENE := preload("res://scenes/ui/star_map_popup.tscn")
 
 const NAV_ITEMS: Array = [
 	{"id": "hangar", "label": "격납고", "x": 0.0},
-	{"id": "bridge", "label": "브릿지", "x": 1220.0},
+	{"id": "bridge", "label": "브릿지", "x": 1200.0},
 	{"id": "control", "label": "관제실", "x": 2420.0},
 ]
 
@@ -21,7 +21,7 @@ func _ready() -> void:
 	PanelManager.register_panel("bridge", self)
 	_build_ui()
 	visibility_changed.connect(_on_visibility_changed)
-	call_deferred("_scroll_to_zone", 1220.0)
+	call_deferred("_scroll_to_zone", 1200.0)
 
 
 func _build_ui() -> void:
@@ -44,7 +44,8 @@ func _build_ui() -> void:
 
 	_content = Control.new()
 	_content.name = "ShipContent"
-	_content.custom_minimum_size = Vector2(3600, 300)
+	_content.custom_minimum_size = Vector2(3700, 0)
+	_content.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_content.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	scroll.add_child(_content)
 
@@ -59,12 +60,6 @@ func _build_background() -> void:
 	lane.set_anchors_preset(Control.PRESET_FULL_RECT)
 	lane.color = Color(0.08, 0.10, 0.15, 0.35)
 	_content.add_child(lane)
-
-	var line := ColorRect.new()
-	line.position = Vector2(0, 149)
-	line.size = Vector2(3600, 2)
-	line.color = Color(0.22, 0.32, 0.48, 0.35)
-	_content.add_child(line)
 
 
 func _build_nav_bar() -> void:
@@ -116,39 +111,31 @@ func _build_nav_bar() -> void:
 
 
 func _build_zone_panels() -> void:
-	_make_hangar_panel()
-	_make_bridge_panel()
-	_make_control_panel()
+	_make_hangar_zone()
+	_make_bridge_zone()
+	_make_control_zone()
 
 
-func _make_hangar_panel() -> Control:
-	var panel := _make_zone_panel(Vector2(20, 58), Vector2(1080, 216), "좌측 격납고")
-	var body := panel.get_node("Root/Body") as VBoxContainer
-
-	var note := Label.new()
-	note.text = "베이가 좌측으로 계속 붙는 확장형 구조"
-	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body.add_child(note)
-
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	body.add_child(row)
-
-	var workshop_btn := Button.new()
-	workshop_btn.text = "공작실 팝업"
-	workshop_btn.disabled = true
-	row.add_child(workshop_btn)
-
-	var status := Label.new()
-	status.text = "베이 / 머신 / 수령 상태가 이 공간에 누적됩니다."
-	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body.add_child(status)
-	return panel
+func _make_hangar_zone() -> void:
+	var zone := HangarZone.new()
+	zone.anchor_left   = 0.0
+	zone.anchor_top    = 0.0
+	zone.anchor_right  = 0.0
+	zone.anchor_bottom = 1.0
+	zone.offset_left   = 0.0
+	zone.offset_top    = 0.0
+	zone.offset_right  = 1200.0
+	zone.offset_bottom = 0.0
+	zone.navigate_to_control_requested.connect(func():
+		_scroll_to_zone(2420.0)
+		get_tree().create_timer(0.28).timeout.connect(_open_star_map)
+	)
+	_content.add_child(zone)
 
 
-func _make_bridge_panel() -> Control:
-	var panel := _make_zone_panel(Vector2(1180, 58), Vector2(1080, 216), "브릿지 / 파일럿 라운지")
-	var body := panel.get_node("Root/Body") as VBoxContainer
+func _make_bridge_zone() -> void:
+	var zone := _make_zone_base(1200.0, 2420.0, "브릿지 / 파일럿 라운지")
+	var body := zone.get_node("ZoneRoot/Body") as VBoxContainer
 
 	var intro := Label.new()
 	intro.text = "파일럿 로밍과 꾸미기 가구가 누적되는 홈 공간"
@@ -163,12 +150,11 @@ func _make_bridge_panel() -> Control:
 	deco.text = "가구 / 오브젝트 / 생활 연출 자리"
 	deco.modulate = Color(0.70, 0.82, 1.0)
 	body.add_child(deco)
-	return panel
 
 
-func _make_control_panel() -> Control:
-	var panel := _make_zone_panel(Vector2(2360, 58), Vector2(1060, 216), "관제실")
-	var body := panel.get_node("Root/Body") as VBoxContainer
+func _make_control_zone() -> void:
+	var zone := _make_zone_base(2420.0, 3700.0, "관제실")
+	var body := zone.get_node("ZoneRoot/Body") as VBoxContainer
 	body.add_theme_constant_override("separation", 8)
 
 	var intro := Label.new()
@@ -179,9 +165,7 @@ func _make_control_panel() -> Control:
 	var star_btn := Button.new()
 	star_btn.text = "항성지도 열기"
 	star_btn.custom_minimum_size = Vector2(0, 34)
-	star_btn.pressed.connect(func():
-		_open_star_map()
-	)
+	star_btn.pressed.connect(func(): _open_star_map())
 	body.add_child(star_btn)
 
 	var shop_btn := Button.new()
@@ -189,47 +173,54 @@ func _make_control_panel() -> Control:
 	shop_btn.disabled = true
 	body.add_child(shop_btn)
 
-	var note := Label.new()
-	note.text = "상점/고용 팝업은 같은 관제실 영역으로 이식됩니다."
-	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body.add_child(note)
-	return panel
 
+func _make_zone_base(x_start: float, x_end: float, title: String) -> Control:
+	var zone := Control.new()
+	zone.anchor_left   = 0.0
+	zone.anchor_top    = 0.0
+	zone.anchor_right  = 0.0
+	zone.anchor_bottom = 1.0
+	zone.offset_left   = x_start
+	zone.offset_top    = 0.0
+	zone.offset_right  = x_end
+	zone.offset_bottom = 0.0
+	zone.mouse_filter  = Control.MOUSE_FILTER_IGNORE
 
-func _make_zone_panel(pos: Vector2, size: Vector2, title: String) -> PanelContainer:
-	var panel := PanelContainer.new()
-	panel.position = pos
-	panel.size = size
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.05, 0.08, 0.12, 0.88)
-	style.border_color = Color(0.26, 0.40, 0.58, 0.92)
+	style.bg_color     = Color(0.05, 0.08, 0.12, 0.82)
+	style.border_color = Color(0.22, 0.34, 0.52, 0.70)
 	style.set_border_width_all(1)
-	style.set_corner_radius_all(8)
-	style.content_margin_left = 12
-	style.content_margin_right = 12
-	style.content_margin_top = 10
-	style.content_margin_bottom = 10
-	panel.add_theme_stylebox_override("panel", style)
-	_content.add_child(panel)
+	var bg := PanelContainer.new()
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.add_theme_stylebox_override("panel", style)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	zone.add_child(bg)
 
-	var root := VBoxContainer.new()
-	root.name = "Root"
-	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	root.add_theme_constant_override("separation", 8)
-	panel.add_child(root)
+	var vb := VBoxContainer.new()
+	vb.name = "ZoneRoot"
+	vb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vb.offset_left   = 16
+	vb.offset_right  = -16
+	vb.offset_top    = 58
+	vb.offset_bottom = -12
+	vb.add_theme_constant_override("separation", 8)
+	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	zone.add_child(vb)
 
 	var title_lbl := Label.new()
 	title_lbl.text = title
 	title_lbl.add_theme_font_size_override("font_size", 14)
 	title_lbl.modulate = Color(0.76, 0.88, 1.0)
-	root.add_child(title_lbl)
+	vb.add_child(title_lbl)
 
 	var body := VBoxContainer.new()
 	body.name = "Body"
 	body.add_theme_constant_override("separation", 6)
-	root.add_child(body)
-	return panel
+	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vb.add_child(body)
+
+	_content.add_child(zone)
+	return zone
 
 
 func _build_star_map_popup() -> void:
