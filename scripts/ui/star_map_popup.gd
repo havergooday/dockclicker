@@ -474,7 +474,7 @@ func _rebuild_slots() -> void:
 			active_bays.append(i)
 	_slot_grid.columns = max_slots
 	for i in max_slots:
-		var bay_index := active_bays[i] if i < active_bays.size() else -1
+		var bay_index: int = active_bays[i] if i < active_bays.size() else -1
 		_slot_grid.add_child(_make_planet_slot_card(i, bay_index))
 
 
