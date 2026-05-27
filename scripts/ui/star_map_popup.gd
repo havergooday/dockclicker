@@ -28,6 +28,9 @@ var _planet_drag_anchor_x: float = 0.0
 var _planet_drag_scroll_start: int = 0
 var _detail_overlay: ColorRect
 var _slot_scroll_container: ScrollContainer
+var _slot_dragging: bool = false
+var _slot_drag_anchor_x: float = 0.0
+var _slot_drag_scroll_start: int = 0
 var _bay_panel: PanelContainer
 var _bay_grid: GridContainer
 var _bay_scroll: ScrollContainer
@@ -261,7 +264,7 @@ func _build_slide_panel() -> void:
 	row.add_child(slot_wrap)
 
 	_slot_scroll_container = ScrollContainer.new()
-	_slot_scroll_container.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	_slot_scroll_container.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	_slot_scroll_container.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_slot_scroll_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_slot_scroll_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -269,15 +272,12 @@ func _build_slide_panel() -> void:
 
 	_slot_grid = GridContainer.new()
 	_slot_grid.columns = 4
-	_slot_grid.add_theme_constant_override("h_separation", 8)
-	_slot_grid.add_theme_constant_override("v_separation", 8)
+	_slot_grid.add_theme_constant_override("h_separation", 20)
+	_slot_grid.add_theme_constant_override("v_separation", 12)
 	_slot_scroll_container.add_child(_slot_grid)
 
 
 func _build_bay_panel() -> void:
-	# Positioned to cover the slot section of the slide panel.
-	# Slide panel starts at anchor_left=0.25; fixed content (X btn + info) = ~300px,
-	# so offset_left=300 aligns the bay panel's left edge with the slot area start.
 	_bay_panel = PanelContainer.new()
 	_bay_panel.anchor_left = 0.25
 	_bay_panel.anchor_top = 0.0
@@ -295,39 +295,37 @@ func _build_bay_panel() -> void:
 	style.border_width_top = 0
 	style.border_width_right = 0
 	style.border_width_bottom = 0
-	style.content_margin_left = 10
+	style.content_margin_left = 8
 	style.content_margin_right = 12
 	style.content_margin_top = 8
 	style.content_margin_bottom = 8
 	_bay_panel.add_theme_stylebox_override("panel", style)
 	add_child(_bay_panel)
 
-	var vbox := VBoxContainer.new()
-	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	vbox.add_theme_constant_override("separation", 6)
-	_bay_panel.add_child(vbox)
-
-	var header := HBoxContainer.new()
-	vbox.add_child(header)
+	var row := HBoxContainer.new()
+	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	row.add_theme_constant_override("separation", 6)
+	_bay_panel.add_child(row)
 
 	var cancel_btn := Button.new()
 	cancel_btn.text = "×"
 	cancel_btn.flat = true
-	cancel_btn.custom_minimum_size = Vector2(28, 24)
+	cancel_btn.custom_minimum_size = Vector2(28, 0)
+	cancel_btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	cancel_btn.pressed.connect(_hide_bay_panel)
-	header.add_child(cancel_btn)
+	row.add_child(cancel_btn)
 
 	_bay_scroll = ScrollContainer.new()
 	_bay_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_bay_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_bay_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	_bay_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	_bay_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	vbox.add_child(_bay_scroll)
+	row.add_child(_bay_scroll)
 
 	_bay_grid = GridContainer.new()
 	_bay_grid.columns = 2
-	_bay_grid.add_theme_constant_override("h_separation", 8)
-	_bay_grid.add_theme_constant_override("v_separation", 8)
+	_bay_grid.add_theme_constant_override("h_separation", 16)
+	_bay_grid.add_theme_constant_override("v_separation", 12)
 	_bay_scroll.add_child(_bay_grid)
 
 
@@ -454,7 +452,7 @@ func _rebuild_slots() -> void:
 		var s := GameState.auto_slots[i] as DispatchManager.AutoSlot
 		if s.planet == _selected_planet_id and s.state in ["on_mission", "returning", "returned"]:
 			active_bays.append(i)
-	_slot_grid.columns = max_slots
+	_slot_grid.columns = ceili(max_slots / 4.0)
 	for i in max_slots:
 		var bay_index: int = active_bays[i] if i < active_bays.size() else -1
 		_slot_grid.add_child(_make_planet_slot_card(i, bay_index))
@@ -463,15 +461,21 @@ func _rebuild_slots() -> void:
 func _make_planet_slot_card(slot_idx: int, bay_index: int) -> Button:
 	var btn := Button.new()
 	btn.toggle_mode = false
-	btn.custom_minimum_size = Vector2(140, 52)
-	btn.add_theme_font_size_override("font_size", 11)
+	btn.custom_minimum_size = Vector2(50, 50)
+	btn.add_theme_font_size_override("font_size", 13)
 	if bay_index < 0:
-		btn.text = "슬롯 %d\n+ 파견" % (slot_idx + 1)
+		btn.text = "%d\n+" % (slot_idx + 1)
 		btn.pressed.connect(func(): _show_bay_panel(slot_idx))
 		_apply_slot_style(btn, "offline", false)
 	else:
 		var slot := GameState.auto_slots[bay_index] as DispatchManager.AutoSlot
-		btn.text = "슬롯 %d  BAY %02d\n%s" % [slot_idx + 1, bay_index + 1, _slot_state_text(slot.state, true, slot.planet)]
+		var abbr: String
+		match slot.state:
+			"on_mission": abbr = "▶"
+			"returning":  abbr = "◀"
+			"returned":   abbr = "★"
+			_:            abbr = "?"
+		btn.text = "%d\n%s" % [slot_idx + 1, abbr]
 		if slot.state == "returned":
 			btn.pressed.connect(func(): _collect_bay(bay_index))
 		_apply_slot_style(btn, slot.state, true)
@@ -696,6 +700,20 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		return
 	if _planet_detail_mode:
+		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
+			if event.pressed:
+				_slot_dragging = true
+				_slot_drag_anchor_x = event.position.x
+				_slot_drag_scroll_start = _slot_scroll_container.scroll_horizontal
+				get_viewport().set_input_as_handled()
+			else:
+				_slot_dragging = false
+				get_viewport().set_input_as_handled()
+		elif event is InputEventMouseMotion and _slot_dragging:
+			var delta := int(_slot_drag_anchor_x - event.position.x)
+			var max_scroll := maxi(0, int(_slot_grid.size.x - _slot_scroll_container.size.x))
+			_slot_scroll_container.scroll_horizontal = clampi(_slot_drag_scroll_start + delta, 0, max_scroll)
+			get_viewport().set_input_as_handled()
 		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
 		if event.pressed:
