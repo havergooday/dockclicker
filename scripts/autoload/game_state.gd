@@ -153,15 +153,16 @@ func add_pending_credit(amount: int) -> void:
 	pending_credits += amount
 
 func collect_player_credits(from_global_pos: Vector2) -> void:
-	if player_status != "returned" or pending_credits <= 0:
+	if player_status != "returned":
 		return
 	var amount := pending_credits
 	total_credits += amount
 	pending_credits = 0
 	player_status = "idle"
 	player_status_changed.emit(player_status)
-	credits_changed.emit(total_credits)
-	credits_collected.emit(amount, from_global_pos)
+	if amount > 0:
+		credits_changed.emit(total_credits)
+		credits_collected.emit(amount, from_global_pos)
 
 # ── 파츠 / 인벤토리 ──────────────────────────────────────────
 
