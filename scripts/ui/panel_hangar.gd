@@ -8,15 +8,19 @@ var _drag_start_x: float = -1.0
 var _drag_start_h: int = 0
 var _was_dragging: bool = false
 var _selected_slot: int = -1
+var _detail_open: bool = false
+var _grid_zone:   Control = null
+var _detail_zone: Control = null
 
-const LEFT_ZONE_RATIO  := 0.20
-const CARD_W           := 108
-const CARD_H           := 108
-const SPRITE_SZ        := 62
-const COL_GAP          := 66
-const ROW_GAP          := 12
-const ROWS             := 2
-const DRAG_THRESHOLD   := 6.0
+const DETAIL_SPLIT   := 0.68
+const CARD_W         := 108
+const CARD_H         := 108
+const SPRITE_SZ      := 62
+const COL_GAP        := 66
+const ROW_GAP        := 12
+const ROWS           := 2
+const DRAG_THRESHOLD := 6.0
+const TWEEN_DUR      := 0.28
 
 
 func _ready() -> void:
@@ -30,7 +34,11 @@ func _ready() -> void:
 	GameState.auto_dispatch_returned.connect(func(_i): _needs_rebuild = true)
 	GameState.slot_pilot_assigned.connect(func(_i): _needs_rebuild = true)
 	visibility_changed.connect(func():
-		if visible: _build_hangar()
+		if visible:
+			_build_hangar()
+		else:
+			_selected_slot = -1
+			_detail_open = false
 	)
 	_build_hangar()
 
@@ -78,6 +86,8 @@ func _build_hangar() -> void:
 	_scroll_ref = null
 	_drag_start_x = -1.0
 	_was_dragging = false
+	_grid_zone = null
+	_detail_zone = null
 
 	var root := Control.new()
 	root.name = "BayLayout"
@@ -85,23 +95,29 @@ func _build_hangar() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 
-	var left_zone := Control.new()
-	left_zone.anchor_left   = 0.0
-	left_zone.anchor_top    = 0.0
-	left_zone.anchor_right  = LEFT_ZONE_RATIO
-	left_zone.anchor_bottom = 1.0
-	left_zone.mouse_filter  = Control.MOUSE_FILTER_IGNORE
-	root.add_child(left_zone)
-	_build_left_panel(left_zone)
+	var grid_right  := DETAIL_SPLIT if _detail_open else 1.0
+	var detail_left := DETAIL_SPLIT if _detail_open else 1.0
 
-	var right_zone := Control.new()
-	right_zone.anchor_left   = LEFT_ZONE_RATIO
-	right_zone.anchor_top    = 0.0
-	right_zone.anchor_right  = 1.0
-	right_zone.anchor_bottom = 1.0
-	right_zone.mouse_filter  = Control.MOUSE_FILTER_IGNORE
-	root.add_child(right_zone)
-	_build_grid(right_zone)
+	_grid_zone = Control.new()
+	_grid_zone.anchor_left   = 0.0
+	_grid_zone.anchor_top    = 0.0
+	_grid_zone.anchor_right  = grid_right
+	_grid_zone.anchor_bottom = 1.0
+	_grid_zone.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_grid_zone)
+	_build_grid(_grid_zone)
+
+	_detail_zone = Control.new()
+	_detail_zone.anchor_left   = detail_left
+	_detail_zone.anchor_top    = 0.0
+	_detail_zone.anchor_right  = 1.0
+	_detail_zone.anchor_bottom = 1.0
+	_detail_zone.visible       = _detail_open
+	_detail_zone.mouse_filter  = Control.MOUSE_FILTER_PASS
+	root.add_child(_detail_zone)
+
+	if _detail_open:
+		_rebuild_detail_content()
 
 
 func _build_grid(zone: Control) -> void:
@@ -151,43 +167,50 @@ func _build_grid(zone: Control) -> void:
 	cols.add_child(rpad)
 
 
-# ── 좌측 관리 패널 ────────────────────────────────────────────────
+func _rebuild_detail_content() -> void:
+	if not is_instance_valid(_detail_zone):
+		return
+	for child in _detail_zone.get_children():
+		child.queue_free()
+	_build_detail_panel(_detail_zone)
 
-func _build_left_panel(zone: Control) -> void:
+
+func _rebuild_grid_content() -> void:
+	if not is_instance_valid(_grid_zone):
+		return
+	for child in _grid_zone.get_children():
+		child.queue_free()
+	_scroll_ref = null
+	_drag_start_x = -1.0
+	_was_dragging = false
+	_build_grid(_grid_zone)
+
+
+# ── 상세 패널 ─────────────────────────────────────────────────────
+
+func _build_detail_panel(zone: Control) -> void:
+	var valid := _selected_slot >= 0 and _selected_slot < GameState.auto_slots.size()
+	if not valid:
+		return
+
+	var slot: DispatchManager.AutoSlot = GameState.auto_slots[_selected_slot]
+	var accent := _border_color(slot.state)
+
 	var panel := PanelContainer.new()
 	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 	panel.offset_left   =  8
-	panel.offset_right  = -6
+	panel.offset_right  = -8
 	panel.offset_top    =  8
 	panel.offset_bottom = -8
 
-	var valid := _selected_slot >= 0 and _selected_slot < GameState.auto_slots.size()
-	var accent := Color(0.22, 0.24, 0.36)
-
-	if valid:
-		accent = _border_color((GameState.auto_slots[_selected_slot] as DispatchManager.AutoSlot).state)
-
 	var sty := StyleBoxFlat.new()
-	sty.bg_color = Color(0.04, 0.06, 0.12, 0.85)
+	sty.bg_color = Color(0.04, 0.06, 0.12, 0.92)
 	sty.border_color = accent
 	sty.set_border_width_all(1)
 	sty.border_width_left = 3
 	sty.set_corner_radius_all(5)
 	panel.add_theme_stylebox_override("panel", sty)
 	zone.add_child(panel)
-
-	if not valid:
-		var hint := Label.new()
-		hint.text = "← 베이를\n선택하세요"
-		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		hint.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-		hint.set_anchors_preset(Control.PRESET_FULL_RECT)
-		hint.add_theme_font_size_override("font_size", 11)
-		hint.modulate = Color(0.30, 0.32, 0.40)
-		panel.add_child(hint)
-		return
-
-	var slot: DispatchManager.AutoSlot = GameState.auto_slots[_selected_slot]
 
 	var vb := VBoxContainer.new()
 	vb.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -216,6 +239,14 @@ func _build_left_panel(zone: Control) -> void:
 	state_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	hdr.add_child(state_lbl)
 
+	var close_btn := Button.new()
+	close_btn.text = "✕"
+	close_btn.add_theme_font_size_override("font_size", 10)
+	close_btn.custom_minimum_size = Vector2(22, 22)
+	close_btn.flat = true
+	close_btn.pressed.connect(_close_detail)
+	hdr.add_child(close_btn)
+
 	var div := ColorRect.new()
 	div.color = Color(accent.r, accent.g, accent.b, 0.35)
 	div.custom_minimum_size = Vector2(0, 1)
@@ -223,14 +254,50 @@ func _build_left_panel(zone: Control) -> void:
 	vb.add_child(div)
 
 	match slot.state:
-		"locked":              _left_locked(vb, slot)
-		"empty":               _left_empty(vb)
-		"offline":             _left_offline(vb, slot)
-		"on_mission", "returning": _left_active(vb, slot)
-		"returned":            _left_returned(vb, slot)
+		"locked":                  _detail_locked(vb, slot)
+		"empty":                   _detail_empty(vb)
+		"offline":                 _detail_offline(vb, slot)
+		"on_mission", "returning": _detail_active(vb, slot)
+		"returned":                _detail_returned(vb, slot)
 
 
-func _left_locked(vb: VBoxContainer, slot: DispatchManager.AutoSlot) -> void:
+func _open_detail() -> void:
+	_detail_open = true
+	_detail_zone.visible = true
+	_rebuild_detail_content()
+	_rebuild_grid_content()
+	var tw := create_tween().set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	tw.parallel().tween_property(_grid_zone,   "anchor_right", DETAIL_SPLIT, TWEEN_DUR)
+	tw.parallel().tween_property(_detail_zone, "anchor_left",  DETAIL_SPLIT, TWEEN_DUR)
+
+
+func _close_detail() -> void:
+	_detail_open = false
+	var tw := create_tween().set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_CUBIC)
+	tw.parallel().tween_property(_grid_zone,   "anchor_right", 1.0, TWEEN_DUR * 0.85)
+	tw.parallel().tween_property(_detail_zone, "anchor_left",  1.0, TWEEN_DUR * 0.85)
+	tw.tween_callback(func():
+		_detail_zone.visible = false
+		_selected_slot = -1
+		_rebuild_grid_content()
+	)
+
+
+func _select_slot(index: int) -> void:
+	if _selected_slot == index and _detail_open:
+		_close_detail()
+		return
+	_selected_slot = index
+	if not _detail_open:
+		_open_detail()
+	else:
+		_rebuild_detail_content()
+		_rebuild_grid_content()
+
+
+# ── 상세 패널 내용 ─────────────────────────────────────────────────
+
+func _detail_locked(vb: VBoxContainer, slot: DispatchManager.AutoSlot) -> void:
 	var hint_lbl := Label.new()
 	hint_lbl.text = "해금 비용"
 	hint_lbl.add_theme_font_size_override("font_size", 10)
@@ -254,7 +321,7 @@ func _left_locked(vb: VBoxContainer, slot: DispatchManager.AutoSlot) -> void:
 	vb.add_child(btn)
 
 
-func _left_empty(vb: VBoxContainer) -> void:
+func _detail_empty(vb: VBoxContainer) -> void:
 	var lbl := Label.new()
 	lbl.text = "머신 없음"
 	lbl.add_theme_font_size_override("font_size", 12)
@@ -274,10 +341,11 @@ func _left_empty(vb: VBoxContainer) -> void:
 	vb.add_child(btn)
 
 
-func _left_offline(vb: VBoxContainer, slot: DispatchManager.AutoSlot) -> void:
+func _detail_offline(vb: VBoxContainer, slot: DispatchManager.AutoSlot) -> void:
 	var b: int = slot.machine.get("body", 0)
 	var w: int = slot.machine.get("weapon", 0)
 	var l: int = slot.machine.get("legs", 0)
+
 	var spec_lbl := Label.new()
 	spec_lbl.text = "몸체T%d · 무기T%d · 다리T%d" % [b, w, l]
 	spec_lbl.add_theme_font_size_override("font_size", 10)
@@ -355,7 +423,7 @@ func _left_offline(vb: VBoxContainer, slot: DispatchManager.AutoSlot) -> void:
 	vb.add_child(dis_btn)
 
 
-func _left_active(vb: VBoxContainer, slot: DispatchManager.AutoSlot) -> void:
+func _detail_active(vb: VBoxContainer, slot: DispatchManager.AutoSlot) -> void:
 	var b: int = slot.machine.get("body", 0)
 	var w: int = slot.machine.get("weapon", 0)
 	var l: int = slot.machine.get("legs", 0)
@@ -391,7 +459,7 @@ func _left_active(vb: VBoxContainer, slot: DispatchManager.AutoSlot) -> void:
 	vb.add_child(cr_lbl)
 
 
-func _left_returned(vb: VBoxContainer, slot: DispatchManager.AutoSlot) -> void:
+func _detail_returned(vb: VBoxContainer, slot: DispatchManager.AutoSlot) -> void:
 	var cr_lbl := Label.new()
 	cr_lbl.text = "+ %s CR" % _fmt(slot.credits_earned)
 	cr_lbl.add_theme_font_size_override("font_size", 18)
@@ -504,7 +572,6 @@ func _make_bay_card(index: int) -> Button:
 		lock_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		sprite_ph.add_child(lock_lbl)
 
-	# 하단 정보
 	if state == "returned":
 		var cr_lbl := Label.new()
 		cr_lbl.text = "+ %s CR" % _fmt(slot.credits_earned)
@@ -548,11 +615,6 @@ func _make_bay_card(index: int) -> Button:
 
 	btn.pressed.connect(func(): _select_slot(index))
 	return btn
-
-
-func _select_slot(index: int) -> void:
-	_selected_slot = index
-	_build_hangar()
 
 
 # ── 헬퍼 ──────────────────────────────────────────────────────────
