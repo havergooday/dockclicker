@@ -275,8 +275,11 @@ func _build_slide_panel() -> void:
 
 
 func _build_bay_panel() -> void:
+	# Positioned to cover the slot section of the slide panel.
+	# Slide panel starts at anchor_left=0.25; fixed content (X btn + info) = ~300px,
+	# so offset_left=300 aligns the bay panel's left edge with the slot area start.
 	_bay_panel = PanelContainer.new()
-	_bay_panel.anchor_left = 0.54
+	_bay_panel.anchor_left = 0.25
 	_bay_panel.anchor_top = 0.0
 	_bay_panel.anchor_right = 1.0
 	_bay_panel.anchor_bottom = 0.0
@@ -292,7 +295,7 @@ func _build_bay_panel() -> void:
 	style.border_width_top = 0
 	style.border_width_right = 0
 	style.border_width_bottom = 0
-	style.content_margin_left = 12
+	style.content_margin_left = 10
 	style.content_margin_right = 12
 	style.content_margin_top = 8
 	style.content_margin_bottom = 8
@@ -301,29 +304,18 @@ func _build_bay_panel() -> void:
 
 	var vbox := VBoxContainer.new()
 	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	vbox.add_theme_constant_override("separation", 8)
+	vbox.add_theme_constant_override("separation", 6)
 	_bay_panel.add_child(vbox)
 
 	var header := HBoxContainer.new()
-	header.add_theme_constant_override("separation", 10)
 	vbox.add_child(header)
 
 	var cancel_btn := Button.new()
-	cancel_btn.text = "←"
+	cancel_btn.text = "×"
 	cancel_btn.flat = true
-	cancel_btn.custom_minimum_size = Vector2(32, 0)
+	cancel_btn.custom_minimum_size = Vector2(28, 24)
 	cancel_btn.pressed.connect(_hide_bay_panel)
 	header.add_child(cancel_btn)
-
-	var title_lbl := Label.new()
-	title_lbl.text = "파견 베이 선택"
-	title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title_lbl.add_theme_font_size_override("font_size", 13)
-	title_lbl.modulate = Color(0.75, 0.88, 1.0)
-	header.add_child(title_lbl)
-
-	var sep := HSeparator.new()
-	vbox.add_child(sep)
 
 	_bay_scroll = ScrollContainer.new()
 	_bay_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -610,7 +602,7 @@ func _show_bay_panel(slot_idx: int) -> void:
 	_bay_panel.visible = true
 	var tween := create_tween()
 	tween.set_parallel(true)
-	tween.tween_property(_bay_panel, "offset_left", 0.0, 0.20).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(_bay_panel, "offset_left", 300.0, 0.20).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
 	tween.tween_property(_bay_panel, "offset_right", 0.0, 0.20).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
 
 
