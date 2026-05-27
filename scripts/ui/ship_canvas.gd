@@ -14,12 +14,14 @@ var _star_map_popup: Control
 var _dragging := false
 var _drag_anchor := Vector2.ZERO
 var _drag_scroll_start := 0
+var _nav_buttons: Dictionary = {}
 
 
 func _ready() -> void:
 	PanelManager.register_panel("bridge", self)
 	_build_ui()
 	visibility_changed.connect(_on_visibility_changed)
+	call_deferred("_scroll_to_zone", 1220.0)
 
 
 func _build_ui() -> void:
@@ -87,27 +89,35 @@ func _build_nav_bar() -> void:
 	row.add_theme_constant_override("separation", 8)
 	bar.add_child(row)
 
+	var nav_group := ButtonGroup.new()
+	_nav_buttons.clear()
 	for item in NAV_ITEMS:
 		var zone_x := float(item["x"])
 		var btn := Button.new()
 		btn.text = str(item["label"])
 		btn.custom_minimum_size = Vector2(0, 26)
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.toggle_mode = true
+		btn.button_group = nav_group
 		btn.pressed.connect(func():
 			_scroll_to_zone(zone_x)
 		)
 		row.add_child(btn)
+		_nav_buttons[str(item["id"])] = btn
+
+	if _nav_buttons.has("bridge"):
+		_nav_buttons["bridge"].button_pressed = true
 
 
 func _build_zone_panels() -> void:
-	_content.add_child(_make_hangar_panel())
-	_content.add_child(_make_bridge_panel())
-	_content.add_child(_make_control_panel())
+	_make_hangar_panel()
+	_make_bridge_panel()
+	_make_control_panel()
 
 
 func _make_hangar_panel() -> Control:
 	var panel := _make_zone_panel(Vector2(20, 58), Vector2(1080, 216), "좌측 격납고")
-	var body := panel.get_node("Body") as VBoxContainer
+	var body := panel.get_node("Root/Body") as VBoxContainer
 
 	var note := Label.new()
 	note.text = "베이가 좌측으로 계속 붙는 확장형 구조"
@@ -132,7 +142,7 @@ func _make_hangar_panel() -> Control:
 
 func _make_bridge_panel() -> Control:
 	var panel := _make_zone_panel(Vector2(1180, 58), Vector2(1080, 216), "브릿지 / 파일럿 라운지")
-	var body := panel.get_node("Body") as VBoxContainer
+	var body := panel.get_node("Root/Body") as VBoxContainer
 
 	var intro := Label.new()
 	intro.text = "파일럿 로밍과 꾸미기 가구가 누적되는 홈 공간"
@@ -152,7 +162,7 @@ func _make_bridge_panel() -> Control:
 
 func _make_control_panel() -> Control:
 	var panel := _make_zone_panel(Vector2(2360, 58), Vector2(1060, 216), "관제실")
-	var body := panel.get_node("Body") as VBoxContainer
+	var body := panel.get_node("Root/Body") as VBoxContainer
 	body.add_theme_constant_override("separation", 8)
 
 	var intro := Label.new()
@@ -198,6 +208,7 @@ func _make_zone_panel(pos: Vector2, size: Vector2, title: String) -> PanelContai
 	_content.add_child(panel)
 
 	var root := VBoxContainer.new()
+	root.name = "Root"
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_theme_constant_override("separation", 8)
 	panel.add_child(root)
@@ -236,8 +247,10 @@ func _scroll_to_zone(x_pos: float) -> void:
 	tween.tween_property(_scroll, "scroll_horizontal", target, 0.24).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 
 
-func _unhandled_input(event: InputEvent) -> void:
+func _input(event: InputEvent) -> void:
 	if not visible or _scroll == null:
+		return
+	if is_instance_valid(_star_map_popup) and _star_map_popup.visible:
 		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
 		if event.pressed:
@@ -247,6 +260,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		else:
 			_dragging = false
+			get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion and _dragging:
 		var delta := int(_drag_anchor.x - event.position.x)
 		var max_scroll := maxi(0, int(_content.custom_minimum_size.x - _scroll.size.x))

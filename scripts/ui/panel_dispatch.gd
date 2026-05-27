@@ -138,8 +138,8 @@ func _rebuild_planet_full() -> void:
 		var spec_lbl := Label.new()
 		spec_lbl.text = "적 HP %d  ·  %d CR/킬  ·  %d웨이브" % [
 			sel_data.get("enemy_hp", 0),
-			sel_data.get("credits_per_kill", 0),
-			sel_data.get("wave_count", 0),
+			sel_data.get("credit_per_kill", 0),
+			sel_data.get("wave_size", 0),
 		]
 		spec_lbl.add_theme_font_size_override("font_size", 11)
 		spec_lbl.modulate = Color(0.58, 0.60, 0.78)

@@ -2,13 +2,21 @@ extends Control
 
 const POPUP_HEIGHT := 264.0
 
+# planet icon placeholder colors (index-based)
+const PLANET_COLORS: Array = [
+	Color(0.32, 0.56, 0.92), Color(0.82, 0.48, 0.28), Color(0.44, 0.76, 0.52),
+	Color(0.72, 0.32, 0.72), Color(0.88, 0.82, 0.28), Color(0.32, 0.72, 0.88),
+	Color(0.88, 0.32, 0.44), Color(0.56, 0.44, 0.88), Color(0.56, 0.88, 0.44),
+	Color(0.88, 0.68, 0.32),
+]
+
 var _main_panel: PanelContainer
-var _planet_pane: PanelContainer
-var _detail_pane: PanelContainer
-var _slot_pane: PanelContainer
+var _body_wrapper: Control
+var _planet_area: Control
 var _planet_scroll: ScrollContainer
 var _planet_row: HBoxContainer
-var _detail_body: VBoxContainer
+var _slide_panel: PanelContainer
+var _detail_info_label: Label
 var _slot_grid: GridContainer
 var _ship_popup: PanelContainer
 var _ship_popup_body: VBoxContainer
@@ -22,6 +30,10 @@ var _selected_slot_index: int = -1
 var _selected_bay_index: int = -1
 var _last_ship_anchor: Control = null
 var _planet_buttons: Dictionary = {}
+var _saved_planet_scroll_x: int = 0
+var _planet_dragging: bool = false
+var _planet_drag_anchor_x: float = 0.0
+var _planet_drag_scroll_start: int = 0
 
 
 func _ready() -> void:
@@ -31,23 +43,32 @@ func _ready() -> void:
 	GameState.planet_unlocked.connect(_on_state_changed)
 	GameState.auto_slot_changed.connect(_on_auto_slot_changed)
 	GameState.auto_dispatch_returned.connect(_on_auto_slot_changed)
-	GameState.pilot_hired.connect(_on_auto_slot_changed)
-	GameState.pilot_status_changed.connect(_on_auto_slot_changed)
+	GameState.pilot_hired.connect(func(_pid: String): _on_auto_slot_changed(-1))
+	GameState.pilot_status_changed.connect(func(_pid: String): _on_auto_slot_changed(-1))
 
 
 func open_for_control_room() -> void:
 	visible = true
+	_planet_detail_mode = false
+	_slide_panel.visible = false
+	_slide_panel.offset_left = 2000.0
+	_slide_panel.offset_right = 2000.0
 	_select_default_planet()
-	_rebuild()
-	_apply_layout_mode()
+	_rebuild_planets()
+	call_deferred("_restore_saved_scroll")
 	_main_panel.offset_top = -POPUP_HEIGHT
 	var tween := create_tween()
 	tween.tween_property(_main_panel, "offset_top", 0.0, 0.20).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
 
 
+func _restore_saved_scroll() -> void:
+	_planet_scroll.scroll_horizontal = _saved_planet_scroll_x
+
+
 func close_popup() -> void:
 	if not visible:
 		return
+	_saved_planet_scroll_x = _planet_scroll.scroll_horizontal
 	var tween := create_tween()
 	tween.tween_property(_main_panel, "offset_top", -POPUP_HEIGHT, 0.18).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_SINE)
 	tween.tween_callback(func():
@@ -55,6 +76,7 @@ func close_popup() -> void:
 		_hide_ship_popup()
 		_hide_confirm_popup()
 		_hide_toast()
+		_planet_dragging = false
 		_selected_slot_index = -1
 		_selected_bay_index = -1
 		_planet_detail_mode = false
@@ -85,143 +107,157 @@ func _build_ui() -> void:
 	_main_panel.offset_bottom = POPUP_HEIGHT
 	_main_panel.offset_top = -POPUP_HEIGHT
 	var main_style := StyleBoxFlat.new()
-	main_style.bg_color = Color(0.04, 0.06, 0.11, 0.96)
+	main_style.bg_color = Color(0.04, 0.06, 0.11, 0.98)
 	main_style.border_color = Color(0.28, 0.40, 0.62, 0.96)
 	main_style.set_border_width_all(1)
-	main_style.set_corner_radius_all(8)
+	main_style.set_corner_radius_all(0)
 	main_style.content_margin_left = 12
 	main_style.content_margin_right = 12
-	main_style.content_margin_top = 10
-	main_style.content_margin_bottom = 10
+	main_style.content_margin_top = 8
+	main_style.content_margin_bottom = 8
 	_main_panel.add_theme_stylebox_override("panel", main_style)
 	add_child(_main_panel)
 
 	var root := VBoxContainer.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	root.add_theme_constant_override("separation", 8)
+	root.add_theme_constant_override("separation", 6)
 	_main_panel.add_child(root)
 
+	# Minimal header — just close button right-aligned
 	var header := HBoxContainer.new()
-	header.add_theme_constant_override("separation", 10)
 	root.add_child(header)
 
-	var title := Label.new()
-	title.text = "항성지도"
-	title.add_theme_font_size_override("font_size", 18)
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.add_child(title)
-
-	var hint := Label.new()
-	hint.text = "마지막 선택 행성 복원"
-	hint.modulate = Color(0.68, 0.74, 0.90)
-	header.add_child(hint)
+	var hdr_spacer := Control.new()
+	hdr_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(hdr_spacer)
 
 	var close_btn := Button.new()
-	close_btn.text = "닫기"
+	close_btn.text = "× 닫기"
+	close_btn.flat = true
+	close_btn.add_theme_color_override("font_color", Color(0.70, 0.80, 1.0))
 	close_btn.pressed.connect(close_popup)
 	header.add_child(close_btn)
 
-	var body := HBoxContainer.new()
-	body.add_theme_constant_override("separation", 10)
-	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	root.add_child(body)
+	# Body wrapper — planet area + slide panel as overlapping children
+	_body_wrapper = Control.new()
+	_body_wrapper.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_body_wrapper.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_body_wrapper.clip_contents = true
+	root.add_child(_body_wrapper)
 
-	_planet_pane = _make_pane("우주지도")
-	_planet_pane.custom_minimum_size = Vector2(720, 0)
-	_planet_pane.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	body.add_child(_planet_pane)
+	_planet_area = Control.new()
+	_planet_area.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_body_wrapper.add_child(_planet_area)
 
-	_detail_pane = _make_pane("행성 상세")
-	_detail_pane.custom_minimum_size = Vector2(430, 0)
-	_detail_pane.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	body.add_child(_detail_pane)
-
-	_slot_pane = _make_pane("BAY / 슬롯")
-	_slot_pane.custom_minimum_size = Vector2(520, 0)
-	_slot_pane.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	body.add_child(_slot_pane)
-
-	_build_planet_pane()
-	_build_detail_pane()
-	_build_slot_pane()
+	_build_planet_area()
+	_build_slide_panel()
 	_build_float_popups()
 	_build_toast()
 
 
-func _make_pane(title_text: String) -> PanelContainer:
-	var pane := PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.07, 0.10, 0.16, 0.92)
-	style.border_color = Color(0.24, 0.36, 0.54, 0.85)
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(7)
-	style.content_margin_left = 10
-	style.content_margin_right = 10
-	style.content_margin_top = 8
-	style.content_margin_bottom = 8
-	pane.add_theme_stylebox_override("panel", style)
-
-	var root := VBoxContainer.new()
-	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	root.add_theme_constant_override("separation", 6)
-	pane.add_child(root)
-
-	var lbl := Label.new()
-	lbl.text = title_text
-	lbl.add_theme_font_size_override("font_size", 14)
-	lbl.modulate = Color(0.76, 0.88, 1.0)
-	root.add_child(lbl)
-
-	var body := VBoxContainer.new()
-	body.name = "Body"
-	body.add_theme_constant_override("separation", 6)
-	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	root.add_child(body)
-	return pane
-
-
-func _build_planet_pane() -> void:
-	var body := _planet_pane.get_node("Body") as VBoxContainer
+func _build_planet_area() -> void:
+	# Planet scroll centered vertically — cards are ~96px tall
 	_planet_scroll = ScrollContainer.new()
+	_planet_scroll.anchor_left = 0.0
+	_planet_scroll.anchor_right = 1.0
+	_planet_scroll.anchor_top = 0.5
+	_planet_scroll.anchor_bottom = 0.5
+	_planet_scroll.offset_left = 24.0
+	_planet_scroll.offset_right = -24.0
+	_planet_scroll.offset_top = -50.0
+	_planet_scroll.offset_bottom = 50.0
 	_planet_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	_planet_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	_planet_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_planet_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	body.add_child(_planet_scroll)
+	_planet_area.add_child(_planet_scroll)
 
 	_planet_row = HBoxContainer.new()
-	_planet_row.add_theme_constant_override("separation", 8)
-	_planet_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_planet_row.add_theme_constant_override("separation", 20)
+	_planet_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	_planet_scroll.add_child(_planet_row)
 
 
-func _build_detail_pane() -> void:
-	var body := _detail_pane.get_node("Body") as VBoxContainer
-	_detail_body = VBoxContainer.new()
-	_detail_body.add_theme_constant_override("separation", 6)
-	_detail_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_detail_body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	body.add_child(_detail_body)
+func _build_slide_panel() -> void:
+	_slide_panel = PanelContainer.new()
+	_slide_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_slide_panel.offset_left = 2000.0
+	_slide_panel.offset_right = 2000.0
+	_slide_panel.visible = false
+	var slide_style := StyleBoxFlat.new()
+	slide_style.bg_color = Color(0.05, 0.08, 0.14, 0.98)
+	slide_style.border_color = Color(0.30, 0.44, 0.68, 0.95)
+	slide_style.border_width_left = 1
+	slide_style.border_width_top = 0
+	slide_style.border_width_right = 0
+	slide_style.border_width_bottom = 0
+	slide_style.content_margin_left = 16
+	slide_style.content_margin_right = 0
+	slide_style.content_margin_top = 8
+	slide_style.content_margin_bottom = 8
+	_slide_panel.add_theme_stylebox_override("panel", slide_style)
+	_body_wrapper.add_child(_slide_panel)
 
+	var row := HBoxContainer.new()
+	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	row.add_theme_constant_override("separation", 14)
+	_slide_panel.add_child(row)
 
-func _build_slot_pane() -> void:
-	var body := _slot_pane.get_node("Body") as VBoxContainer
+	# Left: dispatch slot section (2-row grid, scrollable horizontally)
+	var slot_wrap := VBoxContainer.new()
+	slot_wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slot_wrap.add_theme_constant_override("separation", 4)
+	row.add_child(slot_wrap)
+
+	var slot_title := Label.new()
+	slot_title.text = "파견 슬롯"
+	slot_title.add_theme_font_size_override("font_size", 12)
+	slot_title.modulate = Color(0.68, 0.80, 1.0)
+	slot_wrap.add_child(slot_title)
+
+	var slot_scroll := ScrollContainer.new()
+	slot_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	slot_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	slot_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slot_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	slot_wrap.add_child(slot_scroll)
+
 	_slot_grid = GridContainer.new()
-	_slot_grid.columns = max(1, ceili(float(GameState.auto_slots.size()) / 2.0))
-	_slot_grid.add_theme_constant_override("h_separation", 8)
-	_slot_grid.add_theme_constant_override("v_separation", 8)
-	_slot_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_slot_grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	body.add_child(_slot_grid)
+	_slot_grid.columns = 4
+	_slot_grid.add_theme_constant_override("h_separation", 6)
+	_slot_grid.add_theme_constant_override("v_separation", 6)
+	slot_scroll.add_child(_slot_grid)
+
+	# Middle: planet info
+	var info_section := VBoxContainer.new()
+	info_section.custom_minimum_size = Vector2(240, 0)
+	info_section.add_theme_constant_override("separation", 8)
+	row.add_child(info_section)
+
+	_detail_info_label = Label.new()
+	_detail_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_detail_info_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_detail_info_label.add_theme_font_size_override("font_size", 13)
+	info_section.add_child(_detail_info_label)
+
+	var direct_btn := Button.new()
+	direct_btn.text = "▶ 직접 파견"
+	direct_btn.custom_minimum_size = Vector2(0, 32)
+	direct_btn.pressed.connect(func(): _confirm_dispatch(-1))
+	info_section.add_child(direct_btn)
+
+	# Right: X close button full-height
+	var x_btn := Button.new()
+	x_btn.text = "×"
+	x_btn.custom_minimum_size = Vector2(44, 0)
+	x_btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	x_btn.pressed.connect(_deselect_planet)
+	row.add_child(x_btn)
 
 
 func _build_float_popups() -> void:
 	_ship_popup = PanelContainer.new()
 	_ship_popup.visible = false
 	_ship_popup.mouse_filter = Control.MOUSE_FILTER_STOP
-	_ship_popup.size = Vector2(260, 260)
+	_ship_popup.size = Vector2(240, 240)
 	var ship_style := StyleBoxFlat.new()
 	ship_style.bg_color = Color(0.05, 0.08, 0.14, 0.98)
 	ship_style.border_color = Color(0.40, 0.60, 0.82, 0.9)
@@ -235,15 +271,24 @@ func _build_float_popups() -> void:
 	add_child(_ship_popup)
 
 	var ship_root := VBoxContainer.new()
-	ship_root.name = "ShipPopupRoot"
 	ship_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ship_root.add_theme_constant_override("separation", 6)
 	_ship_popup.add_child(ship_root)
 
+	var ship_header := HBoxContainer.new()
+	ship_root.add_child(ship_header)
+
 	var ship_title := Label.new()
-	ship_title.text = "기체 선택"
+	ship_title.text = "베이 선택"
 	ship_title.add_theme_font_size_override("font_size", 13)
-	ship_root.add_child(ship_title)
+	ship_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ship_header.add_child(ship_title)
+
+	var ship_close := Button.new()
+	ship_close.text = "×"
+	ship_close.custom_minimum_size = Vector2(24, 0)
+	ship_close.pressed.connect(_hide_ship_popup)
+	ship_header.add_child(ship_close)
 
 	_ship_popup_body = VBoxContainer.new()
 	_ship_popup_body.add_theme_constant_override("separation", 4)
@@ -307,12 +352,6 @@ func _build_toast() -> void:
 	add_child(_toast_label)
 
 
-func _rebuild() -> void:
-	_rebuild_planets()
-	_rebuild_detail()
-	_rebuild_slots()
-
-
 func _select_default_planet() -> void:
 	if _selected_planet_id != "":
 		return
@@ -332,141 +371,144 @@ func _rebuild_planets() -> void:
 		child.queue_free()
 	_planet_buttons.clear()
 
-	for planet in GameState.PLANETS:
+	for i in GameState.PLANETS.size():
+		var planet: Dictionary = GameState.PLANETS[i]
 		var pid := str(planet["id"])
 		var unlocked := GameState.is_planet_unlocked(pid)
-		var button := Button.new()
-		button.toggle_mode = true
-		button.custom_minimum_size = Vector2(148, 62)
-		button.text = "%s\n%s" % [str(planet["name"]), "UNLOCKED" if unlocked else "LOCKED"]
-		button.button_pressed = pid == _selected_planet_id
-		button.disabled = not unlocked
-		button.add_theme_font_size_override("font_size", 11)
-		button.pressed.connect(func():
-			_select_planet(pid)
-		)
-		_apply_planet_style(button, unlocked, pid == _selected_planet_id)
-		_planet_row.add_child(button)
-		_planet_buttons[pid] = button
+		var selected := pid == _selected_planet_id and _planet_detail_mode
+		var card := _make_planet_card(planet, pid, i, unlocked, selected)
+		_planet_row.add_child(card)
+		_planet_buttons[pid] = card
 
-	call_deferred("_restore_planet_scroll")
+	call_deferred("_restore_planet_scroll_to_selected")
 
 
-func _restore_planet_scroll() -> void:
-	var btn: Button = _planet_buttons.get(_selected_planet_id, null)
+func _make_planet_card(planet: Dictionary, pid: String, index: int, unlocked: bool, selected: bool) -> Button:
+	var card := Button.new()
+	card.custom_minimum_size = Vector2(76, 90)
+	card.toggle_mode = true
+	card.button_pressed = selected
+	card.flat = true
+	card.disabled = not unlocked
+
+	var vbox := VBoxContainer.new()
+	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 4)
+	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(vbox)
+
+	var icon_wrap := PanelContainer.new()
+	icon_wrap.custom_minimum_size = Vector2(58, 58)
+	icon_wrap.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	icon_wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var icon_style := StyleBoxFlat.new()
+	var base_color: Color = PLANET_COLORS[index % PLANET_COLORS.size()]
+	icon_style.bg_color = base_color.darkened(0.3) if selected else (base_color.darkened(0.55) if not unlocked else base_color.darkened(0.15))
+	icon_style.border_color = base_color if selected else (base_color.darkened(0.3) if unlocked else Color(0.3, 0.3, 0.4))
+	icon_style.set_border_width_all(2 if selected else 1)
+	icon_style.set_corner_radius_all(29)
+	icon_wrap.add_theme_stylebox_override("panel", icon_style)
+	vbox.add_child(icon_wrap)
+
+	var name_lbl := Label.new()
+	name_lbl.text = str(planet.get("name", ""))
+	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_lbl.add_theme_font_size_override("font_size", 10)
+	name_lbl.modulate = Color(0.90, 0.95, 1.0) if unlocked else Color(0.45, 0.45, 0.55)
+	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(name_lbl)
+
+	card.pressed.connect(func(): _select_planet(pid))
+	return card
+
+
+func _restore_planet_scroll_to_selected() -> void:
+	var btn = _planet_buttons.get(_selected_planet_id, null)
 	if btn and is_instance_valid(btn):
 		_planet_scroll.ensure_control_visible(btn)
 
 
-func _apply_planet_style(btn: Button, unlocked: bool, selected: bool) -> void:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.11, 0.16, 0.24, 0.96) if selected else Color(0.07, 0.10, 0.16, 0.92)
-	style.border_color = Color(0.70, 0.88, 1.0, 0.9) if selected else (Color(0.34, 0.48, 0.68, 0.75) if unlocked else Color(0.24, 0.24, 0.34, 0.8))
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(6)
-	style.content_margin_left = 10
-	style.content_margin_right = 10
-	style.content_margin_top = 8
-	style.content_margin_bottom = 8
-	btn.add_theme_stylebox_override("normal", style)
-	btn.add_theme_stylebox_override("pressed", style)
-
-
 func _rebuild_detail() -> void:
-	for child in _detail_body.get_children():
-		child.queue_free()
-
+	if not is_instance_valid(_detail_info_label):
+		return
 	var planet := GameState.get_planet(_selected_planet_id)
 	if planet.is_empty():
+		_detail_info_label.text = ""
 		return
-
-	var title := Label.new()
-	title.text = str(planet.get("name", ""))
-	title.add_theme_font_size_override("font_size", 18)
-	_detail_body.add_child(title)
-
-	var info := Label.new()
-	info.text = "적 HP %d  ·  %d CR/킬  ·  %d 웨이브" % [
+	_detail_info_label.text = "%s\n\n적 HP  %d\nCR/킬  %d\n웨이브  %d" % [
+		str(planet.get("name", "")),
 		int(planet.get("enemy_hp", 0)),
-		int(planet.get("credits_per_kill", 0)),
-		int(planet.get("wave_count", 0)),
+		int(planet.get("credit_per_kill", 0)),
+		int(planet.get("wave_size", 0)),
 	]
-	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_detail_body.add_child(info)
-
-	var desc := Label.new()
-	desc.text = "선택하면 좌측 지도는 15%% 폭까지 축소되고, 우측 슬롯/기체 선택이 열립니다."
-	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_detail_body.add_child(desc)
-
-	var selected_lbl := Label.new()
-	selected_lbl.text = "선택된 행성: %s" % str(planet.get("name", ""))
-	_detail_body.add_child(selected_lbl)
 
 
 func _rebuild_slots() -> void:
 	for child in _slot_grid.get_children():
 		child.queue_free()
-	_slot_grid.columns = max(1, ceili(float(GameState.auto_slots.size()) / 2.0))
-
+	var unlocked_bays: Array = []
 	for i in GameState.auto_slots.size():
-		_slot_grid.add_child(_make_slot_card(i))
+		var slot := GameState.auto_slots[i] as DispatchManager.AutoSlot
+		if slot.state != "locked":
+			unlocked_bays.append(i)
+	_slot_grid.columns = max(2, ceili(float(unlocked_bays.size()) / 2.0))
+	for bay_index in unlocked_bays:
+		_slot_grid.add_child(_make_slot_card(bay_index))
 
 
-func _make_slot_card(index: int) -> Button:
-	var slot: DispatchManager.AutoSlot = GameState.auto_slots[index]
+func _make_slot_card(bay_index: int) -> Button:
+	var slot := GameState.auto_slots[bay_index] as DispatchManager.AutoSlot
+	var is_this_planet := slot.state in ["on_mission", "returning", "returned"] and slot.planet == _selected_planet_id
 	var btn := Button.new()
 	btn.toggle_mode = true
-	btn.custom_minimum_size = Vector2(150, 52)
+	btn.custom_minimum_size = Vector2(110, 40)
 	btn.add_theme_font_size_override("font_size", 10)
-	btn.text = "BAY %02d\n%s" % [index + 1, _slot_state_text(slot.state)]
-	btn.pressed.connect(func():
-		_open_ship_popup(index, btn)
-	)
-	_apply_slot_style(btn, slot.state)
+	var line1 := "BAY %02d" % (bay_index + 1)
+	var line2 := _slot_state_text(slot.state, is_this_planet, slot.planet)
+	btn.text = "%s\n%s" % [line1, line2]
+	btn.button_pressed = is_this_planet
+	if slot.state == "offline":
+		btn.pressed.connect(func(): _open_ship_popup(bay_index, btn))
+	_apply_slot_style(btn, slot.state, is_this_planet)
 	return btn
 
 
-func _slot_state_text(state: String) -> String:
+func _slot_state_text(state: String, is_this_planet: bool, planet_id: String) -> String:
 	match state:
-		"locked":
-			return "정보 슬롯"
-		"empty":
-			return "빈 슬롯"
-		"offline":
-			return "대기"
+		"empty":      return "머신 없음"
+		"offline":    return "대기 중"
 		"on_mission":
-			return "파견 중"
-		"returning":
-			return "복귀 중"
-		"returned":
-			return "수령 대기"
-		_:
-			return state
+			if is_this_planet: return "파견 중"
+			var p := GameState.get_planet(planet_id)
+			return "타 행성" if p.is_empty() else str(p.get("name", "타 행성"))
+		"returning":  return "복귀 중" if is_this_planet else "타 행성 복귀"
+		"returned":   return "수령 대기" if is_this_planet else "타 행성 수령"
+		_: return state
 
 
-func _apply_slot_style(btn: Button, state: String) -> void:
+func _apply_slot_style(btn: Button, state: String, is_this_planet: bool) -> void:
+	var accent: Color
+	if is_this_planet:
+		match state:
+			"on_mission": accent = Color(0.34, 0.82, 0.84, 0.95)
+			"returning":  accent = Color(0.92, 0.72, 0.32, 0.95)
+			"returned":   accent = Color(0.78, 0.92, 0.44, 0.95)
+			_: accent = Color(0.38, 0.56, 0.78, 0.95)
+	else:
+		match state:
+			"empty":   accent = Color(0.30, 0.30, 0.38, 0.85)
+			"offline": accent = Color(0.38, 0.56, 0.78, 0.95)
+			_:         accent = Color(0.42, 0.42, 0.52, 0.80)
 	var style := StyleBoxFlat.new()
-	var accent := Color(0.30, 0.46, 0.66, 0.95)
-	match state:
-		"locked":
-			accent = Color(0.28, 0.30, 0.36, 0.95)
-		"offline":
-			accent = Color(0.38, 0.56, 0.78, 0.95)
-		"on_mission":
-			accent = Color(0.34, 0.82, 0.84, 0.95)
-		"returning":
-			accent = Color(0.92, 0.72, 0.32, 0.95)
-		"returned":
-			accent = Color(0.78, 0.92, 0.44, 0.95)
-	style.bg_color = Color(accent.r * 0.26, accent.g * 0.26, accent.b * 0.26, 0.92)
+	style.bg_color = Color(accent.r * 0.22, accent.g * 0.22, accent.b * 0.22, 0.92)
 	style.border_color = accent
 	style.set_border_width_all(1)
-	style.set_corner_radius_all(6)
-	style.content_margin_left = 10
-	style.content_margin_right = 10
-	style.content_margin_top = 8
-	style.content_margin_bottom = 8
+	style.set_corner_radius_all(5)
+	style.content_margin_left = 8
+	style.content_margin_right = 8
+	style.content_margin_top = 6
+	style.content_margin_bottom = 6
 	btn.add_theme_stylebox_override("normal", style)
 	btn.add_theme_stylebox_override("pressed", style)
 
@@ -476,21 +518,43 @@ func _select_planet(planet_id: String) -> void:
 		_show_toast("미해금 행성입니다.")
 		return
 	_selected_planet_id = planet_id
-	_planet_detail_mode = true
 	GameState.selected_planet = planet_id
-	_rebuild()
-	_apply_layout_mode()
+	_rebuild_detail()
+	_rebuild_slots()
+	_rebuild_planets()
+	if not _planet_detail_mode:
+		_planet_detail_mode = true
+		_enter_detail_mode()
 
 
-func _apply_layout_mode() -> void:
-	if _planet_detail_mode:
-		_planet_pane.custom_minimum_size.x = 280
-		_detail_pane.custom_minimum_size.x = 520
-		_slot_pane.custom_minimum_size.x = 640
-	else:
-		_planet_pane.custom_minimum_size.x = 720
-		_detail_pane.custom_minimum_size.x = 430
-		_slot_pane.custom_minimum_size.x = 520
+func _deselect_planet() -> void:
+	_planet_detail_mode = false
+	_hide_ship_popup()
+	_hide_confirm_popup()
+	_rebuild_planets()
+	_exit_detail_mode()
+
+
+func _enter_detail_mode() -> void:
+	var start_x := maxf(_body_wrapper.size.x, 600.0)
+	_slide_panel.offset_left = start_x
+	_slide_panel.offset_right = start_x
+	_slide_panel.visible = true
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(_slide_panel, "offset_left", 0.0, 0.24).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(_slide_panel, "offset_right", 0.0, 0.24).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
+
+
+func _exit_detail_mode() -> void:
+	var end_x := maxf(_body_wrapper.size.x, 600.0)
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(_slide_panel, "offset_left", end_x, 0.20).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(_slide_panel, "offset_right", end_x, 0.20).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_SINE)
+	tween.chain().tween_callback(func():
+		_slide_panel.visible = false
+	)
 
 
 func _open_ship_popup(slot_index: int, anchor: Control) -> void:
@@ -502,21 +566,23 @@ func _open_ship_popup(slot_index: int, anchor: Control) -> void:
 	for child in _ship_popup_body.get_children():
 		child.queue_free()
 
-	var intro := Label.new()
-	intro.text = "BAY 선택"
-	_ship_popup_body.add_child(intro)
+	var note := Label.new()
+	note.text = "파견할 베이를 선택하세요"
+	note.add_theme_font_size_override("font_size", 11)
+	_ship_popup_body.add_child(note)
 
 	for i in GameState.auto_slots.size():
 		var bay_index := i
+		var slot := GameState.auto_slots[i] as DispatchManager.AutoSlot
+		if slot.state == "locked":
+			continue
 		var bay_btn := Button.new()
-		bay_btn.text = "0 BAY - 직접 파견" if bay_index == 0 else "BAY %02d" % (bay_index + 1)
-		bay_btn.disabled = bay_index > 0 and not _bay_ready_for_dispatch(bay_index)
-		bay_btn.pressed.connect(func():
-			_select_ship_bay(bay_index)
-		)
+		bay_btn.text = "BAY %02d  — %s" % [bay_index + 1, _slot_state_text(slot.state, false, "")]
+		bay_btn.disabled = slot.state != "offline"
+		bay_btn.pressed.connect(func(): _select_ship_bay(bay_index))
 		_ship_popup_body.add_child(bay_btn)
 
-	var local_pos := anchor.global_position - global_position + Vector2(anchor.size.x + 10, 0)
+	var local_pos := anchor.global_position - global_position + Vector2(anchor.size.x + 8, 0)
 	_ship_popup.position = local_pos
 	_ship_popup.visible = true
 
@@ -528,11 +594,7 @@ func _select_ship_bay(bay_index: int) -> void:
 
 func _show_confirm_popup(bay_index: int) -> void:
 	_confirm_bay_index = bay_index
-	_confirm_label.text = "파견 시작?"
-	if bay_index == 0:
-		_confirm_label.text = "직접 파견 시작?"
-	else:
-		_confirm_label.text = "BAY %02d 파견 시작?" % (bay_index + 1)
+	_confirm_label.text = "BAY %02d 파견 시작?" % (bay_index + 1)
 	_confirm_popup.position = _ship_popup.position + Vector2(_ship_popup.size.x + 8, 32)
 	_confirm_popup.visible = true
 
@@ -540,13 +602,12 @@ func _show_confirm_popup(bay_index: int) -> void:
 func _confirm_dispatch(bay_index: int) -> void:
 	_hide_ship_popup()
 	_hide_confirm_popup()
-	if bay_index <= 0:
+	if bay_index < 0:
 		GameState.selected_planet = _selected_planet_id
 		GameState.start_direct_dispatch()
 		PanelManager.show_panel("clicker")
 		hide()
 		return
-
 	var pilot_id := _get_first_idle_pilot_id()
 	if pilot_id == "":
 		_show_toast("대기 파일럿이 없습니다.")
@@ -555,13 +616,7 @@ func _confirm_dispatch(bay_index: int) -> void:
 		_show_toast("BAY %02d 파견 실패" % (bay_index + 1))
 		return
 	_show_toast("BAY %02d 파견 시작" % (bay_index + 1))
-
-
-func _bay_ready_for_dispatch(bay_index: int) -> bool:
-	if bay_index < 0 or bay_index >= GameState.auto_slots.size():
-		return false
-	var slot: DispatchManager.AutoSlot = GameState.auto_slots[bay_index]
-	return slot.state == "offline"
+	_rebuild_slots()
 
 
 func _get_first_idle_pilot_id() -> String:
@@ -590,11 +645,45 @@ func _hide_toast() -> void:
 	_toast_label.visible = false
 
 
+func _input(event: InputEvent) -> void:
+	if not visible or _planet_detail_mode:
+		return
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
+		if event.pressed:
+			_planet_dragging = true
+			_planet_drag_anchor_x = event.position.x
+			_planet_drag_scroll_start = _planet_scroll.scroll_horizontal
+			get_viewport().set_input_as_handled()
+		else:
+			_planet_dragging = false
+			get_viewport().set_input_as_handled()
+	elif event is InputEventMouseMotion and _planet_dragging:
+		var delta := int(_planet_drag_anchor_x - event.position.x)
+		var max_scroll := maxi(0, int(_planet_row.size.x - _planet_scroll.size.x))
+		_planet_scroll.scroll_horizontal = clampi(_planet_drag_scroll_start + delta, 0, max_scroll)
+		get_viewport().set_input_as_handled()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not visible:
+		return
+	if event.is_action_pressed("ui_cancel"):
+		if _confirm_popup.visible:
+			_hide_confirm_popup()
+		elif _ship_popup.visible:
+			_hide_ship_popup()
+		elif _planet_detail_mode:
+			_deselect_planet()
+		else:
+			close_popup()
+		get_viewport().set_input_as_handled()
+
+
 func _on_state_changed(_planet_id: String) -> void:
 	if visible:
-		_rebuild()
+		_rebuild_planets()
 
 
 func _on_auto_slot_changed(_index: int) -> void:
-	if visible:
+	if visible and _planet_detail_mode:
 		_rebuild_slots()
