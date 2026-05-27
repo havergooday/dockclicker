@@ -467,8 +467,8 @@ func _rebuild_slots() -> void:
 func _make_planet_slot_card(slot_idx: int, bay_index: int) -> Button:
 	var btn := Button.new()
 	btn.toggle_mode = false
-	btn.custom_minimum_size = Vector2(50, 50)
-	btn.add_theme_font_size_override("font_size", 13)
+	btn.custom_minimum_size = Vector2(58, 58)
+	btn.add_theme_font_size_override("font_size", 12)
 	if bay_index < 0:
 		btn.text = "%d\n+" % (slot_idx + 1)
 		btn.pressed.connect(func(): _show_bay_panel(slot_idx))
@@ -479,11 +479,10 @@ func _make_planet_slot_card(slot_idx: int, bay_index: int) -> Button:
 		match slot.state:
 			"on_mission": abbr = "▶"
 			"returning":  abbr = "◀"
-			"returned":   abbr = "★"
+			"returned":   abbr = "복귀"
 			_:            abbr = "?"
 		btn.text = "%d\n%s" % [slot_idx + 1, abbr]
-		if slot.state == "returned":
-			btn.pressed.connect(func(): _collect_bay(bay_index))
+		btn.disabled = true
 		_apply_slot_style(btn, slot.state, true)
 	return btn
 
@@ -637,12 +636,12 @@ func _make_bay_card(bay_index: int, slot: DispatchManager.AutoSlot) -> PanelCont
 		"returning":  accent = Color(0.92, 0.72, 0.32, 0.95)
 		"returned":   accent = Color(0.78, 0.92, 0.44, 0.95)
 		_:            accent = Color(0.30, 0.30, 0.38, 0.85)
+	var _pid := slot.pilot_id if slot.pilot_id != "" else slot.assigned_pilot_id
 	var pilot_name := "—"
-	if slot.pilot != "":
-		for p in GameState.hired_pilots:
-			if str(p.get("id", "")) == slot.pilot:
-				pilot_name = str(p.get("name", slot.pilot))
-				break
+	if _pid != "":
+		var p := GameState.get_hired_pilot(_pid)
+		if not p.is_empty():
+			pilot_name = str(p.get("name", _pid))
 
 	var card := PanelContainer.new()
 	card.custom_minimum_size = Vector2(96, 100)
