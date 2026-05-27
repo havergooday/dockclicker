@@ -17,7 +17,8 @@ func show_panel(panel_id: String) -> void:
 		return
 	if not _panels.has(panel_id) or not _panels.has(current_panel):
 		return
-	_history.append(current_panel)
+	if current_panel != "clicker":
+		_history.append(current_panel)
 	_flip_to(current_panel, panel_id)
 
 
