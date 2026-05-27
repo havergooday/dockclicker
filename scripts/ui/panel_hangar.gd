@@ -12,7 +12,7 @@ var _detail_open: bool = false
 var _grid_zone:   Control = null
 var _detail_zone: Control = null
 
-const DETAIL_SPLIT   := 0.68
+const DETAIL_SPLIT   := 0.30
 const CARD_W         := 108
 const CARD_H         := 108
 const SPRITE_SZ      := 62
