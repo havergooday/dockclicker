@@ -22,6 +22,7 @@ func save() -> void:
 		"player_status":        GameState.player_status,
 		"click_damage":         GameState.click_damage,
 		"damage_upgrade_level": GameState.damage_upgrade_level,
+		"auto_attack_unlocked": GameState.auto_attack_unlocked,
 		"selected_planet":      GameState.selected_planet,
 		"unlocked_planets":     GameState.unlocked_planets.duplicate(),
 		"part_inventory": GameState.part_inventory.duplicate(true),
@@ -58,6 +59,7 @@ func load_save() -> bool:
 	GameState.player_status        = str(d.get("player_status",        "idle"))
 	GameState.click_damage         = int(d.get("click_damage",         1))
 	GameState.damage_upgrade_level = int(d.get("damage_upgrade_level", 0))
+	GameState.auto_attack_unlocked = bool(d.get("auto_attack_unlocked", false))
 	GameState.selected_planet      = str(d.get("selected_planet",      "sector_a"))
 	GameState.unlocked_planets     = (d.get("unlocked_planets", ["sector_a"]) as Array).duplicate()
 

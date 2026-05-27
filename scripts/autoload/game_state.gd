@@ -8,6 +8,9 @@ var pending_credits: int = 0
 var player_status: String = "idle"  # idle / on_mission / returned
 var click_damage: int = 1
 var damage_upgrade_level: int = 0
+var auto_attack_unlocked: bool = false
+
+const AUTO_ATTACK_COST := 800
 var unlocked_planets: Array = ["sector_a"]
 var selected_planet: String = "sector_a"
 var part_inventory: Array = []  # Array of {iid, type, tier}
@@ -116,6 +119,14 @@ func get_damage_upgrade_cost() -> int:
 	if damage_upgrade_level >= DAMAGE_UPGRADE_COSTS.size():
 		return -1
 	return DAMAGE_UPGRADE_COSTS[damage_upgrade_level]
+
+func unlock_auto_attack() -> bool:
+	if auto_attack_unlocked or total_credits < AUTO_ATTACK_COST:
+		return false
+	total_credits -= AUTO_ATTACK_COST
+	auto_attack_unlocked = true
+	credits_changed.emit(total_credits)
+	return true
 
 func upgrade_click_damage() -> bool:
 	var cost := get_damage_upgrade_cost()

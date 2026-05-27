@@ -180,6 +180,16 @@ func _build_upgrade_content() -> void:
 		func():
 			GameState.upgrade_click_damage()
 	))
+	var auto_on := GameState.auto_attack_unlocked
+	list.add_child(_make_upgrade_row(
+		"자동 공격",
+		"비활성" if not auto_on else "활성  (데미지 ×0.5 / 1.5초)",
+		"임의 적을 1.5초마다 자동 공격",
+		-1 if auto_on else GameState.AUTO_ATTACK_COST,
+		auto_on,
+		func(): GameState.unlock_auto_attack(),
+		"완료" if auto_on else "",
+	))
 	list.add_child(_make_upgrade_row("클릭 범위", "추후 해금 예정", "범위형 공격 업그레이드", -1, true, func(): pass))
 	list.add_child(_make_upgrade_row("무기 교체", "추후 해금 예정", "직접 파견 무기 유형 확장", -1, true, func(): pass))
 
@@ -575,7 +585,7 @@ func _make_part_row(part_type: String, tier: int, tier_data: Dictionary, part_da
 	return row
 
 
-func _make_upgrade_row(title: String, current: String, desc: String, cost: int, disabled: bool, callback: Callable) -> Control:
+func _make_upgrade_row(title: String, current: String, desc: String, cost: int, disabled: bool, callback: Callable, btn_label: String = "") -> Control:
 	var row := PanelContainer.new()
 	row.custom_minimum_size = Vector2(0, ROW_H)
 	row.add_theme_stylebox_override("panel", _make_row_style(Color(0.44, 0.74, 1.0), disabled))
@@ -613,7 +623,7 @@ func _make_upgrade_row(title: String, current: String, desc: String, cost: int, 
 	hb.add_child(price_lbl)
 
 	var btn := Button.new()
-	btn.text = "잠김" if cost < 0 else "강화"
+	btn.text = btn_label if btn_label != "" else ("잠김" if cost < 0 else "강화")
 	btn.custom_minimum_size = Vector2(84, 26)
 	btn.disabled = disabled or (cost >= 0 and GameState.total_credits < cost)
 	if not disabled:

@@ -3,6 +3,9 @@ extends Control
 var _enemies: Dictionary = {}
 var _wave_kills: int = 0
 var _planet_data: Dictionary = {}
+var _auto_attack_timer: float = 0.0
+
+const AUTO_ATTACK_INTERVAL := 1.5
 
 @onready var battle_area: Control = $BattleArea
 @onready var session_label: Label = $Header/SessionLabel
@@ -12,6 +15,33 @@ func _ready() -> void:
 	PanelManager.register_panel("clicker", self)
 	return_button.pressed.connect(_on_return_pressed)
 	PanelManager.panel_changed.connect(_on_panel_changed)
+
+func _process(delta: float) -> void:
+	if not visible or not GameState.auto_attack_unlocked or _enemies.is_empty():
+		return
+	_auto_attack_timer -= delta
+	if _auto_attack_timer <= 0.0:
+		_auto_attack_timer = AUTO_ATTACK_INTERVAL
+		_do_auto_attack()
+
+
+func _do_auto_attack() -> void:
+	var keys := _enemies.keys()
+	if keys.is_empty():
+		return
+	var enemy: Button = keys[randi() % keys.size()]
+	if not is_instance_valid(enemy) or not _enemies.has(enemy):
+		return
+	var dmg := maxi(1, GameState.click_damage / 2)
+	_enemies[enemy]["hp"] -= dmg
+	if _enemies[enemy]["hp"] <= 0:
+		_kill_enemy(enemy)
+	else:
+		_update_enemy_display(enemy)
+		var tw := enemy.create_tween()
+		tw.tween_property(enemy, "modulate", Color(0.45, 0.85, 1.0), 0.05)
+		tw.tween_property(enemy, "modulate", Color.WHITE, 0.12)
+
 
 func _input(event: InputEvent) -> void:
 	if not visible:
@@ -27,6 +57,7 @@ func _on_panel_changed(panel_id: String) -> void:
 func _start_session() -> void:
 	_planet_data = GameState.get_selected_planet_data()
 	_wave_kills = 0
+	_auto_attack_timer = AUTO_ATTACK_INTERVAL
 	_clear_enemies()
 	_refresh_session_label()
 	_fill_to_max.call_deferred()
