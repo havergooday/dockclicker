@@ -1,6 +1,7 @@
 extends Control
 
-const STAR_MAP_SCENE := preload("res://scenes/ui/star_map_popup.tscn")
+const STAR_MAP_SCENE  := preload("res://scenes/ui/star_map_popup.tscn")
+const HANGAR_ZONE_SCR := preload("res://scripts/ui/hangar_zone.gd")
 
 const NAV_ITEMS: Array = [
 	{"id": "hangar", "label": "격납고", "x": 0.0},
@@ -117,7 +118,7 @@ func _build_zone_panels() -> void:
 
 
 func _make_hangar_zone() -> void:
-	var zone := HangarZone.new()
+	var zone: Control = HANGAR_ZONE_SCR.new()
 	zone.anchor_left   = 0.0
 	zone.anchor_top    = 0.0
 	zone.anchor_right  = 0.0
@@ -126,7 +127,7 @@ func _make_hangar_zone() -> void:
 	zone.offset_top    = 0.0
 	zone.offset_right  = 1200.0
 	zone.offset_bottom = 0.0
-	zone.navigate_to_control_requested.connect(func():
+	zone.connect("navigate_to_control_requested", func():
 		_scroll_to_zone(2420.0)
 		get_tree().create_timer(0.28).timeout.connect(_open_star_map)
 	)
