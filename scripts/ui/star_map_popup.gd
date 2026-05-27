@@ -667,12 +667,12 @@ func _make_bay_card(bay_index: int, slot: DispatchManager.AutoSlot) -> PanelCont
 			btn.pressed.connect(func(): _dispatch_from_bay(bay_index))
 			vbox.add_child(btn)
 		"returned":
-			var btn := Button.new()
-			btn.text = "수령"
-			btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			btn.custom_minimum_size = Vector2(0, 28)
-			btn.pressed.connect(func(): _collect_bay(bay_index))
-			vbox.add_child(btn)
+			var state_lbl := Label.new()
+			state_lbl.text = "복귀 완료"
+			state_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			state_lbl.add_theme_font_size_override("font_size", 10)
+			state_lbl.modulate = accent
+			vbox.add_child(state_lbl)
 		_:
 			var state_lbl := Label.new()
 			state_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
