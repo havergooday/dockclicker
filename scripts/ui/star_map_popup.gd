@@ -28,7 +28,12 @@ var _planet_drag_anchor_x: float = 0.0
 var _planet_drag_scroll_start: int = 0
 var _detail_overlay: ColorRect
 var _slot_scroll_container: ScrollContainer
-var _bay_list_container: VBoxContainer
+var _bay_panel: PanelContainer
+var _bay_grid: GridContainer
+var _bay_scroll: ScrollContainer
+var _bay_panel_dragging: bool = false
+var _bay_drag_anchor_x: float = 0.0
+var _bay_drag_scroll_start: int = 0
 var _bay_select_mode: bool = false
 
 
@@ -71,7 +76,10 @@ func close_popup() -> void:
 	tween.tween_callback(func():
 		hide()
 		_hide_toast()
-		_hide_bay_list()
+		if _bay_select_mode:
+			_bay_select_mode = false
+			_bay_panel_dragging = false
+			_bay_panel.visible = false
 		_slide_panel.visible = false
 		_detail_overlay.visible = false
 		_planet_dragging = false
@@ -144,6 +152,7 @@ func _build_ui() -> void:
 	_build_planet_area()
 	_build_detail_overlay()
 	_build_slide_panel()
+	_build_bay_panel()
 	_build_float_popups()
 	_build_toast()
 
@@ -264,12 +273,70 @@ func _build_slide_panel() -> void:
 	_slot_grid.add_theme_constant_override("v_separation", 8)
 	_slot_scroll_container.add_child(_slot_grid)
 
-	_bay_list_container = VBoxContainer.new()
-	_bay_list_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_bay_list_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_bay_list_container.add_theme_constant_override("separation", 4)
-	_bay_list_container.visible = false
-	slot_wrap.add_child(_bay_list_container)
+
+func _build_bay_panel() -> void:
+	_bay_panel = PanelContainer.new()
+	_bay_panel.anchor_left = 0.54
+	_bay_panel.anchor_top = 0.0
+	_bay_panel.anchor_right = 1.0
+	_bay_panel.anchor_bottom = 0.0
+	_bay_panel.offset_top = 0.0
+	_bay_panel.offset_bottom = POPUP_HEIGHT
+	_bay_panel.offset_left = 2000.0
+	_bay_panel.offset_right = 2000.0
+	_bay_panel.visible = false
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.05, 0.09, 0.16, 0.99)
+	style.border_color = Color(0.32, 0.48, 0.72, 0.95)
+	style.border_width_left = 2
+	style.border_width_top = 0
+	style.border_width_right = 0
+	style.border_width_bottom = 0
+	style.content_margin_left = 12
+	style.content_margin_right = 12
+	style.content_margin_top = 8
+	style.content_margin_bottom = 8
+	_bay_panel.add_theme_stylebox_override("panel", style)
+	add_child(_bay_panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vbox.add_theme_constant_override("separation", 8)
+	_bay_panel.add_child(vbox)
+
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 10)
+	vbox.add_child(header)
+
+	var cancel_btn := Button.new()
+	cancel_btn.text = "←"
+	cancel_btn.flat = true
+	cancel_btn.custom_minimum_size = Vector2(32, 0)
+	cancel_btn.pressed.connect(_hide_bay_panel)
+	header.add_child(cancel_btn)
+
+	var title_lbl := Label.new()
+	title_lbl.text = "파견 베이 선택"
+	title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_lbl.add_theme_font_size_override("font_size", 13)
+	title_lbl.modulate = Color(0.75, 0.88, 1.0)
+	header.add_child(title_lbl)
+
+	var sep := HSeparator.new()
+	vbox.add_child(sep)
+
+	_bay_scroll = ScrollContainer.new()
+	_bay_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_bay_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_bay_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	_bay_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	vbox.add_child(_bay_scroll)
+
+	_bay_grid = GridContainer.new()
+	_bay_grid.columns = 2
+	_bay_grid.add_theme_constant_override("h_separation", 8)
+	_bay_grid.add_theme_constant_override("v_separation", 8)
+	_bay_scroll.add_child(_bay_grid)
 
 
 func _build_float_popups() -> void:
@@ -408,7 +475,7 @@ func _make_planet_slot_card(slot_idx: int, bay_index: int) -> Button:
 	btn.add_theme_font_size_override("font_size", 11)
 	if bay_index < 0:
 		btn.text = "슬롯 %d\n+ 파견" % (slot_idx + 1)
-		btn.pressed.connect(func(): _show_bay_list(slot_idx))
+		btn.pressed.connect(func(): _show_bay_panel(slot_idx))
 		_apply_slot_style(btn, "offline", false)
 	else:
 		var slot := GameState.auto_slots[bay_index] as DispatchManager.AutoSlot
@@ -482,7 +549,10 @@ func _select_planet(planet_id: String) -> void:
 
 func _deselect_planet() -> void:
 	_planet_detail_mode = false
-	_hide_bay_list()
+	if _bay_select_mode:
+		_bay_select_mode = false
+		_bay_panel_dragging = false
+		_bay_panel.visible = false
 	_rebuild_planets()
 	_exit_detail_mode()
 
@@ -511,74 +581,80 @@ func _exit_detail_mode() -> void:
 	)
 
 
-func _show_bay_list(slot_idx: int) -> void:
+func _show_bay_panel(slot_idx: int) -> void:
 	_bay_select_mode = true
-	_slot_scroll_container.visible = false
-	_bay_list_container.visible = true
-	for child in _bay_list_container.get_children():
+	for child in _bay_grid.get_children():
 		child.queue_free()
 
-	var header := Label.new()
-	header.text = "슬롯 %d — 파견 베이 선택" % (slot_idx + 1)
-	header.add_theme_font_size_override("font_size", 12)
-	header.modulate = Color(0.75, 0.88, 1.0)
-	_bay_list_container.add_child(header)
-
-	var sep := HSeparator.new()
-	_bay_list_container.add_child(sep)
-
-	var has_any := false
+	var available: Array = []
 	for i in GameState.auto_slots.size():
-		var bay_index := i
-		var slot := GameState.auto_slots[i] as DispatchManager.AutoSlot
-		if slot.state == "locked":
-			continue
-		has_any = true
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 8)
-		_bay_list_container.add_child(row)
+		var s := GameState.auto_slots[i] as DispatchManager.AutoSlot
+		if s.state != "locked":
+			available.append(i)
 
-		var name_lbl := Label.new()
-		name_lbl.text = "BAY %02d  %s" % [bay_index + 1, _slot_state_text(slot.state, false, "")]
-		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		name_lbl.add_theme_font_size_override("font_size", 12)
-		row.add_child(name_lbl)
+	if available.is_empty():
+		var lbl := Label.new()
+		lbl.text = "사용 가능한 베이 없음"
+		lbl.modulate = Color(0.55, 0.55, 0.65)
+		_bay_grid.add_child(lbl)
+	else:
+		_bay_grid.columns = ceili(available.size() / 2.0)
+		for bay_index in available:
+			var bay_i: int = bay_index
+			var slot := GameState.auto_slots[bay_i] as DispatchManager.AutoSlot
+			_bay_grid.add_child(_make_bay_card(bay_i, slot))
 
-		var dispatch_btn := Button.new()
-		dispatch_btn.text = "파견 ▶"
-		dispatch_btn.custom_minimum_size = Vector2(72, 28)
-		dispatch_btn.disabled = slot.state != "offline"
-		dispatch_btn.pressed.connect(func(): _dispatch_from_bay(bay_index))
-		row.add_child(dispatch_btn)
-
-	if not has_any:
-		var empty_lbl := Label.new()
-		empty_lbl.text = "사용 가능한 베이 없음"
-		empty_lbl.modulate = Color(0.55, 0.55, 0.65)
-		_bay_list_container.add_child(empty_lbl)
-
-	var spacer := Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_bay_list_container.add_child(spacer)
-
-	var cancel_row := HBoxContainer.new()
-	cancel_row.alignment = BoxContainer.ALIGNMENT_END
-	_bay_list_container.add_child(cancel_row)
-
-	var cancel_btn := Button.new()
-	cancel_btn.text = "← 취소"
-	cancel_btn.pressed.connect(_hide_bay_list)
-	cancel_row.add_child(cancel_btn)
+	var off := maxf(size.x, 800.0)
+	_bay_panel.offset_left = off
+	_bay_panel.offset_right = off
+	_bay_panel.visible = true
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(_bay_panel, "offset_left", 0.0, 0.20).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(_bay_panel, "offset_right", 0.0, 0.20).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
 
 
-func _hide_bay_list() -> void:
+func _hide_bay_panel() -> void:
 	_bay_select_mode = false
-	_slot_scroll_container.visible = true
-	_bay_list_container.visible = false
+	_bay_panel_dragging = false
+	var off := maxf(size.x, 800.0)
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(_bay_panel, "offset_left", off, 0.18).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(_bay_panel, "offset_right", off, 0.18).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_SINE)
+	tween.chain().tween_callback(func(): _bay_panel.visible = false)
+
+
+func _make_bay_card(bay_index: int, slot: DispatchManager.AutoSlot) -> Button:
+	var btn := Button.new()
+	btn.custom_minimum_size = Vector2(100, 72)
+	btn.add_theme_font_size_override("font_size", 11)
+	btn.text = "BAY %02d\n%s" % [bay_index + 1, _slot_state_text(slot.state, false, "")]
+	btn.disabled = slot.state != "offline"
+	btn.pressed.connect(func(): _dispatch_from_bay(bay_index))
+	var accent: Color
+	match slot.state:
+		"offline":    accent = Color(0.38, 0.56, 0.78, 0.95)
+		"on_mission": accent = Color(0.34, 0.82, 0.84, 0.95)
+		"returning":  accent = Color(0.92, 0.72, 0.32, 0.95)
+		"returned":   accent = Color(0.78, 0.92, 0.44, 0.95)
+		_:            accent = Color(0.30, 0.30, 0.38, 0.85)
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(accent.r * 0.22, accent.g * 0.22, accent.b * 0.22, 0.92)
+	style.border_color = accent
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(5)
+	style.content_margin_left = 8
+	style.content_margin_right = 8
+	style.content_margin_top = 6
+	style.content_margin_bottom = 6
+	btn.add_theme_stylebox_override("normal", style)
+	btn.add_theme_stylebox_override("pressed", style)
+	return btn
 
 
 func _dispatch_from_bay(bay_index: int) -> void:
-	_hide_bay_list()
+	_hide_bay_panel()
 	var pilot_id := _get_first_idle_pilot_id()
 	if pilot_id == "":
 		_show_toast("대기 파일럿이 없습니다.")
@@ -609,7 +685,25 @@ func _hide_toast() -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if not visible or _planet_detail_mode:
+	if not visible:
+		return
+	if _bay_select_mode:
+		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
+			if event.pressed:
+				_bay_panel_dragging = true
+				_bay_drag_anchor_x = event.position.x
+				_bay_drag_scroll_start = _bay_scroll.scroll_horizontal
+				get_viewport().set_input_as_handled()
+			else:
+				_bay_panel_dragging = false
+				get_viewport().set_input_as_handled()
+		elif event is InputEventMouseMotion and _bay_panel_dragging:
+			var delta := int(_bay_drag_anchor_x - event.position.x)
+			var max_scroll := maxi(0, int(_bay_grid.size.x - _bay_scroll.size.x))
+			_bay_scroll.scroll_horizontal = clampi(_bay_drag_scroll_start + delta, 0, max_scroll)
+			get_viewport().set_input_as_handled()
+		return
+	if _planet_detail_mode:
 		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
 		if event.pressed:
@@ -632,7 +726,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed("ui_cancel"):
 		if _bay_select_mode:
-			_hide_bay_list()
+			_hide_bay_panel()
 		elif _planet_detail_mode:
 			_deselect_planet()
 		else:
