@@ -4,6 +4,8 @@ var _enemies: Dictionary = {}
 var _wave_kills: int = 0
 var _planet_data: Dictionary = {}
 var _auto_attack_timer: float = 0.0
+var _returning := false
+var _float_label: Label
 
 const AUTO_ATTACK_INTERVAL := 1.5
 
@@ -15,6 +17,26 @@ func _ready() -> void:
 	PanelManager.register_panel("clicker", self)
 	return_button.pressed.connect(_on_return_pressed)
 	PanelManager.panel_changed.connect(_on_panel_changed)
+	_build_float_label()
+
+func _build_float_label() -> void:
+	_float_label = Label.new()
+	_float_label.anchor_left = 0.5
+	_float_label.anchor_right = 0.5
+	_float_label.anchor_top = 0.5
+	_float_label.anchor_bottom = 0.5
+	_float_label.offset_left = -200.0
+	_float_label.offset_right = 200.0
+	_float_label.offset_top = -50.0
+	_float_label.offset_bottom = 50.0
+	_float_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_float_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_float_label.add_theme_font_size_override("font_size", 42)
+	_float_label.add_theme_color_override("font_color", Color(0.88, 0.96, 1.0))
+	_float_label.modulate.a = 0.0
+	_float_label.z_index = 20
+	_float_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_float_label)
 
 func _process(delta: float) -> void:
 	if not visible or not GameState.auto_attack_unlocked or _enemies.is_empty():
@@ -58,6 +80,10 @@ func _start_session() -> void:
 	_planet_data = GameState.get_selected_planet_data()
 	_wave_kills = 0
 	_auto_attack_timer = AUTO_ATTACK_INTERVAL
+	_returning = false
+	return_button.disabled = false
+	if is_instance_valid(_float_label):
+		_float_label.modulate.a = 0.0
 	_clear_enemies()
 	_refresh_session_label()
 	_fill_to_max.call_deferred()
@@ -120,7 +146,35 @@ func _kill_enemy(enemy: Button) -> void:
 		_fill_to_max()
 
 func _on_wave_complete() -> void:
-	_on_return_pressed()
+	if _returning:
+		return
+	_returning = true
+	return_button.disabled = true
+	_show_float_then("미션완료", 0.8, _do_return)
+
+
+func _on_return_pressed() -> void:
+	if _returning:
+		return
+	_returning = true
+	return_button.disabled = true
+	_show_float_then("함선복귀", 0.5, _do_return)
+
+
+func _show_float_then(text: String, hold: float, callback: Callable) -> void:
+	_float_label.text = text
+	_float_label.modulate.a = 0.0
+	var tween := create_tween()
+	tween.tween_property(_float_label, "modulate:a", 1.0, 0.18)
+	tween.tween_interval(hold)
+	tween.tween_callback(callback)
+
+
+func _do_return() -> void:
+	_clear_enemies()
+	GameState.return_from_dispatch()
+	GameState.collect_player_credits(return_button.global_position)
+	PanelManager.go_back()
 
 func _refresh_session_label() -> void:
 	var wave_size: int = _planet_data.get("wave_size", 5)
@@ -130,8 +184,3 @@ func _refresh_session_label() -> void:
 		GameState.pending_credits
 	]
 
-func _on_return_pressed() -> void:
-	_clear_enemies()
-	GameState.return_from_dispatch()
-	GameState.collect_player_credits(return_button.global_position)
-	PanelManager.go_back()
