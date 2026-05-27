@@ -180,11 +180,16 @@ func _build_planet_area() -> void:
 
 func _build_detail_overlay() -> void:
 	_detail_overlay = ColorRect.new()
-	_detail_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_detail_overlay.anchor_left = 0.0
+	_detail_overlay.anchor_top = 0.0
+	_detail_overlay.anchor_right = 1.0
+	_detail_overlay.anchor_bottom = 0.0
+	_detail_overlay.offset_top = 0.0
+	_detail_overlay.offset_bottom = POPUP_HEIGHT
 	_detail_overlay.color = Color(0, 0, 0, 0.60)
 	_detail_overlay.visible = false
 	_detail_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
-	_main_panel.add_child(_detail_overlay)
+	add_child(_detail_overlay)
 
 
 func _build_slide_panel() -> void:
@@ -192,11 +197,11 @@ func _build_slide_panel() -> void:
 	_slide_panel.anchor_left = 0.25
 	_slide_panel.anchor_top = 0.0
 	_slide_panel.anchor_right = 1.0
-	_slide_panel.anchor_bottom = 1.0
+	_slide_panel.anchor_bottom = 0.0
+	_slide_panel.offset_top = 0.0
+	_slide_panel.offset_bottom = POPUP_HEIGHT
 	_slide_panel.offset_left = 0.0
 	_slide_panel.offset_right = 0.0
-	_slide_panel.offset_top = 0.0
-	_slide_panel.offset_bottom = 0.0
 	_slide_panel.visible = false
 	var slide_style := StyleBoxFlat.new()
 	slide_style.bg_color = Color(0.05, 0.08, 0.14, 0.98)
@@ -210,7 +215,7 @@ func _build_slide_panel() -> void:
 	slide_style.content_margin_top = 8
 	slide_style.content_margin_bottom = 8
 	_slide_panel.add_theme_stylebox_override("panel", slide_style)
-	_main_panel.add_child(_slide_panel)
+	add_child(_slide_panel)
 
 	var row := HBoxContainer.new()
 	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -566,7 +571,7 @@ func _deselect_planet() -> void:
 
 
 func _enter_detail_mode() -> void:
-	var off := maxf(_main_panel.size.x, 800.0)
+	var off := maxf(size.x, 800.0)
 	_detail_overlay.visible = true
 	_slide_panel.offset_left = off
 	_slide_panel.offset_right = off
@@ -578,7 +583,7 @@ func _enter_detail_mode() -> void:
 
 
 func _exit_detail_mode() -> void:
-	var off := maxf(_main_panel.size.x, 800.0)
+	var off := maxf(size.x, 800.0)
 	var tween := create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(_slide_panel, "offset_left", off, 0.20).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_SINE)
