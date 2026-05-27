@@ -18,23 +18,18 @@ var _planet_row: HBoxContainer
 var _slide_panel: PanelContainer
 var _detail_info_label: Label
 var _slot_grid: GridContainer
-var _ship_popup: PanelContainer
-var _ship_popup_body: VBoxContainer
-var _confirm_popup: PanelContainer
-var _confirm_label: Label
 var _toast_label: Label
-var _confirm_bay_index: int = -1
 var _selected_planet_id: String = ""
 var _planet_detail_mode: bool = false
-var _selected_slot_index: int = -1
-var _selected_bay_index: int = -1
-var _last_ship_anchor: Control = null
 var _planet_buttons: Dictionary = {}
 var _saved_planet_scroll_x: int = 0
 var _planet_dragging: bool = false
 var _planet_drag_anchor_x: float = 0.0
 var _planet_drag_scroll_start: int = 0
 var _detail_overlay: ColorRect
+var _slot_scroll_container: ScrollContainer
+var _bay_list_container: VBoxContainer
+var _bay_select_mode: bool = false
 
 
 func _ready() -> void:
@@ -75,14 +70,11 @@ func close_popup() -> void:
 	tween.tween_property(_main_panel, "offset_top", -POPUP_HEIGHT, 0.18).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_SINE)
 	tween.tween_callback(func():
 		hide()
-		_hide_ship_popup()
-		_hide_confirm_popup()
 		_hide_toast()
+		_hide_bay_list()
 		_slide_panel.visible = false
 		_detail_overlay.visible = false
 		_planet_dragging = false
-		_selected_slot_index = -1
-		_selected_bay_index = -1
 		_planet_detail_mode = false
 	)
 
@@ -245,117 +237,43 @@ func _build_slide_panel() -> void:
 	var direct_btn := Button.new()
 	direct_btn.text = "▶ 직접 파견"
 	direct_btn.custom_minimum_size = Vector2(0, 32)
-	direct_btn.pressed.connect(func(): _confirm_dispatch(-1))
+	direct_btn.pressed.connect(func():
+		GameState.selected_planet = _selected_planet_id
+		GameState.start_direct_dispatch()
+		PanelManager.show_panel("clicker")
+		hide()
+	)
 	info_section.add_child(direct_btn)
 
 	# Right: planet slot section
 	var slot_wrap := VBoxContainer.new()
 	slot_wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	slot_wrap.add_theme_constant_override("separation", 4)
+	slot_wrap.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	row.add_child(slot_wrap)
 
-	var slot_title := Label.new()
-	slot_title.text = "행성 슬롯"
-	slot_title.add_theme_font_size_override("font_size", 12)
-	slot_title.modulate = Color(0.68, 0.80, 1.0)
-	slot_wrap.add_child(slot_title)
-
-	var slot_scroll := ScrollContainer.new()
-	slot_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	slot_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	slot_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	slot_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	slot_wrap.add_child(slot_scroll)
+	_slot_scroll_container = ScrollContainer.new()
+	_slot_scroll_container.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	_slot_scroll_container.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_slot_scroll_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_slot_scroll_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	slot_wrap.add_child(_slot_scroll_container)
 
 	_slot_grid = GridContainer.new()
 	_slot_grid.columns = 4
 	_slot_grid.add_theme_constant_override("h_separation", 8)
 	_slot_grid.add_theme_constant_override("v_separation", 8)
-	slot_scroll.add_child(_slot_grid)
+	_slot_scroll_container.add_child(_slot_grid)
+
+	_bay_list_container = VBoxContainer.new()
+	_bay_list_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_bay_list_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_bay_list_container.add_theme_constant_override("separation", 4)
+	_bay_list_container.visible = false
+	slot_wrap.add_child(_bay_list_container)
 
 
 func _build_float_popups() -> void:
-	_ship_popup = PanelContainer.new()
-	_ship_popup.visible = false
-	_ship_popup.mouse_filter = Control.MOUSE_FILTER_STOP
-	_ship_popup.size = Vector2(240, 240)
-	var ship_style := StyleBoxFlat.new()
-	ship_style.bg_color = Color(0.05, 0.08, 0.14, 0.98)
-	ship_style.border_color = Color(0.40, 0.60, 0.82, 0.9)
-	ship_style.set_border_width_all(1)
-	ship_style.set_corner_radius_all(6)
-	ship_style.content_margin_left = 10
-	ship_style.content_margin_right = 10
-	ship_style.content_margin_top = 8
-	ship_style.content_margin_bottom = 8
-	_ship_popup.add_theme_stylebox_override("panel", ship_style)
-	add_child(_ship_popup)
-
-	var ship_root := VBoxContainer.new()
-	ship_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	ship_root.add_theme_constant_override("separation", 6)
-	_ship_popup.add_child(ship_root)
-
-	var ship_header := HBoxContainer.new()
-	ship_root.add_child(ship_header)
-
-	var ship_title := Label.new()
-	ship_title.text = "베이 선택"
-	ship_title.add_theme_font_size_override("font_size", 13)
-	ship_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	ship_header.add_child(ship_title)
-
-	var ship_close := Button.new()
-	ship_close.text = "×"
-	ship_close.custom_minimum_size = Vector2(24, 0)
-	ship_close.pressed.connect(_hide_ship_popup)
-	ship_header.add_child(ship_close)
-
-	_ship_popup_body = VBoxContainer.new()
-	_ship_popup_body.add_theme_constant_override("separation", 4)
-	_ship_popup_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_ship_popup_body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	ship_root.add_child(_ship_popup_body)
-
-	_confirm_popup = PanelContainer.new()
-	_confirm_popup.visible = false
-	_confirm_popup.mouse_filter = Control.MOUSE_FILTER_STOP
-	_confirm_popup.size = Vector2(190, 102)
-	var confirm_style := StyleBoxFlat.new()
-	confirm_style.bg_color = Color(0.05, 0.08, 0.14, 0.98)
-	confirm_style.border_color = Color(0.54, 0.74, 1.0, 0.9)
-	confirm_style.set_border_width_all(1)
-	confirm_style.set_corner_radius_all(6)
-	confirm_style.content_margin_left = 10
-	confirm_style.content_margin_right = 10
-	confirm_style.content_margin_top = 8
-	confirm_style.content_margin_bottom = 8
-	_confirm_popup.add_theme_stylebox_override("panel", confirm_style)
-	add_child(_confirm_popup)
-
-	var confirm_root := VBoxContainer.new()
-	confirm_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	confirm_root.add_theme_constant_override("separation", 6)
-	_confirm_popup.add_child(confirm_root)
-
-	_confirm_label = Label.new()
-	_confirm_label.text = "파견 시작?"
-	_confirm_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	confirm_root.add_child(_confirm_label)
-
-	var confirm_buttons := HBoxContainer.new()
-	confirm_buttons.add_theme_constant_override("separation", 6)
-	confirm_root.add_child(confirm_buttons)
-
-	var ok_btn := Button.new()
-	ok_btn.text = "확인"
-	ok_btn.pressed.connect(func(): _confirm_dispatch(_confirm_bay_index))
-	confirm_buttons.add_child(ok_btn)
-
-	var cancel_btn := Button.new()
-	cancel_btn.text = "취소"
-	cancel_btn.pressed.connect(_hide_confirm_popup)
-	confirm_buttons.add_child(cancel_btn)
+	pass
 
 
 func _build_toast() -> void:
@@ -490,7 +408,7 @@ func _make_planet_slot_card(slot_idx: int, bay_index: int) -> Button:
 	btn.add_theme_font_size_override("font_size", 11)
 	if bay_index < 0:
 		btn.text = "슬롯 %d\n+ 파견" % (slot_idx + 1)
-		btn.pressed.connect(func(): _open_ship_popup(slot_idx, btn))
+		btn.pressed.connect(func(): _show_bay_list(slot_idx))
 		_apply_slot_style(btn, "offline", false)
 	else:
 		var slot := GameState.auto_slots[bay_index] as DispatchManager.AutoSlot
@@ -564,8 +482,7 @@ func _select_planet(planet_id: String) -> void:
 
 func _deselect_planet() -> void:
 	_planet_detail_mode = false
-	_hide_ship_popup()
-	_hide_confirm_popup()
+	_hide_bay_list()
 	_rebuild_planets()
 	_exit_detail_mode()
 
@@ -594,57 +511,74 @@ func _exit_detail_mode() -> void:
 	)
 
 
-func _open_ship_popup(slot_index: int, anchor: Control) -> void:
-	_selected_slot_index = slot_index
-	_last_ship_anchor = anchor
-	_selected_bay_index = -1
-	_hide_confirm_popup()
-
-	for child in _ship_popup_body.get_children():
+func _show_bay_list(slot_idx: int) -> void:
+	_bay_select_mode = true
+	_slot_scroll_container.visible = false
+	_bay_list_container.visible = true
+	for child in _bay_list_container.get_children():
 		child.queue_free()
 
-	var note := Label.new()
-	note.text = "파견할 베이를 선택하세요"
-	note.add_theme_font_size_override("font_size", 11)
-	_ship_popup_body.add_child(note)
+	var header := Label.new()
+	header.text = "슬롯 %d — 파견 베이 선택" % (slot_idx + 1)
+	header.add_theme_font_size_override("font_size", 12)
+	header.modulate = Color(0.75, 0.88, 1.0)
+	_bay_list_container.add_child(header)
 
+	var sep := HSeparator.new()
+	_bay_list_container.add_child(sep)
+
+	var has_any := false
 	for i in GameState.auto_slots.size():
 		var bay_index := i
 		var slot := GameState.auto_slots[i] as DispatchManager.AutoSlot
 		if slot.state == "locked":
 			continue
-		var bay_btn := Button.new()
-		bay_btn.text = "BAY %02d  — %s" % [bay_index + 1, _slot_state_text(slot.state, false, "")]
-		bay_btn.disabled = slot.state != "offline"
-		bay_btn.pressed.connect(func(): _select_ship_bay(bay_index))
-		_ship_popup_body.add_child(bay_btn)
+		has_any = true
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		_bay_list_container.add_child(row)
 
-	var local_pos := anchor.global_position - global_position + Vector2(anchor.size.x + 8, 0)
-	_ship_popup.position = local_pos
-	_ship_popup.visible = true
+		var name_lbl := Label.new()
+		name_lbl.text = "BAY %02d  %s" % [bay_index + 1, _slot_state_text(slot.state, false, "")]
+		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		name_lbl.add_theme_font_size_override("font_size", 12)
+		row.add_child(name_lbl)
+
+		var dispatch_btn := Button.new()
+		dispatch_btn.text = "파견 ▶"
+		dispatch_btn.custom_minimum_size = Vector2(72, 28)
+		dispatch_btn.disabled = slot.state != "offline"
+		dispatch_btn.pressed.connect(func(): _dispatch_from_bay(bay_index))
+		row.add_child(dispatch_btn)
+
+	if not has_any:
+		var empty_lbl := Label.new()
+		empty_lbl.text = "사용 가능한 베이 없음"
+		empty_lbl.modulate = Color(0.55, 0.55, 0.65)
+		_bay_list_container.add_child(empty_lbl)
+
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_bay_list_container.add_child(spacer)
+
+	var cancel_row := HBoxContainer.new()
+	cancel_row.alignment = BoxContainer.ALIGNMENT_END
+	_bay_list_container.add_child(cancel_row)
+
+	var cancel_btn := Button.new()
+	cancel_btn.text = "← 취소"
+	cancel_btn.pressed.connect(_hide_bay_list)
+	cancel_row.add_child(cancel_btn)
 
 
-func _select_ship_bay(bay_index: int) -> void:
-	_selected_bay_index = bay_index
-	_show_confirm_popup(bay_index)
+func _hide_bay_list() -> void:
+	_bay_select_mode = false
+	_slot_scroll_container.visible = true
+	_bay_list_container.visible = false
 
 
-func _show_confirm_popup(bay_index: int) -> void:
-	_confirm_bay_index = bay_index
-	_confirm_label.text = "BAY %02d 파견 시작?" % (bay_index + 1)
-	_confirm_popup.position = _ship_popup.position + Vector2(_ship_popup.size.x + 8, 32)
-	_confirm_popup.visible = true
-
-
-func _confirm_dispatch(bay_index: int) -> void:
-	_hide_ship_popup()
-	_hide_confirm_popup()
-	if bay_index < 0:
-		GameState.selected_planet = _selected_planet_id
-		GameState.start_direct_dispatch()
-		PanelManager.show_panel("clicker")
-		hide()
-		return
+func _dispatch_from_bay(bay_index: int) -> void:
+	_hide_bay_list()
 	var pilot_id := _get_first_idle_pilot_id()
 	if pilot_id == "":
 		_show_toast("대기 파일럿이 없습니다.")
@@ -660,14 +594,6 @@ func _get_first_idle_pilot_id() -> String:
 	for pilot in GameState.get_idle_pilots():
 		return str(pilot.get("id", ""))
 	return ""
-
-
-func _hide_ship_popup() -> void:
-	_ship_popup.visible = false
-
-
-func _hide_confirm_popup() -> void:
-	_confirm_popup.visible = false
 
 
 func _show_toast(text: String) -> void:
@@ -705,10 +631,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not visible:
 		return
 	if event.is_action_pressed("ui_cancel"):
-		if _confirm_popup.visible:
-			_hide_confirm_popup()
-		elif _ship_popup.visible:
-			_hide_ship_popup()
+		if _bay_select_mode:
+			_hide_bay_list()
 		elif _planet_detail_mode:
 			_deselect_planet()
 		else:
