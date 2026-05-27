@@ -134,4 +134,4 @@ func _on_return_pressed() -> void:
 	_clear_enemies()
 	GameState.return_from_dispatch()
 	GameState.collect_player_credits(return_button.global_position)
-	PanelManager.show_panel("dispatch")
+	PanelManager.go_back()
