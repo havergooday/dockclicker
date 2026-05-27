@@ -9,7 +9,7 @@ const AUTO_ATTACK_INTERVAL := 1.5
 
 @onready var battle_area: Control = $BattleArea
 @onready var session_label: Label = $Header/SessionLabel
-@onready var return_button: Button = $ReturnButton
+@onready var return_button: Button = $Header/ReturnButton
 
 func _ready() -> void:
 	PanelManager.register_panel("clicker", self)
