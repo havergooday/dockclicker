@@ -405,6 +405,34 @@ func assign_pilot_to_slot(slot_index: int, pilot_id: String) -> bool:
 	return true
 
 
+func replace_machine_part(slot_index: int, part_type: String, tier: int) -> bool:
+	if slot_index < 0 or slot_index >= auto_slots.size():
+		return false
+	if part_type not in ["body", "weapon", "legs"]:
+		return false
+	if tier <= 0:
+		return false
+	if GameState.get_owned_qty(part_type, tier) <= 0:
+		return false
+	var slot: AutoSlot = auto_slots[slot_index]
+	if slot.state != "offline":
+		return false
+	var old_tier: int = int(slot.machine.get(part_type, 0))
+	if old_tier == tier:
+		return true
+	if not GameState.consume_part(part_type, tier):
+		return false
+	if old_tier > 0:
+		GameState.part_inventory.append({
+			"iid": "swap_%d" % Time.get_ticks_usec(),
+			"type": part_type,
+			"tier": old_tier,
+		})
+	slot.machine[part_type] = tier
+	auto_slot_changed.emit(slot_index)
+	return true
+
+
 func disassemble_machine(slot_index: int) -> bool:
 	if slot_index < 0 or slot_index >= auto_slots.size():
 		return false

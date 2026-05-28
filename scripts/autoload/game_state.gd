@@ -3,7 +3,7 @@ extends Node
 var layout_mode := "horizontal"
 var dispatch_preselect_slot: int = -1
 var workshop_preselect_slot: int = -1
-var total_credits: int = 0
+var total_credits: int = 100000
 var pending_credits: int = 0
 var player_status: String = "idle"  # idle / on_mission / returned
 var click_damage: int = 1
@@ -303,6 +303,10 @@ func assign_pilot_to_slot(slot_index: int, pilot_id: String) -> bool:
 	if ok:
 		slot_pilot_assigned.emit(slot_index)
 	return ok
+
+
+func replace_machine_part(slot_index: int, part_type: String, tier: int) -> bool:
+	return _dispatch.replace_machine_part(slot_index, part_type, tier)
 
 
 func disassemble_machine(slot_index: int) -> bool:

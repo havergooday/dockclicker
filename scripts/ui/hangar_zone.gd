@@ -2,6 +2,7 @@ class_name HangarZone
 extends Control
 
 signal navigate_to_control_requested
+signal bay_detail_requested(slot_index: int)
 
 const CARD_W         := 108
 const CARD_H         := 108
@@ -411,7 +412,7 @@ func _build_card_content(btn: Button, slot: DispatchManager.AutoSlot,
 	else:
 		btn.pressed.connect(func():
 			if not _was_dragging:
-				_show_popup(index)
+				bay_detail_requested.emit(index)
 		)
 
 
@@ -637,25 +638,37 @@ func _popup_offline(vb: VBoxContainer, slot: DispatchManager.AutoSlot, slot_idx:
 
 	vb.add_child(_vspacer())
 
-	var dispatch_btn := Button.new()
-	dispatch_btn.text = "관제실에서 파견  ▶"
-	dispatch_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	dispatch_btn.pressed.connect(func():
+	var rebuild_btn := Button.new()
+	rebuild_btn.text = "⚙ 재조립"
+	rebuild_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var cap_rebuild := slot_idx
+	rebuild_btn.pressed.connect(func():
+		GameState.workshop_preselect_slot = cap_rebuild
+		_hide_popup()
+		PanelManager.show_panel("workshop")
+	)
+	vb.add_child(rebuild_btn)
+
+	var repair_btn := Button.new()
+	repair_btn.text = "🔧 수리"
+	repair_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	repair_btn.modulate = Color(0.80, 0.90, 1.0)
+	var cap_repair := slot_idx
+	repair_btn.pressed.connect(func():
+		GameState.workshop_preselect_slot = cap_repair
+		_hide_popup()
+		PanelManager.show_panel("workshop")
+	)
+	vb.add_child(repair_btn)
+
+	var control_btn := Button.new()
+	control_btn.text = "관제실로 이동  ▶"
+	control_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	control_btn.pressed.connect(func():
 		_hide_popup()
 		navigate_to_control_requested.emit()
 	)
-	vb.add_child(dispatch_btn)
-
-	var dis_btn := Button.new()
-	dis_btn.text = "머신 분해"
-	dis_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	dis_btn.modulate = Color(1.0, 0.62, 0.62)
-	var cap2 := slot_idx
-	dis_btn.pressed.connect(func():
-		GameState.disassemble_machine(cap2)
-		_hide_popup()
-	)
-	vb.add_child(dis_btn)
+	vb.add_child(control_btn)
 
 
 func _popup_active(vb: VBoxContainer, slot: DispatchManager.AutoSlot) -> void:
@@ -665,25 +678,27 @@ func _popup_active(vb: VBoxContainer, slot: DispatchManager.AutoSlot) -> void:
 	_add_lbl(vb, "몸체 T%d  ·  무기 T%d  ·  다리 T%d" % [b, w, l], 11,
 			HORIZONTAL_ALIGNMENT_LEFT, Color(0.65, 0.70, 0.82))
 
-	if slot.pilot_id != "":
-		var pilot := GameState.get_hired_pilot(slot.pilot_id)
-		var pname: String = str(pilot.get("name", slot.pilot_id)) if not pilot.is_empty() else slot.pilot_id
-		_add_lbl(vb, "👤 " + pname, 11, HORIZONTAL_ALIGNMENT_LEFT, Color(0.65, 0.88, 1.0))
-
 	if slot.planet != "":
 		var planet := GameState.get_planet(slot.planet)
-		_add_lbl(vb, "→ " + str(planet.get("name", slot.planet)), 10,
+		_add_lbl(vb, "도착 행성  " + str(planet.get("name", slot.planet)), 11,
 				HORIZONTAL_ALIGNMENT_LEFT, Color(0.75, 0.65, 1.0))
 
-	var preview := GameState.get_machine_preview(b, w, l)
-	_add_lbl(vb, "예상 수익 %d CR" % preview["credits"], 10,
+	var remain_lbl := "남은 시간"
+	var remain_text := "00:00"
+	if slot.state == "on_mission":
+		remain_text = _fmt_mission_remaining(slot.mission_end_time)
+	elif slot.state == "returning":
+		remain_lbl = "귀환 ETA"
+		remain_text = _fmt_mission_remaining(slot.return_end_time)
+	_add_lbl(vb, "%s  %s" % [remain_lbl, remain_text], 11,
 			HORIZONTAL_ALIGNMENT_LEFT, Color(0.50, 0.90, 0.55))
 
 	vb.add_child(_vspacer())
-	_add_lbl(vb, "임무 종료 후 자동 귀환합니다.", 9, HORIZONTAL_ALIGNMENT_LEFT, Color(0.42, 0.44, 0.55))
+	_add_lbl(vb, "자동 파견은 추후 업데이트 예정입니다.", 9, HORIZONTAL_ALIGNMENT_LEFT, Color(0.42, 0.44, 0.55))
 
 
 func _popup_returned(vb: VBoxContainer, slot: DispatchManager.AutoSlot, slot_idx: int) -> void:
+	_add_lbl(vb, "보상 요약", 11, HORIZONTAL_ALIGNMENT_LEFT, Color(0.52, 0.60, 0.75))
 	var cr_lbl := Label.new()
 	cr_lbl.text = "+ %s CR" % _fmt(slot.credits_earned)
 	cr_lbl.add_theme_font_size_override("font_size", 20)
@@ -793,3 +808,11 @@ func _fmt(n: int) -> String:
 			out += ","
 		out += s[i]
 	return out
+
+
+func _fmt_mission_remaining(end_time: float) -> String:
+	var now := Time.get_unix_time_from_system()
+	var total := maxi(0, int(round(end_time - now)))
+	var m := total / 60
+	var s := total % 60
+	return "%02d:%02d" % [m, s]

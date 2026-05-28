@@ -1,6 +1,7 @@
 extends Control
 
 const STAR_MAP_SCENE  := preload("res://scenes/ui/star_map_popup.tscn")
+const HANGAR_BAY_POPUP_SCENE := preload("res://scenes/ui/hangar_bay_popup.tscn")
 const HANGAR_ZONE_SCR := preload("res://scripts/ui/hangar_zone.gd")
 
 const NAV_ITEMS: Array = [
@@ -12,6 +13,7 @@ const NAV_ITEMS: Array = [
 var _scroll: ScrollContainer
 var _content: Control
 var _star_map_popup: Control
+var _hangar_bay_popup: Control
 var _dragging := false
 var _drag_anchor := Vector2.ZERO
 var _drag_scroll_start := 0
@@ -55,6 +57,7 @@ func _build_ui() -> void:
 	_build_zone_dividers()
 	_build_nav_bar()
 	_build_star_map_popup()
+	_build_hangar_bay_popup()
 
 
 func _build_background() -> void:
@@ -131,6 +134,9 @@ func _make_hangar_zone() -> void:
 	zone.connect("navigate_to_control_requested", func():
 		_scroll_to_zone(2420.0)
 		get_tree().create_timer(0.28).timeout.connect(_open_star_map)
+	)
+	zone.connect("bay_detail_requested", func(slot_index: int):
+		_open_hangar_bay_popup(slot_index)
 	)
 	_content.add_child(zone)
 
@@ -262,9 +268,25 @@ func _build_star_map_popup() -> void:
 	move_child(_star_map_popup, get_child_count() - 1)
 
 
+func _build_hangar_bay_popup() -> void:
+	_hangar_bay_popup = HANGAR_BAY_POPUP_SCENE.instantiate()
+	_hangar_bay_popup.visible = false
+	_hangar_bay_popup.connect("navigate_to_control_requested", func():
+		_scroll_to_zone(2420.0)
+		get_tree().create_timer(0.28).timeout.connect(_open_star_map)
+	)
+	add_child(_hangar_bay_popup)
+	move_child(_hangar_bay_popup, get_child_count() - 1)
+
+
 func _open_star_map() -> void:
 	if is_instance_valid(_star_map_popup):
 		(_star_map_popup as Control).call("open_for_control_room")
+
+
+func _open_hangar_bay_popup(slot_index: int) -> void:
+	if is_instance_valid(_hangar_bay_popup):
+		(_hangar_bay_popup as Control).call("open_for_slot", slot_index)
 
 
 func _scroll_to_zone(x_pos: float) -> void:
@@ -279,7 +301,7 @@ func _scroll_to_zone(x_pos: float) -> void:
 func _input(event: InputEvent) -> void:
 	if not visible or _scroll == null:
 		return
-	if is_instance_valid(_star_map_popup) and _star_map_popup.visible:
+	if (is_instance_valid(_star_map_popup) and _star_map_popup.visible) or (is_instance_valid(_hangar_bay_popup) and _hangar_bay_popup.visible):
 		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
 		if event.pressed:
