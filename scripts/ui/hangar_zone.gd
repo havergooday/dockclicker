@@ -280,7 +280,8 @@ func _make_bay_card(index: int) -> Button:
 	var slots := GameState.auto_slots
 	var slot: DispatchManager.AutoSlot = slots[index]
 	var state: String  = slot.state
-	var border_col     := _border_color(state)
+	var display_state  := "assembling" if state == "empty" and not slot.pending_machine.is_empty() else state
+	var border_col     := _border_color(display_state)
 	var glowing        := state == "returned"
 	var is_conf        := _confirming_type == "bay" and _confirming_id == index
 
@@ -310,7 +311,7 @@ func _make_bay_card(index: int) -> Button:
 	if state == "locked" and is_conf:
 		_build_card_confirm(btn, slot, index)
 	else:
-		_build_card_content(btn, slot, state, border_col, index)
+		_build_card_content(btn, slot, display_state, border_col, index)
 
 	return btn
 
@@ -761,35 +762,38 @@ func _card_sty(col: Color, hover: bool, glowing: bool, selected: bool = false) -
 
 func _status_color(state: String) -> Color:
 	match state:
-		"empty":      return Color(0.70, 0.72, 0.78)
-		"offline":    return Color(0.72, 0.22, 0.22)
-		"returned":   return Color(0.28, 1.00, 0.48)
-		"on_mission": return Color(0.30, 0.62, 1.00)
-		"returning":  return Color(1.00, 0.78, 0.22)
-		"locked":     return Color(0.42, 0.44, 0.54)
-		_:            return Color(0.60, 0.60, 0.65)
+		"empty":       return Color(0.70, 0.72, 0.78)
+		"assembling":  return Color(0.95, 0.65, 0.20)
+		"offline":     return Color(0.72, 0.22, 0.22)
+		"returned":    return Color(0.28, 1.00, 0.48)
+		"on_mission":  return Color(0.30, 0.62, 1.00)
+		"returning":   return Color(1.00, 0.78, 0.22)
+		"locked":      return Color(0.42, 0.44, 0.54)
+		_:             return Color(0.60, 0.60, 0.65)
 
 
 func _border_color(state: String) -> Color:
 	match state:
-		"locked":     return Color(0.33, 0.35, 0.48)
-		"empty":      return Color(0.34, 0.48, 0.62)
-		"offline":    return Color(0.55, 0.18, 0.18)
-		"on_mission": return Color(0.28, 0.58, 0.95)
-		"returning":  return Color(0.95, 0.74, 0.20)
-		"returned":   return Color(0.26, 0.95, 0.46)
-		_:            return Color(0.45, 0.45, 0.55)
+		"locked":      return Color(0.33, 0.35, 0.48)
+		"empty":       return Color(0.34, 0.48, 0.62)
+		"assembling":  return Color(0.70, 0.48, 0.14)
+		"offline":     return Color(0.55, 0.18, 0.18)
+		"on_mission":  return Color(0.28, 0.58, 0.95)
+		"returning":   return Color(0.95, 0.74, 0.20)
+		"returned":    return Color(0.26, 0.95, 0.46)
+		_:             return Color(0.45, 0.45, 0.55)
 
 
 func _state_label(state: String) -> String:
 	match state:
-		"locked":     return "LOCKED"
-		"empty":      return "EMPTY"
-		"offline":    return "OFFLINE"
-		"on_mission": return "ON MISSION"
-		"returning":  return "RETURNING"
-		"returned":   return "RETURNED"
-		_:            return state.to_upper()
+		"locked":      return "LOCKED"
+		"empty":       return "EMPTY"
+		"assembling":  return "ASSEMBLING"
+		"offline":     return "OFFLINE"
+		"on_mission":  return "ON MISSION"
+		"returning":   return "RETURNING"
+		"returned":    return "RETURNED"
+		_:             return state.to_upper()
 
 
 func _sprite_bg(machine: Dictionary, state: String) -> Color:

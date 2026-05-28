@@ -151,6 +151,8 @@ func _serialize_slots() -> Array:
 			"auto_redispatch":   s.auto_redispatch,
 			"auto_pilot_id":     s.auto_pilot_id,
 			"auto_planet":       s.auto_planet,
+			"pending_machine":   s.pending_machine.duplicate(),
+			"pending_pilot_id":  s.pending_pilot_id,
 		})
 	return out
 

@@ -678,6 +678,7 @@ func _make_bay_card(bay_index: int, slot: DispatchManager.AutoSlot) -> PanelCont
 			btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			btn.custom_minimum_size = Vector2(0, 28)
 			btn.pressed.connect(func(): _dispatch_from_bay(bay_index))
+			btn.disabled = not _can_dispatch_bay(bay_index)
 			vbox.add_child(btn)
 		"returned":
 			var state_lbl := Label.new()
@@ -697,6 +698,22 @@ func _make_bay_card(bay_index: int, slot: DispatchManager.AutoSlot) -> PanelCont
 				_:            state_lbl.text = slot.state
 			vbox.add_child(state_lbl)
 	return card
+
+
+func _can_dispatch_bay(_bay_index: int) -> bool:
+	if _selected_planet_id == "":
+		return false
+	var pilot_id := _get_first_idle_pilot_id()
+	if pilot_id == "":
+		return false
+	var pilot := GameState.get_hired_pilot(pilot_id)
+	if pilot.is_empty():
+		return false
+	var pilot_tier := int(pilot.get("tier", 1))
+	for p in GameState._dispatch.get_pilot_accessible_planets(pilot_tier):
+		if str(p.get("id", "")) == _selected_planet_id:
+			return true
+	return false
 
 
 func _dispatch_from_bay(bay_index: int) -> void:

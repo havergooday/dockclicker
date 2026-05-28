@@ -34,6 +34,9 @@ class AutoSlot:
 	var auto_redispatch: bool = false
 	var auto_pilot_id: String = ""
 	var auto_planet: String = ""
+	# 미완성 조립 드래프트 (empty 상태에서 팝업 닫을 때 기록)
+	var pending_machine: Dictionary = {}
+	var pending_pilot_id: String = ""
 
 	static func make_empty(group_id: int = 0) -> AutoSlot:
 		var s := AutoSlot.new()
@@ -166,6 +169,8 @@ func assemble_machine(slot_index: int, body_tier: int, weapon_tier: int, legs_ti
 	GameState.consume_part("legs", legs_tier)
 	slot.state = "offline"
 	slot.machine = {"body": body_tier, "weapon": weapon_tier, "legs": legs_tier}
+	slot.pending_machine = {}
+	slot.pending_pilot_id = ""
 	GameState.credits_changed.emit(GameState.total_credits)
 	auto_slot_changed.emit(slot_index)
 	return true
@@ -344,6 +349,9 @@ func apply_save_data(slot_data: Array, save_time: float, groups_data: Array = []
 		slot.auto_redispatch   = bool(d.get("auto_redispatch",  false))
 		slot.auto_pilot_id     = str(d.get("auto_pilot_id",     ""))
 		slot.auto_planet       = str(d.get("auto_planet",       ""))
+		var pmraw              = d.get("pending_machine", {})
+		slot.pending_machine   = (pmraw as Dictionary).duplicate() if pmraw is Dictionary else {}
+		slot.pending_pilot_id  = str(d.get("pending_pilot_id",  ""))
 		auto_slots.append(slot)
 	_fast_forward(Time.get_unix_time_from_system())
 
@@ -405,6 +413,27 @@ func assign_pilot_to_slot(slot_index: int, pilot_id: String) -> bool:
 	return true
 
 
+func remove_machine_part(slot_index: int, part_type: String) -> bool:
+	if slot_index < 0 or slot_index >= auto_slots.size():
+		return false
+	if part_type not in ["body", "weapon", "legs"]:
+		return false
+	var slot: AutoSlot = auto_slots[slot_index]
+	if slot.state != "offline":
+		return false
+	var old_tier: int = int(slot.machine.get(part_type, 0))
+	if old_tier <= 0:
+		return false
+	GameState.part_inventory.append({
+		"iid":  "rem_%d" % Time.get_ticks_usec(),
+		"type": part_type,
+		"tier": old_tier,
+	})
+	slot.machine.erase(part_type)
+	auto_slot_changed.emit(slot_index)
+	return true
+
+
 func replace_machine_part(slot_index: int, part_type: String, tier: int) -> bool:
 	if slot_index < 0 or slot_index >= auto_slots.size():
 		return false
@@ -418,8 +447,6 @@ func replace_machine_part(slot_index: int, part_type: String, tier: int) -> bool
 	if slot.state != "offline":
 		return false
 	var old_tier: int = int(slot.machine.get(part_type, 0))
-	if old_tier == tier:
-		return true
 	if not GameState.consume_part(part_type, tier):
 		return false
 	if old_tier > 0:

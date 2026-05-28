@@ -5,7 +5,7 @@ const POPUP_HEIGHT := 300.0
 const PANEL_W_RATIO := 0.60
 const PANEL_PAD_X := 32.0
 const PANEL_PAD_Y := 12.0
-const SELECTOR_W := 220.0
+var _selector_w: float = 220.0  # computed in _build_ui from viewport
 
 signal navigate_to_control_requested
 
@@ -13,6 +13,7 @@ var _panel: PanelContainer
 var _content_root: Control
 var _selector_panel: PanelContainer
 var _selector_body: VBoxContainer
+var _selector_scroll: ScrollContainer = null
 var _slot_index: int = -1
 var _closing: bool = false
 var _selector_visible: bool = false
@@ -20,12 +21,39 @@ var _selector_kind: String = ""
 var _selector_part_key: String = ""
 var _draft_pilot_id: String = ""
 var _draft_machine: Dictionary = {}
+var _sel_dragging: bool = false
+var _sel_drag_start_y: float = 0.0
+var _sel_drag_start_scroll: int = 0
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_build_ui()
 	hide()
+
+
+func _input(event: InputEvent) -> void:
+	if not visible or not _selector_visible or _selector_scroll == null or _selector_panel == null:
+		return
+	var sel_rect := Rect2(_selector_panel.global_position, _selector_panel.size)
+	if event is InputEventMouseButton:
+		match event.button_index:
+			MOUSE_BUTTON_RIGHT:
+				if event.pressed and sel_rect.has_point(event.global_position):
+					_sel_dragging = true
+					_sel_drag_start_y = event.global_position.y
+					_sel_drag_start_scroll = _selector_scroll.scroll_vertical
+					get_viewport().set_input_as_handled()
+				elif not event.pressed and _sel_dragging:
+					_sel_dragging = false
+					get_viewport().set_input_as_handled()
+			MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN:
+				if sel_rect.has_point(event.global_position):
+					get_viewport().set_input_as_handled()
+	elif event is InputEventMouseMotion and _sel_dragging:
+		var delta: float = _sel_drag_start_y - (event as InputEventMouseMotion).global_position.y
+		_selector_scroll.scroll_vertical = _sel_drag_start_scroll + int(delta)
+		get_viewport().set_input_as_handled()
 
 
 func open_for_slot(slot_index: int) -> void:
@@ -49,6 +77,7 @@ func close_popup() -> void:
 	if not visible or _closing:
 		return
 	_closing = true
+	_flush_draft_to_slot()
 	_hide_selector(false)
 	var off := -POPUP_HEIGHT
 	var tween := create_tween()
@@ -64,6 +93,7 @@ func close_popup() -> void:
 
 
 func _build_ui() -> void:
+	_selector_w = get_viewport_rect().size.x * 0.5
 	for child in get_children():
 		child.queue_free()
 
@@ -517,8 +547,8 @@ func _build_selector_panel() -> void:
 	_selector_panel.anchor_right = 1.0
 	_selector_panel.anchor_top = 0.0
 	_selector_panel.anchor_bottom = 1.0
-	_selector_panel.offset_left = SELECTOR_W
-	_selector_panel.offset_right = SELECTOR_W * 2.0
+	_selector_panel.offset_left = _selector_w
+	_selector_panel.offset_right = _selector_w * 2.0
 	_selector_panel.offset_top = 0.0
 	_selector_panel.offset_bottom = 0.0
 	_selector_panel.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -564,7 +594,8 @@ func _build_selector_panel() -> void:
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_selector_scroll = scroll
 	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	root.add_child(scroll)
 
@@ -576,14 +607,34 @@ func _build_selector_panel() -> void:
 
 
 func _init_draft_state() -> void:
-	_draft_pilot_id = _pilot_id(GameState.auto_slots[_slot_index]) if _slot_index >= 0 and _slot_index < GameState.auto_slots.size() else ""
+	# 이전 베이 오염 방지: 반드시 먼저 초기화
+	_draft_pilot_id = ""
 	_draft_machine = {"body": 0, "weapon": 0, "legs": 0}
-	if _slot_index >= 0 and _slot_index < GameState.auto_slots.size():
-		var slot: DispatchManager.AutoSlot = GameState.auto_slots[_slot_index]
-		if slot.state != "empty":
-			_draft_machine = slot.machine.duplicate()
-		elif not slot.machine.is_empty():
-			_draft_machine = slot.machine.duplicate()
+	if _slot_index < 0 or _slot_index >= GameState.auto_slots.size():
+		return
+	var slot: DispatchManager.AutoSlot = GameState.auto_slots[_slot_index]
+	if slot.state != "empty":
+		_draft_machine = slot.machine.duplicate()
+		_draft_pilot_id = slot.pilot_id if slot.pilot_id != "" else slot.assigned_pilot_id
+	else:
+		if not slot.pending_machine.is_empty():
+			_draft_machine = slot.pending_machine.duplicate()
+		if slot.pending_pilot_id != "":
+			_draft_pilot_id = slot.pending_pilot_id
+		elif slot.assigned_pilot_id != "":
+			_draft_pilot_id = slot.assigned_pilot_id
+
+
+func _flush_draft_to_slot() -> void:
+	if _slot_index < 0 or _slot_index >= GameState.auto_slots.size():
+		return
+	var slot: DispatchManager.AutoSlot = GameState.auto_slots[_slot_index]
+	if slot.state != "empty":
+		return
+	var has_any := _draft_machine.values().any(func(v): return int(v) > 0)
+	slot.pending_machine = _draft_machine.duplicate() if has_any else {}
+	slot.pending_pilot_id = _draft_pilot_id
+	GameState.auto_slot_changed.emit(_slot_index)
 
 
 func _open_selector(kind: String, part_key: String) -> void:
@@ -634,7 +685,7 @@ func _show_selector() -> void:
 	var tween := create_tween()
 	tween.set_ease(Tween.EASE_OUT)
 	tween.set_trans(Tween.TRANS_SINE)
-	tween.tween_property(_selector_panel, "offset_left", -SELECTOR_W, 0.18)
+	tween.tween_property(_selector_panel, "offset_left", -_selector_w, 0.18)
 	tween.parallel().tween_property(_selector_panel, "offset_right", 0.0, 0.18)
 
 
@@ -645,8 +696,8 @@ func _hide_selector(refresh: bool) -> void:
 		var tween := create_tween()
 		tween.set_ease(Tween.EASE_IN)
 		tween.set_trans(Tween.TRANS_SINE)
-		tween.tween_property(_selector_panel, "offset_left", SELECTOR_W, 0.16)
-		tween.parallel().tween_property(_selector_panel, "offset_right", SELECTOR_W * 2.0, 0.16)
+		tween.tween_property(_selector_panel, "offset_left", _selector_w, 0.16)
+		tween.parallel().tween_property(_selector_panel, "offset_right", _selector_w * 2.0, 0.16)
 		tween.tween_callback(func():
 			_selector_panel.visible = false
 		)
@@ -666,6 +717,8 @@ func _build_pilot_selector() -> void:
 	header.text = "대기 파일럿"
 	header.modulate = Color(0.72, 0.78, 0.90)
 	_selector_body.add_child(header)
+	if _draft_pilot_id != "":
+		_selector_body.add_child(_make_unequip_button(func(): _select_pilot("")))
 	var pilots := GameState.get_idle_pilots()
 	if pilots.is_empty():
 		var empty_lbl := Label.new()
@@ -693,6 +746,10 @@ func _build_part_selector(part_key: String) -> void:
 	header.text = "%s 인벤토리" % _part_caption(part_key)
 	header.modulate = Color(0.72, 0.78, 0.90)
 	_selector_body.add_child(header)
+	if _slot_index >= 0 and _slot_index < GameState.auto_slots.size():
+		var cap_key := part_key
+		if _part_tier(GameState.auto_slots[_slot_index], part_key) > 0:
+			_selector_body.add_child(_make_unequip_button(func(): _unequip_part(cap_key)))
 	var items := []
 	for item: Dictionary in GameState.part_inventory:
 		if str(item.get("type", "")) == part_key:
@@ -726,7 +783,7 @@ func _select_pilot(pilot_id: String) -> void:
 	var slot: DispatchManager.AutoSlot = GameState.auto_slots[_slot_index]
 	if slot.state == "empty":
 		_draft_pilot_id = pilot_id
-		_rebuild_content()
+		_hide_selector(true)
 		return
 	if GameState.assign_pilot_to_slot(_slot_index, pilot_id):
 		_hide_selector(true)
@@ -741,6 +798,37 @@ func _select_part(part_key: String, tier: int, iid: String) -> void:
 		_rebuild_content()
 		return
 	if GameState.replace_machine_part(_slot_index, part_key, tier):
+		_hide_selector(true)
+
+
+func _make_unequip_button(callback: Callable) -> Button:
+	var btn := Button.new()
+	btn.text = "장착 해제"
+	btn.custom_minimum_size = Vector2(0, 30)
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.pressed.connect(callback)
+	var sty := StyleBoxFlat.new()
+	sty.bg_color = Color(0.28, 0.10, 0.08, 0.92)
+	sty.border_color = Color(0.82, 0.38, 0.28, 0.88)
+	sty.set_border_width_all(1)
+	sty.set_corner_radius_all(4)
+	btn.add_theme_stylebox_override("normal", sty)
+	btn.add_theme_stylebox_override("hover", sty)
+	btn.add_theme_stylebox_override("pressed", sty)
+	btn.add_theme_stylebox_override("focus", sty)
+	btn.modulate = Color(1.0, 0.68, 0.58)
+	return btn
+
+
+func _unequip_part(part_key: String) -> void:
+	if _slot_index < 0 or _slot_index >= GameState.auto_slots.size():
+		return
+	var slot: DispatchManager.AutoSlot = GameState.auto_slots[_slot_index]
+	if slot.state == "empty":
+		_draft_machine[part_key] = 0
+		_hide_selector(true)
+		return
+	if GameState.remove_machine_part(_slot_index, part_key):
 		_hide_selector(true)
 
 
@@ -891,7 +979,10 @@ func _pilot_status_text(slot: DispatchManager.AutoSlot) -> String:
 	if slot.state == "locked":
 		return "잠금"
 	if slot.state == "empty":
-		return "기체 없음" if _draft_pilot_id == "" else "조립 대기"
+		var has_parts := _draft_machine.values().any(func(v): return int(v) > 0)
+		if not has_parts:
+			return "기체 없음"
+		return "조립 대기" if _can_commit_assembly() else "조립중"
 	var pilot := _pilot_data(slot)
 	if pilot.is_empty():
 		return "파일럿 없음"

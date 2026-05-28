@@ -305,6 +305,9 @@ func assign_pilot_to_slot(slot_index: int, pilot_id: String) -> bool:
 	return ok
 
 
+func remove_machine_part(slot_index: int, part_type: String) -> bool:
+	return _dispatch.remove_machine_part(slot_index, part_type)
+
 func replace_machine_part(slot_index: int, part_type: String, tier: int) -> bool:
 	return _dispatch.replace_machine_part(slot_index, part_type, tier)
 
