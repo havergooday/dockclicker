@@ -6,12 +6,21 @@ signal auto_dispatch_returned(slot_index: int)
 
 const BASE_RETURN_TIME: float = 30.0
 
+# ── HangarGroup ───────────────────────────────────────────────
+# 격납고 단위 잠금. 각 격납고는 4개의 베이 슬롯을 포함.
+
+class HangarGroup:
+	var id: int = 0
+	var locked: bool = false
+	var unlock_cost: int = 0
+
 # ── AutoSlot ──────────────────────────────────────────────────
 # 슬롯 상태: locked | empty | offline | on_mission | returning | returned
 
 class AutoSlot:
 	var state: String = "empty"
 	var unlock_cost: int = 0
+	var hangar_group_id: int = 0
 	var machine: Dictionary = {}   # {body: int, weapon: int, legs: int}
 	var assigned_pilot_id: String = ""  # 베이 사전 배정 파일럿 (임무와 무관하게 유지)
 	var pilot_id: String = ""
@@ -26,13 +35,16 @@ class AutoSlot:
 	var auto_pilot_id: String = ""
 	var auto_planet: String = ""
 
-	static func make_empty() -> AutoSlot:
-		return AutoSlot.new()
+	static func make_empty(group_id: int = 0) -> AutoSlot:
+		var s := AutoSlot.new()
+		s.hangar_group_id = group_id
+		return s
 
-	static func make_locked(cost: int) -> AutoSlot:
+	static func make_locked(cost: int, group_id: int = 0) -> AutoSlot:
 		var s := AutoSlot.new()
 		s.state = "locked"
 		s.unlock_cost = cost
+		s.hangar_group_id = group_id
 		return s
 
 	func reset_mission_data() -> void:
@@ -43,29 +55,36 @@ class AutoSlot:
 		credits_earned = 0
 		# auto_redispatch 설정은 유지
 
-# ── 슬롯 초기화 ───────────────────────────────────────────────
+# ── 초기화 ────────────────────────────────────────────────────
 
+var hangar_groups: Array = []  # Array[HangarGroup]
 var auto_slots: Array = []
 
+# 격납고별 해금 비용 / 베이별 개별 해금 비용
+const HANGAR_COSTS: Array  = [0, 5000, 50000, 500000]
+const BAY_COSTS: Array     = [300, 700, 1500, 3500]  # 격납고 내 베이 2~4번 비용
+
 func _ready() -> void:
-	auto_slots = [
-		AutoSlot.make_empty(),
-		AutoSlot.make_locked(300),
-		AutoSlot.make_locked(700),
-		AutoSlot.make_locked(1500),
-		AutoSlot.make_locked(3500),
-		AutoSlot.make_locked(8000),
-		AutoSlot.make_locked(18000),
-		AutoSlot.make_locked(40000),
-		AutoSlot.make_locked(90000),
-		AutoSlot.make_locked(200000),
-		AutoSlot.make_locked(450000),
-		AutoSlot.make_locked(1000000),
-		AutoSlot.make_locked(2200000),
-		AutoSlot.make_locked(5000000),
-		AutoSlot.make_locked(11000000),
-		AutoSlot.make_locked(25000000),
-	]
+	_init_default_layout()
+
+
+func _init_default_layout() -> void:
+	hangar_groups.clear()
+	auto_slots.clear()
+	for g in 4:
+		var hg := HangarGroup.new()
+		hg.id = g
+		hg.locked = g > 0  # 격납고 0만 기본 해금
+		hg.unlock_cost = HANGAR_COSTS[g]
+		hangar_groups.append(hg)
+		# 격납고 0의 첫 베이(g*4+0)는 기본 오픈, 나머지는 잠금
+		for b in 4:
+			var slot: AutoSlot
+			if g == 0 and b == 0:
+				slot = AutoSlot.make_empty(g)
+			else:
+				slot = AutoSlot.make_locked(BAY_COSTS[b] if b > 0 else BAY_COSTS[0], g)
+			auto_slots.append(slot)
 
 # ── 타이머 ────────────────────────────────────────────────────
 
@@ -79,6 +98,31 @@ func _process(_delta: float) -> void:
 		elif slot.state == "returning":
 			if now >= slot.return_end_time:
 				_complete_return(i)
+
+# ── 격납고 잠금 해제 ──────────────────────────────────────────
+
+func unlock_hangar(group_id: int) -> bool:
+	if group_id < 0 or group_id >= hangar_groups.size():
+		return false
+	var group: HangarGroup = hangar_groups[group_id]
+	if not group.locked:
+		return false
+	if GameState.total_credits < group.unlock_cost:
+		return false
+	GameState.total_credits -= group.unlock_cost
+	group.locked = false
+	GameState.credits_changed.emit(GameState.total_credits)
+	for i in auto_slots.size():
+		if (auto_slots[i] as AutoSlot).hangar_group_id == group_id:
+			auto_slot_changed.emit(i)
+	return true
+
+
+func get_hangar_group(group_id: int) -> HangarGroup:
+	if group_id < 0 or group_id >= hangar_groups.size():
+		return null
+	return hangar_groups[group_id]
+
 
 # ── 슬롯 잠금 해제 ───────────────────────────────────────────
 
@@ -254,26 +298,52 @@ func _get_mission_credits(weapon_tier: int, mission_duration: float) -> int:
 
 # ── 저장/불러오기 ─────────────────────────────────────────────────
 
-func apply_save_data(slot_data: Array, save_time: float) -> void:
+func apply_save_data(slot_data: Array, save_time: float, groups_data: Array = []) -> void:
+	# 격납고 그룹 복원 (없으면 슬롯 상태로 자동 추론)
+	hangar_groups.clear()
+	if groups_data.size() >= 4:
+		for gd in groups_data:
+			var d: Dictionary = gd as Dictionary
+			var hg := HangarGroup.new()
+			hg.id          = int(d.get("id",           0))
+			hg.locked      = bool(d.get("locked",       false))
+			hg.unlock_cost = int(d.get("unlock_cost",   0))
+			hangar_groups.append(hg)
+	else:
+		# v3→v4 마이그레이션: 슬롯 상태로 격납고 잠금 추론
+		for g in 4:
+			var hg := HangarGroup.new()
+			hg.id          = g
+			hg.unlock_cost = HANGAR_COSTS[g]
+			var any_open := g == 0  # 격납고 0은 항상 해금
+			if not any_open:
+				for i in range(g * 4, min(g * 4 + 4, slot_data.size())):
+					if slot_data[i].get("state", "locked") != "locked":
+						any_open = true
+						break
+			hg.locked = not any_open
+			hangar_groups.append(hg)
+
 	auto_slots.clear()
-	for sd in slot_data:
-		var d: Dictionary = sd as Dictionary
+	for i in slot_data.size():
+		var d: Dictionary = slot_data[i] as Dictionary
 		var slot := AutoSlot.new()
-		slot.state            = str(d.get("state",            "empty"))
-		slot.unlock_cost      = int(d.get("unlock_cost",      0))
-		var mraw              = d.get("machine", {})
-		slot.machine          = (mraw as Dictionary).duplicate() if mraw is Dictionary else {}
-		slot.pilot_id         = str(d.get("pilot_id",         ""))
+		slot.state             = str(d.get("state",             "empty"))
+		slot.unlock_cost       = int(d.get("unlock_cost",       0))
+		slot.hangar_group_id   = int(d.get("hangar_group_id",   i / 4))
+		var mraw               = d.get("machine", {})
+		slot.machine           = (mraw as Dictionary).duplicate() if mraw is Dictionary else {}
+		slot.pilot_id          = str(d.get("pilot_id",          ""))
 		slot.assigned_pilot_id = str(d.get("assigned_pilot_id", ""))
-		slot.planet           = str(d.get("planet",           ""))
-		slot.mission_start_time = float(d.get("mission_start_time", 0.0))
-		slot.mission_end_time   = _dec(d.get("mission_end_time", INF))
-		slot.return_start_time  = float(d.get("return_start_time", 0.0))
-		slot.return_end_time    = _dec(d.get("return_end_time",  INF))
-		slot.credits_earned   = int(d.get("credits_earned",   0))
-		slot.auto_redispatch  = bool(d.get("auto_redispatch",  false))
-		slot.auto_pilot_id    = str(d.get("auto_pilot_id",    ""))
-		slot.auto_planet      = str(d.get("auto_planet",      ""))
+		slot.planet            = str(d.get("planet",            ""))
+		slot.mission_start_time  = float(d.get("mission_start_time",  0.0))
+		slot.mission_end_time    = _dec(d.get("mission_end_time",    INF))
+		slot.return_start_time   = float(d.get("return_start_time",  0.0))
+		slot.return_end_time     = _dec(d.get("return_end_time",     INF))
+		slot.credits_earned    = int(d.get("credits_earned",    0))
+		slot.auto_redispatch   = bool(d.get("auto_redispatch",  false))
+		slot.auto_pilot_id     = str(d.get("auto_pilot_id",     ""))
+		slot.auto_planet       = str(d.get("auto_planet",       ""))
 		auto_slots.append(slot)
 	_fast_forward(Time.get_unix_time_from_system())
 

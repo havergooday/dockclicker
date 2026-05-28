@@ -81,6 +81,9 @@ var _dispatch: DispatchManager
 var auto_slots: Array:
 	get: return _dispatch.auto_slots if _dispatch != null else []
 
+var hangar_groups: Array:
+	get: return _dispatch.hangar_groups if _dispatch != null else []
+
 func _ready() -> void:
 	_dispatch = DispatchManager.new()
 	add_child(_dispatch)
@@ -305,5 +308,11 @@ func assign_pilot_to_slot(slot_index: int, pilot_id: String) -> bool:
 func disassemble_machine(slot_index: int) -> bool:
 	return _dispatch.disassemble_machine(slot_index)
 
-func apply_dispatch_save(slot_data: Array, save_time: float) -> void:
-	_dispatch.apply_save_data(slot_data, save_time)
+func unlock_hangar(group_id: int) -> bool:
+	return _dispatch.unlock_hangar(group_id)
+
+func get_hangar_group(group_id: int) -> DispatchManager.HangarGroup:
+	return _dispatch.get_hangar_group(group_id)
+
+func apply_dispatch_save(slot_data: Array, save_time: float, groups_data: Array = []) -> void:
+	_dispatch.apply_save_data(slot_data, save_time, groups_data)

@@ -1,7 +1,7 @@
 extends Node
 
 const SAVE_PATH    := "user://save.json"
-const SAVE_VERSION := 3
+const SAVE_VERSION := 4
 const _INF_SUB     := 1e30  # INF를 JSON에 저장할 때 대체값
 
 func _ready() -> void:
@@ -26,9 +26,10 @@ func save() -> void:
 		"selected_planet":      GameState.selected_planet,
 		"unlocked_planets":     GameState.unlocked_planets.duplicate(),
 		"part_inventory": GameState.part_inventory.duplicate(true),
-		"hired_pilots": _serialize_pilots(),
-		"auto_slots":   _serialize_slots(),
-		"ui_positions": GameState.ui_positions.duplicate(),
+		"hired_pilots":    _serialize_pilots(),
+		"auto_slots":      _serialize_slots(),
+		"hangar_groups":   _serialize_hangar_groups(),
+		"ui_positions":    GameState.ui_positions.duplicate(),
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file == null:
@@ -102,9 +103,10 @@ func load_save() -> bool:
 			"is_custom":      bool(pd.get("is_custom",     false)),
 		})
 
-	var slots_raw: Array = d.get("auto_slots", [])
+	var slots_raw: Array  = d.get("auto_slots",    [])
+	var groups_raw: Array = d.get("hangar_groups", [])
 	var save_time: float  = float(d.get("save_time", Time.get_unix_time_from_system()))
-	GameState.apply_dispatch_save(slots_raw, save_time)
+	GameState.apply_dispatch_save(slots_raw, save_time, groups_raw)
 
 	var ui_pos = d.get("ui_positions", {})
 	if ui_pos is Dictionary:
@@ -134,21 +136,30 @@ func _serialize_slots() -> Array:
 	for raw in GameState.auto_slots:
 		var s: DispatchManager.AutoSlot = raw as DispatchManager.AutoSlot
 		out.append({
-			"state":            s.state,
-			"unlock_cost":      s.unlock_cost,
-			"machine":          s.machine.duplicate(),
-			"pilot_id":         s.pilot_id,
+			"state":             s.state,
+			"unlock_cost":       s.unlock_cost,
+			"hangar_group_id":   s.hangar_group_id,
+			"machine":           s.machine.duplicate(),
+			"pilot_id":          s.pilot_id,
 			"assigned_pilot_id": s.assigned_pilot_id,
-			"planet":           s.planet,
-			"mission_start_time": s.mission_start_time,
-			"mission_end_time":   _enc(s.mission_end_time),
-			"return_start_time":  s.return_start_time,
-			"return_end_time":    _enc(s.return_end_time),
-			"credits_earned":   s.credits_earned,
-			"auto_redispatch":  s.auto_redispatch,
-			"auto_pilot_id":    s.auto_pilot_id,
-			"auto_planet":      s.auto_planet,
+			"planet":            s.planet,
+			"mission_start_time":  s.mission_start_time,
+			"mission_end_time":    _enc(s.mission_end_time),
+			"return_start_time":   s.return_start_time,
+			"return_end_time":     _enc(s.return_end_time),
+			"credits_earned":    s.credits_earned,
+			"auto_redispatch":   s.auto_redispatch,
+			"auto_pilot_id":     s.auto_pilot_id,
+			"auto_planet":       s.auto_planet,
 		})
+	return out
+
+
+func _serialize_hangar_groups() -> Array:
+	var out: Array = []
+	for raw in GameState.hangar_groups:
+		var hg: DispatchManager.HangarGroup = raw as DispatchManager.HangarGroup
+		out.append({"id": hg.id, "locked": hg.locked, "unlock_cost": hg.unlock_cost})
 	return out
 
 func _enc(v: float) -> float:
