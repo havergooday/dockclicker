@@ -1,7 +1,9 @@
 extends Control
 
-const STAR_MAP_SCENE  := preload("res://scenes/ui/star_map_popup.tscn")
+const STAR_MAP_SCENE         := preload("res://scenes/ui/star_map_popup.tscn")
 const HANGAR_BAY_POPUP_SCENE := preload("res://scenes/ui/hangar_bay_popup.tscn")
+const SHOP_POPUP_SCENE       := preload("res://scenes/ui/shop_popup.tscn")
+const BRIDGE_PILOT_SCR       := preload("res://scripts/ui/bridge_pilot.gd")
 const HANGAR_ZONE_SCR := preload("res://scripts/ui/hangar_zone.gd")
 
 const NAV_ITEMS: Array = [
@@ -14,6 +16,9 @@ var _scroll: ScrollContainer
 var _content: Control
 var _star_map_popup: Control
 var _hangar_bay_popup: Control
+var _shop_popup: Control
+var _bridge_zone_root: Control = null  # 파일럿 로밍용 컨테이너 참조
+var _bridge_pilots: Dictionary = {}    # pilot_id → BridgePilot node
 var _dragging := false
 var _drag_anchor := Vector2.ZERO
 var _drag_scroll_start := 0
@@ -58,6 +63,7 @@ func _build_ui() -> void:
 	_build_nav_bar()
 	_build_star_map_popup()
 	_build_hangar_bay_popup()
+	_build_shop_popup()
 
 
 func _build_background() -> void:
@@ -143,21 +149,19 @@ func _make_hangar_zone() -> void:
 
 func _make_bridge_zone() -> void:
 	var zone := _make_zone_base(1200.0, 2420.0, "브릿지 / 파일럿 라운지")
-	var body := zone.get_node("ZoneRoot/Body") as VBoxContainer
 
-	var intro := Label.new()
-	intro.text = "파일럿 로밍과 꾸미기 가구가 누적되는 홈 공간"
-	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body.add_child(intro)
+	# 파일럿 로밍 레이어 — ZoneRoot 위에 별도 Control
+	var roam_layer := Control.new()
+	roam_layer.name = "RoamLayer"
+	roam_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	roam_layer.offset_top    = 50.0
+	roam_layer.offset_bottom = -10.0
+	roam_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	zone.add_child(roam_layer)
+	_bridge_zone_root = roam_layer
 
-	var pilot_count := Label.new()
-	pilot_count.text = "고용 파일럿: %d명" % GameState.hired_pilots.size()
-	body.add_child(pilot_count)
-
-	var deco := Label.new()
-	deco.text = "가구 / 오브젝트 / 생활 연출 자리"
-	deco.modulate = Color(0.70, 0.82, 1.0)
-	body.add_child(deco)
+	GameState.pilot_hired.connect(func(_id): _sync_bridge_pilots())
+	_sync_bridge_pilots()
 
 
 func _make_control_zone() -> void:
@@ -178,7 +182,8 @@ func _make_control_zone() -> void:
 
 	var shop_btn := Button.new()
 	shop_btn.text = "상점 / 고용"
-	shop_btn.disabled = true
+	shop_btn.custom_minimum_size = Vector2(0, 34)
+	shop_btn.pressed.connect(func(): _open_shop())
 	body.add_child(shop_btn)
 
 
@@ -279,6 +284,47 @@ func _build_hangar_bay_popup() -> void:
 	move_child(_hangar_bay_popup, get_child_count() - 1)
 
 
+func _sync_bridge_pilots() -> void:
+	if _bridge_zone_root == null:
+		return
+	# 새로 고용된 파일럿 추가
+	for p in GameState.hired_pilots:
+		var pid: String = str(p.get("id", ""))
+		if _bridge_pilots.has(pid):
+			continue
+		var node: Control = BRIDGE_PILOT_SCR.new()
+		_bridge_zone_root.add_child(node)
+		var zone_w := 1220.0  # 브릿지 폭
+		var zone_h := _bridge_zone_root.size.y if _bridge_zone_root.size.y > 0 else 240.0
+		var start_x := randf_range(20.0, zone_w - 68.0)
+		var start_y := zone_h * 0.55
+		node.position = Vector2(start_x, start_y)
+		node.call("setup", p, 0.0, zone_w)
+		_bridge_pilots[pid] = node
+	# 혹시 제거된 파일럿 정리 (현재는 고용 제한 없으므로 거의 없음)
+	for pid in _bridge_pilots.keys():
+		var still_hired := false
+		for p in GameState.hired_pilots:
+			if str(p.get("id", "")) == pid:
+				still_hired = true
+				break
+		if not still_hired:
+			(_bridge_pilots[pid] as Control).queue_free()
+			_bridge_pilots.erase(pid)
+
+
+func _build_shop_popup() -> void:
+	_shop_popup = SHOP_POPUP_SCENE.instantiate()
+	_shop_popup.visible = false
+	add_child(_shop_popup)
+	move_child(_shop_popup, get_child_count() - 1)
+
+
+func _open_shop() -> void:
+	if is_instance_valid(_shop_popup):
+		(_shop_popup as Control).call("open_popup")
+
+
 func _open_star_map() -> void:
 	if is_instance_valid(_star_map_popup):
 		(_star_map_popup as Control).call("open_for_control_room")
@@ -301,7 +347,9 @@ func _scroll_to_zone(x_pos: float) -> void:
 func _input(event: InputEvent) -> void:
 	if not visible or _scroll == null:
 		return
-	if (is_instance_valid(_star_map_popup) and _star_map_popup.visible) or (is_instance_valid(_hangar_bay_popup) and _hangar_bay_popup.visible):
+	if (is_instance_valid(_star_map_popup) and _star_map_popup.visible) \
+			or (is_instance_valid(_hangar_bay_popup) and _hangar_bay_popup.visible) \
+			or (is_instance_valid(_shop_popup) and _shop_popup.visible):
 		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
 		if event.pressed:

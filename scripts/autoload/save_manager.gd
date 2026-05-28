@@ -10,6 +10,7 @@ func _ready() -> void:
 	GameState.auto_slot_changed.connect(func(_i): save())
 	GameState.pilot_hired.connect(func(_id): save())
 	GameState.pilot_status_changed.connect(func(_id): save())
+	GameState.board_refreshed.connect(func(): save())
 
 # ── 저장 ─────────────────────────────────────────────────────────
 
@@ -30,6 +31,9 @@ func save() -> void:
 		"auto_slots":      _serialize_slots(),
 		"hangar_groups":   _serialize_hangar_groups(),
 		"ui_positions":    GameState.ui_positions.duplicate(),
+		"board_pilot_ids":     GameState.board_pilot_ids.duplicate(),
+		"board_last_day":      GameState.board_last_day,
+		"board_refresh_count": GameState.board_refresh_count,
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file == null:
@@ -111,6 +115,12 @@ func load_save() -> bool:
 	var ui_pos = d.get("ui_positions", {})
 	if ui_pos is Dictionary:
 		GameState.ui_positions = (ui_pos as Dictionary).duplicate()
+
+	var board_ids = d.get("board_pilot_ids", [])
+	if board_ids is Array:
+		GameState.board_pilot_ids = (board_ids as Array).duplicate()
+	GameState.board_last_day      = int(d.get("board_last_day",      -1))
+	GameState.board_refresh_count = int(d.get("board_refresh_count",  0))
 
 	return true
 

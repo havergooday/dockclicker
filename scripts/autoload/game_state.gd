@@ -16,41 +16,17 @@ var selected_planet: String = "sector_a"
 var part_inventory: Array = []  # Array of {iid, type, tier}
 
 # ── 파일럿 ────────────────────────────────────────────────────
-# bonus_type: "none" | "speed" (임무 시간 단축 %) | "credits" (수익 증가 %)
-const PILOTS: Array = [
-	{
-		"id": "kyla_vex",
-		"name": "카이라 벡스",
-		"tier": 1,
-		"cost": 500,
-		"bonus_type": "none",
-		"bonus_value": 0,
-		"portrait_color": "#4499DD",
-		"desc": "신뢰할 수 있는 초보 파일럿",
-	},
-	{
-		"id": "rio_son",
-		"name": "리오 손",
-		"tier": 2,
-		"cost": 1500,
-		"bonus_type": "speed",
-		"bonus_value": 20,
-		"portrait_color": "#DD7733",
-		"desc": "임무 시간 -20%",
-	},
-	{
-		"id": "dona_mar",
-		"name": "도나 마르",
-		"tier": 3,
-		"cost": 3500,
-		"bonus_type": "credits",
-		"bonus_value": 30,
-		"portrait_color": "#44CC66",
-		"desc": "수익 +30%",
-	},
-]
-
 var hired_pilots: Array = []  # Array of pilot instance dicts
+
+# ── 모집 공고판 ───────────────────────────────────────────────
+const BOARD_SLOT_COUNT    := 3
+const BOARD_REFRESH_COST  := 300
+
+var board_pilot_ids: Array  = []   # 현재 공고판에 표시 중인 파일럿 ID 3개
+var board_last_day:   int   = -1   # 마지막 자동 갱신 일수 (Unix days)
+var board_refresh_count: int = 0   # 오늘 유료 갱신 횟수 (시드 변경용)
+
+signal board_refreshed
 
 # ── UI 편집 ───────────────────────────────────────────────────
 var ui_edit_mode: bool = false
@@ -61,9 +37,11 @@ signal ui_positions_reset
 # ── 데이터 상수 ───────────────────────────────────────────────
 const _PlanetDataScript = preload("res://data/planet_data.gd")
 const _PartsDataScript  = preload("res://data/parts_data.gd")
+const _PilotsDataScript = preload("res://data/pilots_data.gd")
 const PLANETS:               Array      = _PlanetDataScript.LIST
 const PARTS:                 Dictionary = _PartsDataScript.DICT
 const DAMAGE_UPGRADE_COSTS:  Array      = _PartsDataScript.DAMAGE_UPGRADE_COSTS
+const PILOTS:                Array      = _PilotsDataScript.LIST
 
 signal credits_changed(new_total: int)
 signal credits_collected(amount: int, from_global_pos: Vector2)
@@ -247,6 +225,8 @@ func hire_pilot(pilot_id: String) -> bool:
 	})
 	credits_changed.emit(total_credits)
 	pilot_hired.emit(pilot_id)
+	board_pilot_ids = _select_board_from_pool(_build_board_pool(), _board_seed())
+	board_refreshed.emit()
 	return true
 
 func create_custom_pilot(custom_name: String, color_hex: String) -> bool:
@@ -270,6 +250,83 @@ func create_custom_pilot(custom_name: String, color_hex: String) -> bool:
 	credits_changed.emit(total_credits)
 	pilot_hired.emit(uid)
 	return true
+
+# ── 모집 공고판 ───────────────────────────────────────────────
+
+func _today_unix_day() -> int:
+	return int(Time.get_unix_time_from_system()) / 86400
+
+func _board_seed() -> int:
+	return _today_unix_day() * 1000 + board_refresh_count
+
+func _build_board_pool() -> Array:
+	var pool: Array = []
+	var c_unlocked := is_planet_unlocked("sector_c")
+	var f_unlocked := is_planet_unlocked("sector_f")
+	for p in PILOTS:
+		if is_pilot_hired(str(p["id"])):
+			continue
+		var tier: int = int(p.get("tier", 1))
+		if tier == 1:
+			pool.append(p)
+		elif tier == 2 and c_unlocked:
+			pool.append(p)
+		elif tier == 3 and f_unlocked:
+			pool.append(p)
+	return pool
+
+func _select_board_from_pool(pool: Array, seed_val: int) -> Array:
+	if pool.is_empty():
+		return []
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_val
+	var shuffled := pool.duplicate()
+	for i in range(shuffled.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var tmp = shuffled[i]
+		shuffled[i] = shuffled[j]
+		shuffled[j] = tmp
+	var result: Array = []
+	for i in mini(BOARD_SLOT_COUNT, shuffled.size()):
+		result.append(str(shuffled[i]["id"]))
+	return result
+
+func ensure_board_fresh() -> void:
+	var today := _today_unix_day()
+	if today > board_last_day:
+		board_last_day = today
+		board_refresh_count = 0
+		board_pilot_ids = _select_board_from_pool(_build_board_pool(), _board_seed())
+		board_refreshed.emit()
+
+func refresh_board_paid() -> bool:
+	if total_credits < BOARD_REFRESH_COST:
+		return false
+	total_credits -= BOARD_REFRESH_COST
+	board_refresh_count += 1
+	board_pilot_ids = _select_board_from_pool(_build_board_pool(), _board_seed())
+	credits_changed.emit(total_credits)
+	board_refreshed.emit()
+	return true
+
+func get_board_pilot_data() -> Array:
+	ensure_board_fresh()
+	var result: Array = []
+	for pid in board_pilot_ids:
+		var found := false
+		for p in PILOTS:
+			if str(p["id"]) == str(pid):
+				result.append(p)
+				found = true
+				break
+		if not found:
+			result.append({})
+	return result
+
+func get_board_next_refresh_secs() -> int:
+	var now := int(Time.get_unix_time_from_system())
+	var next_midnight := (_today_unix_day() + 1) * 86400
+	return next_midnight - now
 
 # ── 자동 파견 — DispatchManager 위임 ─────────────────────────
 
