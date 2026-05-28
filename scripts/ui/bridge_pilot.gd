@@ -81,7 +81,7 @@ func _do_roam(delta: float) -> void:
 		_schedule_pause()
 		return
 
-	var step := ROAM_SPEED * delta * sign(diff)
+	var step: float = ROAM_SPEED * delta * sign(diff)
 	position.x += step
 	_roam_dir = int(sign(diff))
 
