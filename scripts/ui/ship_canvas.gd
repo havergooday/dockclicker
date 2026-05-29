@@ -13,6 +13,10 @@ const NAV_ITEMS: Array = [
 	{"id": "control", "label": "관제실", "x": 2420.0},
 ]
 
+const DECK_HEIGHT      := 300.0  # 데크 한 층 높이 (= 창 높이)
+const DECK_SNAP_THRESH := 55.0   # 이 거리 이상 드래그해야 데크 전환
+const AXIS_LOCK_PX     := 10.0   # H/V 축 고정 임계값
+
 var _scroll: ScrollContainer
 var _content: Control
 var _popups: Dictionary = {}           # key → Control
@@ -20,7 +24,11 @@ var _bridge_zone_root: Control = null  # 파일럿 로밍용 컨테이너 참조
 var _bridge_pilots: Dictionary = {}    # pilot_id → BridgePilot node
 var _dragging := false
 var _drag_anchor := Vector2.ZERO
+var _drag_current_pos := Vector2.ZERO
 var _drag_scroll_start := 0
+var _drag_axis: String = ""            # "" | "h" | "v"
+var _current_deck: int = 0            # 0 = 상부, 1 = 하부
+var _deck_btn: Button = null
 var _nav_buttons: Dictionary = {}
 
 
@@ -44,15 +52,14 @@ func _build_ui() -> void:
 	scroll.name = "ShipScroll"
 	scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
-	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode   = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	scroll.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(scroll)
 	_scroll = scroll
 
 	_content = Control.new()
 	_content.name = "ShipContent"
-	_content.custom_minimum_size = Vector2(3700, 0)
-	_content.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_content.custom_minimum_size = Vector2(3700, DECK_HEIGHT * 2.0)
 	_content.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	scroll.add_child(_content)
 
@@ -76,8 +83,8 @@ func _build_nav_bar() -> void:
 	bar.anchor_top = 0.0
 	bar.anchor_right = 0.5
 	bar.anchor_bottom = 0.0
-	bar.offset_left = -260.0
-	bar.offset_right = 260.0
+	bar.offset_left = -310.0
+	bar.offset_right = 310.0
 	bar.offset_top = 10.0
 	bar.offset_bottom = 46.0
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -117,11 +124,27 @@ func _build_nav_bar() -> void:
 	if _nav_buttons.has("bridge"):
 		_nav_buttons["bridge"].button_pressed = true
 
+	# 데크 구분선
+	var sep := ColorRect.new()
+	sep.custom_minimum_size = Vector2(1, 0)
+	sep.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sep.color = Color(0.28, 0.40, 0.60, 0.45)
+	row.add_child(sep)
+
+	# 데크 전환 버튼
+	_deck_btn = Button.new()
+	_deck_btn.text = "▼ 숙소"
+	_deck_btn.custom_minimum_size = Vector2(66, 26)
+	_deck_btn.add_theme_font_size_override("font_size", 10)
+	_deck_btn.pressed.connect(func(): _snap_to_deck(1 - _current_deck))
+	row.add_child(_deck_btn)
+
 
 func _build_zone_panels() -> void:
 	_make_hangar_zone()
 	_make_bridge_zone()
 	_make_control_zone()
+	_make_lower_deck()
 
 
 func _make_hangar_zone() -> void:
@@ -129,11 +152,11 @@ func _make_hangar_zone() -> void:
 	zone.anchor_left   = 0.0
 	zone.anchor_top    = 0.0
 	zone.anchor_right  = 0.0
-	zone.anchor_bottom = 1.0
+	zone.anchor_bottom = 0.0
 	zone.offset_left   = 0.0
 	zone.offset_top    = 0.0
 	zone.offset_right  = 1200.0
-	zone.offset_bottom = 0.0
+	zone.offset_bottom = DECK_HEIGHT
 	zone.connect("navigate_to_control_requested", func():
 		_scroll_to_zone(2420.0)
 		get_tree().create_timer(0.28).timeout.connect(_open_star_map)
@@ -195,11 +218,11 @@ func _make_zone_base(x_start: float, x_end: float, title: String) -> Control:
 	zone.anchor_left   = 0.0
 	zone.anchor_top    = 0.0
 	zone.anchor_right  = 0.0
-	zone.anchor_bottom = 1.0
+	zone.anchor_bottom = 0.0
 	zone.offset_left   = x_start
 	zone.offset_top    = 0.0
 	zone.offset_right  = x_end
-	zone.offset_bottom = 0.0
+	zone.offset_bottom = DECK_HEIGHT
 	zone.mouse_filter  = Control.MOUSE_FILTER_IGNORE
 
 	var style := StyleBoxFlat.new()
@@ -245,11 +268,11 @@ func _build_zone_dividers() -> void:
 		wall.anchor_left   = 0.0
 		wall.anchor_top    = 0.0
 		wall.anchor_right  = 0.0
-		wall.anchor_bottom = 1.0
+		wall.anchor_bottom = 0.0
 		wall.offset_left   = x - 8.0
 		wall.offset_right  = x + 8.0
 		wall.offset_top    = 0.0
-		wall.offset_bottom = 0.0
+		wall.offset_bottom = DECK_HEIGHT
 		wall.color = Color(0.07, 0.09, 0.13, 1.0)
 		wall.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_content.add_child(wall)
@@ -259,14 +282,64 @@ func _build_zone_dividers() -> void:
 			edge.anchor_left   = 0.0
 			edge.anchor_top    = 0.0
 			edge.anchor_right  = 0.0
-			edge.anchor_bottom = 1.0
+			edge.anchor_bottom = 0.0
 			edge.offset_left   = x + dx
 			edge.offset_right  = x + dx + 2.0
 			edge.offset_top    = 0.0
-			edge.offset_bottom = 0.0
+			edge.offset_bottom = DECK_HEIGHT
 			edge.color = Color(0.18, 0.26, 0.40, 0.85)
 			edge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			_content.add_child(edge)
+
+
+func _make_lower_deck() -> void:
+	var zone := Control.new()
+	zone.anchor_left   = 0.0
+	zone.anchor_top    = 0.0
+	zone.anchor_right  = 0.0
+	zone.anchor_bottom = 0.0
+	zone.offset_left   = 0.0
+	zone.offset_top    = DECK_HEIGHT
+	zone.offset_right  = 3700.0
+	zone.offset_bottom = DECK_HEIGHT * 2.0
+	zone.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+
+	# 배경
+	var bg_sty := StyleBoxFlat.new()
+	bg_sty.bg_color       = Color(0.03, 0.05, 0.09, 1.0)
+	bg_sty.border_color   = Color(0.20, 0.32, 0.50, 0.70)
+	bg_sty.border_width_top = 2
+	var bg := PanelContainer.new()
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.add_theme_stylebox_override("panel", bg_sty)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	zone.add_child(bg)
+
+	# 바닥 줄무늬 — 숙소 느낌
+	for i in 6:
+		var stripe := ColorRect.new()
+		stripe.anchor_left   = 0.0
+		stripe.anchor_top    = 0.0
+		stripe.anchor_right  = 1.0
+		stripe.anchor_bottom = 0.0
+		stripe.offset_top    = float(i) * 50.0
+		stripe.offset_bottom = float(i) * 50.0 + 1.0
+		stripe.color = Color(0.12, 0.20, 0.34, 0.18)
+		stripe.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		zone.add_child(stripe)
+
+	# 플레이스홀더 레이블
+	var lbl := Label.new()
+	lbl.text = "하부 데크 — 숙소"
+	lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	lbl.add_theme_font_size_override("font_size", 15)
+	lbl.modulate = Color(0.22, 0.32, 0.48)
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	zone.add_child(lbl)
+
+	_content.add_child(zone)
 
 
 # ── 팝업 관리 ─────────────────────────────────────────────────
@@ -351,20 +424,67 @@ func _input(event: InputEvent) -> void:
 	for popup in _popups.values():
 		if is_instance_valid(popup) and popup.visible:
 			return
+
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
 		if event.pressed:
 			_dragging = true
-			_drag_anchor = event.position
+			_drag_anchor       = event.position
+			_drag_current_pos  = event.position
 			_drag_scroll_start = _scroll.scroll_horizontal
+			_drag_axis         = ""
 			get_viewport().set_input_as_handled()
 		else:
-			_dragging = false
+			if _dragging and _drag_axis == "v":
+				_handle_deck_snap()
+			_dragging  = false
+			_drag_axis = ""
 			get_viewport().set_input_as_handled()
+
 	elif event is InputEventMouseMotion and _dragging:
-		var delta := int(_drag_anchor.x - event.position.x)
-		var max_scroll := maxi(0, int(_content.custom_minimum_size.x - _scroll.size.x))
-		_scroll.scroll_horizontal = clampi(_drag_scroll_start + delta, 0, max_scroll)
-		get_viewport().set_input_as_handled()
+		_drag_current_pos = event.position
+		var delta := event.position - _drag_anchor
+
+		if _drag_axis == "":
+			if abs(delta.x) >= AXIS_LOCK_PX:
+				_drag_axis = "h"
+			elif abs(delta.y) >= AXIS_LOCK_PX:
+				_drag_axis = "v"
+
+		if _drag_axis == "h":
+			var dx := int(_drag_anchor.x - event.position.x)
+			var max_h := maxi(0, int(_content.custom_minimum_size.x - _scroll.size.x))
+			_scroll.scroll_horizontal = clampi(_drag_scroll_start + dx, 0, max_h)
+			get_viewport().set_input_as_handled()
+		elif _drag_axis == "v":
+			# 드래그 중 부분 스크롤로 시각적 피드백
+			var dy: float = event.position.y - _drag_anchor.y
+			var base_y := int(_current_deck * DECK_HEIGHT)
+			_scroll.scroll_vertical = clampi(int(float(base_y) - dy), 0, int(DECK_HEIGHT))
+			get_viewport().set_input_as_handled()
+
+
+func _handle_deck_snap() -> void:
+	var dy: float = _drag_current_pos.y - _drag_anchor.y
+	var target := _current_deck
+	if _current_deck == 0 and dy < -DECK_SNAP_THRESH:
+		target = 1
+	elif _current_deck == 1 and dy > DECK_SNAP_THRESH:
+		target = 0
+	_snap_to_deck(target)
+
+
+func _snap_to_deck(deck: int) -> void:
+	_current_deck = deck
+	var target_y := int(float(deck) * DECK_HEIGHT)
+	var tween := create_tween()
+	tween.tween_property(_scroll, "scroll_vertical", target_y, 0.22) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	_update_deck_indicator()
+
+
+func _update_deck_indicator() -> void:
+	if is_instance_valid(_deck_btn):
+		_deck_btn.text = "▼ 숙소" if _current_deck == 0 else "▲ 상부"
 
 
 func _on_visibility_changed() -> void:
