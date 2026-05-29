@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://1jo82y32imhq"]
 
-[ext_resource type="Script" uid="uid://de7teplit7sji" path="res://scripts/core/app_root.gd" id="1_apprt"]
+[ext_resource type="Script" uid="uid://b728yf05sfn4a" path="res://scripts/core/app_root.gd" id="1_apprt"]
 [ext_resource type="PackedScene" path="res://scenes/ui/ship_canvas.tscn" id="2_ship"]
 [ext_resource type="PackedScene" path="res://scenes/ui/panel_clicker.tscn" id="3_click"]
 [ext_resource type="PackedScene" path="res://scenes/ui/credit_hud.tscn" id="4_hud"]
@@ -24,3 +24,6 @@ layout_mode = 1
 
 [node name="CreditHUD" parent="." unique_id=445231608 instance=ExtResource("4_hud")]
 anchors_preset = 12
+offset_top = 0.0
+grow_horizontal = 2
+grow_vertical = 0

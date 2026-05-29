@@ -3,6 +3,7 @@ extends Control
 const STAR_MAP_SCENE         := preload("res://scenes/ui/star_map_popup.tscn")
 const HANGAR_BAY_POPUP_SCENE := preload("res://scenes/ui/hangar_bay_popup.tscn")
 const SHOP_POPUP_SCENE       := preload("res://scenes/ui/shop_popup.tscn")
+const PARTS_POPUP_SCENE      := preload("res://scenes/ui/parts_shop_popup.tscn")
 const BRIDGE_PILOT_SCR       := preload("res://scripts/ui/bridge_pilot.gd")
 const HANGAR_ZONE_SCR := preload("res://scripts/ui/hangar_zone.gd")
 
@@ -17,6 +18,7 @@ var _content: Control
 var _star_map_popup: Control
 var _hangar_bay_popup: Control
 var _shop_popup: Control
+var _parts_popup: Control
 var _bridge_zone_root: Control = null  # 파일럿 로밍용 컨테이너 참조
 var _bridge_pilots: Dictionary = {}    # pilot_id → BridgePilot node
 var _dragging := false
@@ -64,6 +66,7 @@ func _build_ui() -> void:
 	_build_star_map_popup()
 	_build_hangar_bay_popup()
 	_build_shop_popup()
+	_build_parts_popup()
 
 
 func _build_background() -> void:
@@ -180,11 +183,17 @@ func _make_control_zone() -> void:
 	star_btn.pressed.connect(func(): _open_star_map())
 	body.add_child(star_btn)
 
-	var shop_btn := Button.new()
-	shop_btn.text = "상점 / 고용"
-	shop_btn.custom_minimum_size = Vector2(0, 34)
-	shop_btn.pressed.connect(func(): _open_shop())
-	body.add_child(shop_btn)
+	var hire_btn := Button.new()
+	hire_btn.text = "파일럿 고용"
+	hire_btn.custom_minimum_size = Vector2(0, 34)
+	hire_btn.pressed.connect(func(): _open_shop())
+	body.add_child(hire_btn)
+
+	var parts_btn := Button.new()
+	parts_btn.text = "파츠 구매"
+	parts_btn.custom_minimum_size = Vector2(0, 34)
+	parts_btn.pressed.connect(func(): _open_parts_shop())
+	body.add_child(parts_btn)
 
 
 func _make_zone_base(x_start: float, x_end: float, title: String) -> Control:
@@ -320,9 +329,21 @@ func _build_shop_popup() -> void:
 	move_child(_shop_popup, get_child_count() - 1)
 
 
+func _build_parts_popup() -> void:
+	_parts_popup = PARTS_POPUP_SCENE.instantiate()
+	_parts_popup.visible = false
+	add_child(_parts_popup)
+	move_child(_parts_popup, get_child_count() - 1)
+
+
 func _open_shop() -> void:
 	if is_instance_valid(_shop_popup):
 		(_shop_popup as Control).call("open_popup")
+
+
+func _open_parts_shop() -> void:
+	if is_instance_valid(_parts_popup):
+		(_parts_popup as Control).call("open_popup")
 
 
 func _open_star_map() -> void:
@@ -349,7 +370,8 @@ func _input(event: InputEvent) -> void:
 		return
 	if (is_instance_valid(_star_map_popup) and _star_map_popup.visible) \
 			or (is_instance_valid(_hangar_bay_popup) and _hangar_bay_popup.visible) \
-			or (is_instance_valid(_shop_popup) and _shop_popup.visible):
+			or (is_instance_valid(_shop_popup) and _shop_popup.visible) \
+			or (is_instance_valid(_parts_popup) and _parts_popup.visible):
 		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
 		if event.pressed:
@@ -370,3 +392,9 @@ func _input(event: InputEvent) -> void:
 func _on_visibility_changed() -> void:
 	if not visible and is_instance_valid(_star_map_popup):
 		_star_map_popup.hide()
+	if not visible and is_instance_valid(_hangar_bay_popup):
+		_hangar_bay_popup.hide()
+	if not visible and is_instance_valid(_shop_popup):
+		_shop_popup.hide()
+	if not visible and is_instance_valid(_parts_popup):
+		_parts_popup.hide()

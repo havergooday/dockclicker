@@ -117,7 +117,7 @@ func _build_ui() -> void:
 	root.mouse_filter  = Control.MOUSE_FILTER_IGNORE
 	_panel.add_child(root)
 
-	root.add_child(_build_header())
+	root.add_child(_build_top_bar())
 	root.add_child(_build_viewer_section())
 	root.add_child(_build_custom_row())
 
@@ -128,31 +128,46 @@ func _build_ui() -> void:
 	add_child(_refresh_timer)
 
 
-func _build_header() -> Control:
+func _build_top_bar() -> Control:
 	var hb := HBoxContainer.new()
 	hb.custom_minimum_size = Vector2(0, 26)
 	hb.add_theme_constant_override("separation", 8)
+	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var left := HBoxContainer.new()
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left.add_theme_constant_override("separation", 8)
+	hb.add_child(left)
 
 	_timer_label = Label.new()
 	_timer_label.text = "--:--:--"
 	_timer_label.add_theme_font_size_override("font_size", 10)
 	_timer_label.modulate = Color(0.55, 0.65, 0.82)
-	_timer_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_timer_label.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_timer_label.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-	hb.add_child(_timer_label)
+	left.add_child(_timer_label)
+
+	var center := Control.new()
+	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hb.add_child(center)
+
+	var close_btn := Button.new()
+	close_btn.text = "✕"
+	close_btn.custom_minimum_size = Vector2(24, 24)
+	close_btn.pressed.connect(func(): close_popup())
+	center.add_child(close_btn)
+
+	var right := HBoxContainer.new()
+	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right.add_theme_constant_override("separation", 8)
+	hb.add_child(right)
 
 	_refresh_btn = Button.new()
 	_refresh_btn.text = "새로고침  %d CR" % GameState.BOARD_REFRESH_COST
 	_refresh_btn.custom_minimum_size = Vector2(130, 24)
 	_refresh_btn.add_theme_font_size_override("font_size", 10)
 	_refresh_btn.pressed.connect(func(): GameState.refresh_board_paid())
-	hb.add_child(_refresh_btn)
-
-	var close_btn := Button.new()
-	close_btn.text = "✕"
-	close_btn.custom_minimum_size = Vector2(24, 24)
-	close_btn.pressed.connect(func(): close_popup())
-	hb.add_child(close_btn)
+	right.add_child(_refresh_btn)
 
 	return hb
 
