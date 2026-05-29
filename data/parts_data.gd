@@ -10,6 +10,13 @@ const COMBO_THRESHOLDS: Array   = [3, 5, 8]
 const COMBO_MULTIPLIERS: Array  = [1.5, 2.0, 3.0]
 const COMBO_WINDOW_SEC: float   = 0.8
 
+# 드랍 파츠 옵션 풀 — 각 항목에서 랜덤 value 선택
+const OPTION_POOL: Array = [
+	{"type": "credits_pct",       "label": "수익 +%d%%",      "values": [8, 12, 18, 22]},
+	{"type": "dispatch_time_pct", "label": "파견 -%d%%",      "values": [5, 8, 12, 15]},
+	{"type": "return_time_pct",   "label": "복귀 -%d%%",      "values": [5, 8, 10, 12]},
+]
+
 const DICT: Dictionary = {
 	"body": {
 		"name": "몸체",

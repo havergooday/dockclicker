@@ -385,8 +385,8 @@ func unlock_auto_slot(index: int) -> bool:
 func get_assembly_cost(body_tier: int, weapon_tier: int, legs_tier: int) -> int:
 	return _dispatch.get_assembly_cost(body_tier, weapon_tier, legs_tier)
 
-func assemble_machine(slot_index: int, body_tier: int, weapon_tier: int, legs_tier: int) -> bool:
-	return _dispatch.assemble_machine(slot_index, body_tier, weapon_tier, legs_tier)
+func assemble_machine(slot_index: int, body_tier: int, weapon_tier: int, legs_tier: int, iids: Dictionary = {}) -> bool:
+	return _dispatch.assemble_machine(slot_index, body_tier, weapon_tier, legs_tier, iids)
 
 func get_pilot_accessible_planets(pilot_id: String) -> Array:
 	var p := get_hired_pilot(pilot_id)
@@ -414,8 +414,8 @@ func assign_pilot_to_slot(slot_index: int, pilot_id: String) -> bool:
 func remove_machine_part(slot_index: int, part_type: String) -> bool:
 	return _dispatch.remove_machine_part(slot_index, part_type)
 
-func replace_machine_part(slot_index: int, part_type: String, tier: int) -> bool:
-	return _dispatch.replace_machine_part(slot_index, part_type, tier)
+func replace_machine_part(slot_index: int, part_type: String, tier: int, iid: String = "") -> bool:
+	return _dispatch.replace_machine_part(slot_index, part_type, tier, iid)
 
 
 func disassemble_machine(slot_index: int) -> bool:

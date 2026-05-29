@@ -21,6 +21,7 @@ var _selector_kind: String = ""
 var _selector_part_key: String = ""
 var _draft_pilot_id: String = ""
 var _draft_machine: Dictionary = {}
+var _draft_iids: Dictionary = {}
 var _sel_dragging: bool = false
 var _sel_drag_start_y: float = 0.0
 var _sel_drag_start_scroll: int = 0
@@ -471,7 +472,7 @@ func _on_unlock_pressed() -> void:
 func _on_commit_assembly_pressed() -> void:
 	if not _can_commit_assembly():
 		return
-	if not GameState.assemble_machine(_slot_index, _draft_machine.get("body", 0), _draft_machine.get("weapon", 0), _draft_machine.get("legs", 0)):
+	if not GameState.assemble_machine(_slot_index, _draft_machine.get("body", 0), _draft_machine.get("weapon", 0), _draft_machine.get("legs", 0), _draft_iids):
 		return
 	if _draft_pilot_id != "":
 		GameState.assign_pilot_to_slot(_slot_index, _draft_pilot_id)
@@ -619,9 +620,9 @@ func _build_selector_panel() -> void:
 
 
 func _init_draft_state() -> void:
-	# 이전 베이 오염 방지: 반드시 먼저 초기화
 	_draft_pilot_id = ""
 	_draft_machine = {"body": 0, "weapon": 0, "legs": 0}
+	_draft_iids = {}
 	if _slot_index < 0 or _slot_index >= GameState.auto_slots.size():
 		return
 	var slot: DispatchManager.AutoSlot = GameState.auto_slots[_slot_index]
@@ -774,17 +775,26 @@ func _build_part_selector(part_key: String) -> void:
 		return
 	for item: Dictionary in items:
 		var tier := int(item.get("tier", 0))
-		var iid := str(item.get("iid", ""))
+		var iid  := str(item.get("iid", ""))
+		var opts := item.get("options", []) as Array
 		var cap_tier := tier
-		var cap_iid := iid
+		var cap_iid  := iid
 		var btn := Button.new()
-		btn.text = "%s  ·  T%d" % [_part_name(part_key, tier), tier]
+		var opt_txt := ""
+		if not opts.is_empty():
+			var parts: Array = []
+			for opt: Dictionary in opts:
+				parts.append(_opt_label(opt))
+			opt_txt = "  [%s]" % "  ".join(parts)
+		btn.text = "%s  T%d%s" % [_part_name(part_key, tier), tier, opt_txt]
 		btn.custom_minimum_size = Vector2(0, 30)
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.pressed.connect(func():
 			_select_part(part_key, cap_tier, cap_iid)
 		)
-		if cap_tier == _part_tier(GameState.auto_slots[_slot_index], part_key):
+		if not opts.is_empty():
+			btn.modulate = Color(0.70, 1.00, 0.75)
+		elif cap_tier == _part_tier(GameState.auto_slots[_slot_index], part_key):
 			btn.modulate = Color(0.78, 0.88, 1.0)
 		_selector_body.add_child(btn)
 
@@ -807,9 +817,10 @@ func _select_part(part_key: String, tier: int, iid: String) -> void:
 	var slot: DispatchManager.AutoSlot = GameState.auto_slots[_slot_index]
 	if slot.state == "empty":
 		_draft_machine[part_key] = tier
+		_draft_iids[part_key] = iid
 		_rebuild_content()
 		return
-	if GameState.replace_machine_part(_slot_index, part_key, tier):
+	if GameState.replace_machine_part(_slot_index, part_key, tier, iid):
 		_hide_selector(true)
 
 
@@ -838,6 +849,7 @@ func _unequip_part(part_key: String) -> void:
 	var slot: DispatchManager.AutoSlot = GameState.auto_slots[_slot_index]
 	if slot.state == "empty":
 		_draft_machine[part_key] = 0
+		_draft_iids.erase(part_key)
 		_hide_selector(true)
 		return
 	if GameState.remove_machine_part(_slot_index, part_key):
@@ -1103,6 +1115,13 @@ func _part_color(part_key: String, tier: int) -> Color:
 	return base.lightened(0.06 * minf(float(tier), 3.0))
 
 
+func _opt_label(opt: Dictionary) -> String:
+	match opt.get("type", ""):
+		"credits_pct":       return "수익+%d%%" % opt.get("value", 0)
+		"dispatch_time_pct": return "파견-%d%%" % opt.get("value", 0)
+		"return_time_pct":   return "복귀-%d%%" % opt.get("value", 0)
+	return ""
+
 func _part_sprite_texture(part_key: String, tier: int) -> Texture2D:
 	# 아직 실제 파츠 아트가 연결되지 않았으므로 슬롯 전용 자리만 유지한다.
 	# 나중에 파츠 타입/tier별 아이콘을 여기에 매핑하면 된다.
@@ -1118,5 +1137,3 @@ func _state_label(state: String) -> String:
 		"returning": return "복귀 중"
 		"returned": return "수령 대기"
 		_: return state
-
-

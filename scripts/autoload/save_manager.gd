@@ -76,10 +76,12 @@ func load_save() -> bool:
 	if d.has("part_inventory"):
 		for raw in (d["part_inventory"] as Array):
 			var item: Dictionary = raw as Dictionary
+			var opts_raw = item.get("options", [])
 			GameState.part_inventory.append({
-				"iid":  str(item.get("iid",  "p_%d" % Time.get_ticks_usec())),
-				"type": str(item.get("type", "")),
-				"tier": int(item.get("tier", 1)),
+				"iid":     str(item.get("iid",  "p_%d" % Time.get_ticks_usec())),
+				"type":    str(item.get("type", "")),
+				"tier":    int(item.get("tier", 1)),
+				"options": (opts_raw as Array).duplicate() if opts_raw is Array else [],
 			})
 	elif d.has("owned_parts"):
 		# v2 → v3 마이그레이션: 수량 배열을 인스턴스 배열로 변환

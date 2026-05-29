@@ -148,7 +148,7 @@ func unlock_auto_slot(index: int) -> bool:
 func get_assembly_cost(body_tier: int, weapon_tier: int, legs_tier: int) -> int:
 	return (body_tier + weapon_tier + legs_tier) * 50
 
-func assemble_machine(slot_index: int, body_tier: int, weapon_tier: int, legs_tier: int) -> bool:
+func assemble_machine(slot_index: int, body_tier: int, weapon_tier: int, legs_tier: int, iids: Dictionary = {}) -> bool:
 	if slot_index < 0 or slot_index >= auto_slots.size():
 		return false
 	var slot: AutoSlot = auto_slots[slot_index]
@@ -163,12 +163,18 @@ func assemble_machine(slot_index: int, body_tier: int, weapon_tier: int, legs_ti
 	var cost := get_assembly_cost(body_tier, weapon_tier, legs_tier)
 	if GameState.total_credits < cost:
 		return false
+	var body_opts   := _lookup_opts(iids.get("body",   ""), "body",   body_tier)
+	var weapon_opts := _lookup_opts(iids.get("weapon", ""), "weapon", weapon_tier)
+	var legs_opts   := _lookup_opts(iids.get("legs",   ""), "legs",   legs_tier)
 	GameState.total_credits -= cost
 	GameState.consume_part("body", body_tier)
 	GameState.consume_part("weapon", weapon_tier)
 	GameState.consume_part("legs", legs_tier)
 	slot.state = "offline"
-	slot.machine = {"body": body_tier, "weapon": weapon_tier, "legs": legs_tier}
+	slot.machine = {
+		"body": body_tier, "weapon": weapon_tier, "legs": legs_tier,
+		"body_opts": body_opts, "weapon_opts": weapon_opts, "legs_opts": legs_opts,
+	}
 	slot.pending_machine = {}
 	slot.pending_pilot_id = ""
 	GameState.credits_changed.emit(GameState.total_credits)
@@ -211,10 +217,11 @@ func start_auto_dispatch(slot_index: int, pilot_id: String, planet_id: String) -
 	slot.pilot_id = pilot_id
 	slot.planet = planet_id
 	var duration := _get_mission_duration(body_tier)
+	duration *= _opts_time_mult(slot.machine, "dispatch_time_pct")
 	if pilot.get("bonus_type", "") == "speed":
 		duration *= (1.0 - float(pilot.get("bonus_value", 0)) / 100.0)
 	slot.mission_start_time = now
-	slot.mission_end_time = now + duration
+	slot.mission_end_time = now + maxf(5.0, duration)
 	auto_slot_changed.emit(slot_index)
 	return true
 
@@ -242,17 +249,20 @@ func collect_auto_slot(slot_index: int) -> bool:
 
 func _start_returning(slot_index: int, now: float) -> void:
 	var slot: AutoSlot = auto_slots[slot_index]
-	var body_tier: int = slot.machine.get("body", 1)
+	var body_tier: int   = slot.machine.get("body",   1)
 	var weapon_tier: int = slot.machine.get("weapon", 1)
-	var legs_tier: int = slot.machine.get("legs", 1)
-	var base_credits := _get_mission_credits(weapon_tier, _get_mission_duration(body_tier))
+	var legs_tier: int   = slot.machine.get("legs",   1)
+	var actual_duration := slot.mission_end_time - slot.mission_start_time
+	var base_credits := _get_mission_credits(weapon_tier, actual_duration)
+	base_credits = int(float(base_credits) * _opts_credits_mult(slot.machine))
 	var pilot := GameState.get_hired_pilot(slot.pilot_id)
 	if not pilot.is_empty() and pilot.get("bonus_type", "") == "credits":
 		base_credits = int(float(base_credits) * (1.0 + float(pilot.get("bonus_value", 0)) / 100.0))
 	slot.credits_earned = base_credits
 	slot.state = "returning"
 	slot.return_start_time = now
-	slot.return_end_time = now + _get_return_duration(legs_tier)
+	var ret_dur := _get_return_duration(legs_tier) * _opts_time_mult(slot.machine, "return_time_pct")
+	slot.return_end_time = now + maxf(5.0, ret_dur)
 	auto_slot_changed.emit(slot_index)
 
 func _complete_return(slot_index: int) -> void:
@@ -362,19 +372,51 @@ func _fast_forward(now: float) -> void:
 			var b: int = slot.machine.get("body",   1)
 			var w: int = slot.machine.get("weapon", 1)
 			var l: int = slot.machine.get("legs",   1)
-			var base_credits := _get_mission_credits(w, _get_mission_duration(b))
+			var actual_duration := slot.mission_end_time - slot.mission_start_time
+			var base_credits := _get_mission_credits(w, actual_duration)
+			base_credits = int(float(base_credits) * _opts_credits_mult(slot.machine))
 			var pilot := GameState.get_hired_pilot(slot.pilot_id)
 			if not pilot.is_empty() and pilot.get("bonus_type", "") == "credits":
 				base_credits = int(float(base_credits) * (1.0 + float(pilot.get("bonus_value", 0)) / 100.0))
 			slot.credits_earned  = base_credits
 			slot.state           = "returning"
-			slot.return_end_time = slot.mission_end_time + _get_return_duration(l)
+			var ret_dur := _get_return_duration(l) * _opts_time_mult(slot.machine, "return_time_pct")
+			slot.return_end_time = slot.mission_end_time + maxf(5.0, ret_dur)
 		if slot.state == "returning" and now >= slot.return_end_time:
 			slot.state = "returned"
 
 func _dec(v) -> float:
 	var f := float(v)
 	return INF if f >= 1e29 else f
+
+
+# ── 파츠 옵션 헬퍼 ───────────────────────────────────────────────
+
+func _lookup_opts(iid: String, part_type: String, _tier: int) -> Array:
+	if iid == "":
+		return []
+	for item: Dictionary in GameState.part_inventory:
+		if str(item.get("iid", "")) == iid and str(item.get("type", "")) == part_type:
+			return (item.get("options", []) as Array).duplicate()
+	return []
+
+
+func _opts_credits_mult(machine: Dictionary) -> float:
+	var mult := 1.0
+	for key in ["body_opts", "weapon_opts", "legs_opts"]:
+		for opt: Dictionary in machine.get(key, []):
+			if opt.get("type", "") == "credits_pct":
+				mult += float(opt.get("value", 0)) / 100.0
+	return mult
+
+
+func _opts_time_mult(machine: Dictionary, opt_type: String) -> float:
+	var mult := 1.0
+	for key in ["body_opts", "weapon_opts", "legs_opts"]:
+		for opt: Dictionary in machine.get(key, []):
+			if opt.get("type", "") == opt_type:
+				mult -= float(opt.get("value", 0)) / 100.0
+	return maxf(0.1, mult)
 
 # ── 자동 재파견 ───────────────────────────────────────────────────────
 
@@ -425,16 +467,18 @@ func remove_machine_part(slot_index: int, part_type: String) -> bool:
 	if old_tier <= 0:
 		return false
 	GameState.part_inventory.append({
-		"iid":  "rem_%d" % Time.get_ticks_usec(),
-		"type": part_type,
-		"tier": old_tier,
+		"iid":     "rem_%d" % Time.get_ticks_usec(),
+		"type":    part_type,
+		"tier":    old_tier,
+		"options": slot.machine.get(part_type + "_opts", []),
 	})
 	slot.machine.erase(part_type)
+	slot.machine.erase(part_type + "_opts")
 	auto_slot_changed.emit(slot_index)
 	return true
 
 
-func replace_machine_part(slot_index: int, part_type: String, tier: int) -> bool:
+func replace_machine_part(slot_index: int, part_type: String, tier: int, iid: String = "") -> bool:
 	if slot_index < 0 or slot_index >= auto_slots.size():
 		return false
 	if part_type not in ["body", "weapon", "legs"]:
@@ -451,11 +495,13 @@ func replace_machine_part(slot_index: int, part_type: String, tier: int) -> bool
 		return false
 	if old_tier > 0:
 		GameState.part_inventory.append({
-			"iid": "swap_%d" % Time.get_ticks_usec(),
-			"type": part_type,
-			"tier": old_tier,
+			"iid":     "swap_%d" % Time.get_ticks_usec(),
+			"type":    part_type,
+			"tier":    old_tier,
+			"options": slot.machine.get(part_type + "_opts", []),
 		})
 	slot.machine[part_type] = tier
+	slot.machine[part_type + "_opts"] = _lookup_opts(iid, part_type, tier)
 	auto_slot_changed.emit(slot_index)
 	return true
 
@@ -470,11 +516,11 @@ func disassemble_machine(slot_index: int) -> bool:
 	var w: int = slot.machine.get("weapon", 0)
 	var l: int = slot.machine.get("legs", 0)
 	if b > 0:
-		GameState.part_inventory.append({"iid": "dis_%d" % Time.get_ticks_usec(), "type": "body", "tier": b})
+		GameState.part_inventory.append({"iid": "dis_%d" % Time.get_ticks_usec(), "type": "body",   "tier": b, "options": slot.machine.get("body_opts",   [])})
 	if w > 0:
-		GameState.part_inventory.append({"iid": "dis_%d" % Time.get_ticks_usec(), "type": "weapon", "tier": w})
+		GameState.part_inventory.append({"iid": "dis_%d" % Time.get_ticks_usec(), "type": "weapon", "tier": w, "options": slot.machine.get("weapon_opts", [])})
 	if l > 0:
-		GameState.part_inventory.append({"iid": "dis_%d" % Time.get_ticks_usec(), "type": "legs", "tier": l})
+		GameState.part_inventory.append({"iid": "dis_%d" % Time.get_ticks_usec(), "type": "legs",   "tier": l, "options": slot.machine.get("legs_opts",   [])})
 	slot.machine = {}
 	slot.assigned_pilot_id = ""
 	slot.state = "empty"

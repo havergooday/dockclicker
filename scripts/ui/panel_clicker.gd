@@ -9,8 +9,10 @@ var _float_label: Label
 var _combo_count: int = 0
 var _last_click_time: float = 0.0
 var _combo_label: Label = null
+var _drop_label: Label = null
 
 const AUTO_ATTACK_INTERVAL := 1.5
+const DROP_RATE := 0.40
 
 @onready var battle_area: Control = $BattleArea
 @onready var session_label: Label = $Header/SessionLabel
@@ -22,6 +24,7 @@ func _ready() -> void:
 	PanelManager.panel_changed.connect(_on_panel_changed)
 	_build_float_label()
 	_build_combo_label()
+	_build_drop_label()
 
 
 func _build_combo_label() -> void:
@@ -187,6 +190,77 @@ func _calc_click_damage() -> int:
 	return base
 
 
+func _build_drop_label() -> void:
+	_drop_label = Label.new()
+	_drop_label.anchor_left   = 0.0
+	_drop_label.anchor_right  = 1.0
+	_drop_label.anchor_top    = 1.0
+	_drop_label.anchor_bottom = 1.0
+	_drop_label.offset_top    = -22.0
+	_drop_label.offset_bottom = -2.0
+	_drop_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_drop_label.add_theme_font_size_override("font_size", 11)
+	_drop_label.add_theme_color_override("font_color", Color(0.55, 1.00, 0.72))
+	_drop_label.modulate.a = 0.0
+	_drop_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_drop_label)
+
+
+func _try_drop_part() -> void:
+	if randf() > DROP_RATE:
+		return
+	var planet_idx := 0
+	for i in GameState.PLANETS.size():
+		if str(GameState.PLANETS[i].get("id", "")) == str(_planet_data.get("id", "")):
+			planet_idx = i
+			break
+	var max_tier := clampi(planet_idx / 3 + 1, 1, 3)
+	var tier     := randi_range(1, max_tier)
+	var types    := ["body", "weapon", "legs"]
+	var ptype    := types[randi() % types.size()]
+	var options  := _gen_drop_options()
+	GameState.part_inventory.append({
+		"iid":     "drop_%d" % Time.get_ticks_usec(),
+		"type":    ptype,
+		"tier":    tier,
+		"options": options,
+	})
+	GameState.part_purchased.emit(ptype, tier)
+	_show_drop_toast(ptype, tier, options)
+
+
+func _gen_drop_options() -> Array:
+	var pool: Array = PartsData.OPTION_POOL.duplicate()
+	var opts: Array = []
+	for _i in 2:
+		if pool.is_empty():
+			break
+		var idx := randi() % pool.size()
+		var opt_def: Dictionary = pool[idx]
+		pool.remove_at(idx)
+		var vals: Array = opt_def["values"] as Array
+		opts.append({"type": opt_def["type"], "value": vals[randi() % vals.size()]})
+	return opts
+
+
+func _show_drop_toast(ptype: String, tier: int, options: Array) -> void:
+	if _drop_label == null:
+		return
+	var type_names := {"body": "몸체", "weapon": "무기", "legs": "다리"}
+	var tier_str   := ["T1", "T2", "T3"][clampi(tier - 1, 0, 2)]
+	var opt_parts  := []
+	for opt in options:
+		match opt.get("type", ""):
+			"credits_pct":       opt_parts.append("수익+%d%%" % opt["value"])
+			"dispatch_time_pct": opt_parts.append("파견-%d%%" % opt["value"])
+			"return_time_pct":   opt_parts.append("복귀-%d%%" % opt["value"])
+	_drop_label.text = "▼ PART DROP  %s %s  [%s]" % [tier_str, type_names.get(ptype, "?"), "  ".join(opt_parts)]
+	_drop_label.modulate.a = 1.0
+	var tw := create_tween()
+	tw.tween_interval(2.2)
+	tw.tween_property(_drop_label, "modulate:a", 0.0, 0.5)
+
+
 func _show_combo_active(mult: float) -> void:
 	if _combo_label == null:
 		return
@@ -202,6 +276,7 @@ func _kill_enemy(enemy: Button) -> void:
 	_enemies.erase(enemy)
 	enemy.queue_free()
 	_wave_kills += 1
+	_try_drop_part()
 	_refresh_session_label()
 	var wave_size: int = _planet_data.get("wave_size", 5)
 	if _wave_kills >= wave_size:
