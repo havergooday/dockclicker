@@ -1,16 +1,16 @@
 [gd_scene load_steps=3 format=3]
 
-[ext_resource type="Script" path="res://scripts/ui/panel_workshop.gd" id="1_workshop"]
-[ext_resource type="Texture2D" path="res://assets/backgrounds/workshop_bg.png" id="2_bg"]
+[ext_resource type="Script" path="res://scripts/ui/hangar_assembly.gd" id="1_hangar"]
+[ext_resource type="Texture2D" path="res://assets/backgrounds/hangar_assembly_bg.png" id="2_bg"]
 
-[node name="PanelWorkshop" type="Control"]
+[node name="HangarAssembly" type="Control"]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-script = ExtResource("1_workshop")
+script = ExtResource("1_hangar")
 
 [node name="Background" type="TextureRect" parent="."]
 layout_mode = 1
@@ -54,7 +54,7 @@ text = "← 브릿지"
 [node name="TitleLabel" type="Label" parent="Header"]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "공작실"
+text = "격납고 조립"
 vertical_alignment = 1
 
 [node name="Body" type="Control" parent="."]

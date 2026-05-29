@@ -40,7 +40,7 @@ func get_back_label() -> String:
 	var names: Dictionary = {
 		"bridge":   "브릿지",
 		"hangar":   "격납고",
-		"workshop": "공작실",
+		"hangar_assembly": "격납고 조립",
 		"shop":     "상점",
 		"dispatch": "파견 관제",
 		"clicker":  "클리커",

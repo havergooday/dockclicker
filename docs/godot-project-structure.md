@@ -33,7 +33,7 @@
 ## 씬 구조
 
 - `scenes/main/`: 메인 앱 씬
-- `scenes/ui/`: 모든 UI 패널 씬 (브릿지, 격납고, 공작실, PC 터미널, 파견 관제, 클리커, ShipCanvas, StarMapPopup 등)
+- `scenes/ui/`: 모든 UI 패널 씬 (브릿지, 격납고 조립 팝업, PC 터미널, 파견 관제, 클리커, ShipCanvas, StarMapPopup 등)
 
 ## ShipCanvas 구역 구조 (현재 우선 구조)
 
@@ -51,7 +51,7 @@
 
 - 메인 창 1개, 가로형 기본 레이아웃
 - 패널 플립 내비게이션 + 히스토리 스택
-- 브릿지, 격납고, 공작실, PC 터미널, 파견 관제, 직접 파견 클리커 패널
+- 브릿지, 격납고 조립 팝업, PC 터미널, 파견 관제, 직접 파견 클리커 패널
 - 전역 상태 오토로드 (GameState, PanelManager, DispatchManager, SaveManager)
 - 직접/자동 파견 루프, 머신·파일럿 시스템, 저장/불러오기
 

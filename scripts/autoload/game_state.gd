@@ -2,7 +2,7 @@ extends Node
 
 var layout_mode := "horizontal"
 var dispatch_preselect_slot: int = -1
-var workshop_preselect_slot: int = -1
+var hangar_preselect_slot: int = -1
 var total_credits: int = 100000
 var pending_credits: int = 0
 var player_status: String = "idle"  # idle / on_mission / returned

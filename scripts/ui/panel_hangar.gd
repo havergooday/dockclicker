@@ -335,12 +335,12 @@ func _detail_empty(vb: VBoxContainer) -> void:
 	vb.add_child(_vspacer())
 
 	var btn := Button.new()
-	btn.text = "공작실에서 조립  ▶"
+	btn.text = "격납고 조립  ▶"
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var idx := _selected_slot
 	btn.pressed.connect(func():
-		GameState.workshop_preselect_slot = idx
-		PanelManager.show_panel("workshop")
+		GameState.hangar_preselect_slot = idx
+		PanelManager.show_panel("hangar_assembly")
 	)
 	vb.add_child(btn)
 

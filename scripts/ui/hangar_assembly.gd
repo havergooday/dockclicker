@@ -60,19 +60,19 @@ const WS_TAB_H  := 24
 const INV_COLS  := 20
 const INV_ROWS  := 3
 
-var _workshop_tab:     Control      = null
+var _assemble_tab:     Control      = null
 var _inventory_tab:    Control      = null
-var _current_ws_tab:   String       = "workshop"
+var _current_ws_tab:   String       = "assemble"
 var _inv_grid_vb:      VBoxContainer = null
 var _inv_detail_con:   Control      = null
 var _inv_selected_iid: String       = ""
 
 func _ready() -> void:
-	PanelManager.register_panel("workshop", self)
+	PanelManager.register_panel("hangar_assembly", self)
 	back_button.pressed.connect(func(): PanelManager.go_back())
 	back_button.text = "← %s" % PanelManager.get_back_label()
 	PanelManager.panel_changed.connect(func(id: String):
-		if id == "workshop": back_button.text = "← %s" % PanelManager.get_back_label()
+		if id == "hangar_assembly": back_button.text = "← %s" % PanelManager.get_back_label()
 	)
 	GameState.part_purchased.connect(func(_pt, _t):
 		_refresh_parts_list(); _refresh_stats(); _refresh_bottom()
@@ -87,16 +87,16 @@ func _ready() -> void:
 		if visible: _apply_preselect()
 	)
 	_build_ws_tab_bar()
-	_workshop_tab  = _make_ws_tab_con()
+	_assemble_tab  = _make_ws_tab_con()
 	_inventory_tab = _make_ws_tab_con()
 	_inventory_tab.visible = false
 	_build_ui()
 	_build_inventory_ui()
 
 func _apply_preselect() -> void:
-	var presel := GameState.workshop_preselect_slot
+	var presel := GameState.hangar_preselect_slot
 	if presel >= 0:
-		GameState.workshop_preselect_slot = -1
+		GameState.hangar_preselect_slot = -1
 		_select_bay(presel)
 	else:
 		# preselect 없이 진입 = 브릿지 등 다른 경로 → 항상 BAY 선택 화면으로 초기화
@@ -112,14 +112,14 @@ func _build_ws_tab_bar() -> void:
 	_body.add_child(bar)
 
 	var btn_group := ButtonGroup.new()
-	for tab in [{"id": "workshop", "label": "조립"}, {"id": "inventory", "label": "인벤토리"}]:
+	for tab in [{"id": "assemble", "label": "조립"}, {"id": "inventory", "label": "인벤토리"}]:
 		var btn := Button.new()
 		btn.text    = tab["label"]
 		btn.toggle_mode = true
 		btn.button_group = btn_group
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.custom_minimum_size   = Vector2(0, WS_TAB_H)
-		if tab["id"] == "workshop": btn.set_pressed_no_signal(true)
+		if tab["id"] == "assemble": btn.set_pressed_no_signal(true)
 
 		var norm := StyleBoxFlat.new()
 		norm.bg_color = Color(0.06, 0.10, 0.18, 0.80)
@@ -154,7 +154,7 @@ func _make_ws_tab_con() -> Control:
 
 func _select_ws_tab(tab_id: String) -> void:
 	_current_ws_tab       = tab_id
-	_workshop_tab.visible  = (tab_id == "workshop")
+	_assemble_tab.visible  = (tab_id == "assemble")
 	_inventory_tab.visible = (tab_id == "inventory")
 	if tab_id == "inventory":
 		_refresh_inv_grid()
@@ -164,7 +164,7 @@ func _build_ui() -> void:
 	var hbox := HBoxContainer.new()
 	hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
 	hbox.add_theme_constant_override("separation", 0)
-	_workshop_tab.add_child(hbox)
+	_assemble_tab.add_child(hbox)
 
 	_build_char_strip(hbox)
 	_add_gap(hbox, 14); _add_vsep(hbox); _add_gap(hbox, 14)

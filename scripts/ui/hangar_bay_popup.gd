@@ -467,10 +467,10 @@ func _on_commit_assembly_pressed() -> void:
 	_close_selector_and_refresh()
 
 
-func _open_workshop(slot_index: int) -> void:
-	GameState.workshop_preselect_slot = slot_index
+func _open_assembly(slot_index: int) -> void:
+	GameState.hangar_preselect_slot = slot_index
 	close_popup()
-	PanelManager.show_panel("workshop")
+	PanelManager.show_panel("hangar_assembly")
 
 
 func _request_control_room() -> void:

@@ -580,12 +580,12 @@ func _popup_empty(vb: VBoxContainer, slot_idx: int) -> void:
 	_add_lbl(vb, "이 베이에 배치된 머신이 없습니다.", 10, HORIZONTAL_ALIGNMENT_LEFT, Color(0.42, 0.44, 0.55))
 	vb.add_child(_vspacer())
 	var btn := Button.new()
-	btn.text = "⚙ 공작실에서 조립하기"
+	btn.text = "⚙ 격납고 조립하기"
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn.pressed.connect(func():
-		GameState.workshop_preselect_slot = slot_idx
+		GameState.hangar_preselect_slot = slot_idx
 		_hide_popup()
-		PanelManager.show_panel("workshop")
+		PanelManager.show_panel("hangar_assembly")
 	)
 	vb.add_child(btn)
 
@@ -644,9 +644,9 @@ func _popup_offline(vb: VBoxContainer, slot: DispatchManager.AutoSlot, slot_idx:
 	rebuild_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var cap_rebuild := slot_idx
 	rebuild_btn.pressed.connect(func():
-		GameState.workshop_preselect_slot = cap_rebuild
+		GameState.hangar_preselect_slot = cap_rebuild
 		_hide_popup()
-		PanelManager.show_panel("workshop")
+		PanelManager.show_panel("hangar_assembly")
 	)
 	vb.add_child(rebuild_btn)
 
@@ -656,9 +656,9 @@ func _popup_offline(vb: VBoxContainer, slot: DispatchManager.AutoSlot, slot_idx:
 	repair_btn.modulate = Color(0.80, 0.90, 1.0)
 	var cap_repair := slot_idx
 	repair_btn.pressed.connect(func():
-		GameState.workshop_preselect_slot = cap_repair
+		GameState.hangar_preselect_slot = cap_repair
 		_hide_popup()
-		PanelManager.show_panel("workshop")
+		PanelManager.show_panel("hangar_assembly")
 	)
 	vb.add_child(repair_btn)
 
