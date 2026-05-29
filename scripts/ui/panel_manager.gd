@@ -38,12 +38,9 @@ func show_bridge() -> void:
 
 func get_back_label() -> String:
 	var names: Dictionary = {
-		"bridge":   "브릿지",
-		"hangar":   "격납고",
+		"bridge":          "브릿지",
 		"hangar_assembly": "격납고 조립",
-		"shop":     "상점",
-		"dispatch": "파견 관제",
-		"clicker":  "클리커",
+		"clicker":         "클리커",
 	}
 	var prev: String = _history.back() if not _history.is_empty() else "bridge"
 	return names.get(prev, prev)

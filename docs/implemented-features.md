@@ -89,20 +89,14 @@
   - 직접 파견 버튼 → 클리커 화면 진입 (기존 PanelManager 경유)
   - ESC/뒤로가기: 단계별 닫힘 (베이 팝업 → 슬라이드 패널 → 팝업 닫힘)
 
-## 패널 플립 내비게이션 시스템 구현 완료
+## 패널 내비게이션 시스템 구현 완료
 
-- `PanelManager` autoload — 패널 전환 총괄, 세로 Tween 플립 (0.12s × 2)
+- `PanelManager` autoload — `bridge` ↔ `hangar_assembly` ↔ `clicker` 전환 담당, 세로 Tween 플립 (0.12s × 2)
 - **히스토리 스택 내비게이션** — `_history: Array[String]` + `go_back()`: 이전 패널로 순차 복귀
-  - 격납고 → 조립 팝업 진입 후 뒤로가기 → 격납고 복귀 (브릿지가 아닌 직전 패널)
   - ESC 키도 `go_back()` 적용 — 히스토리 순서대로 역행
-- **동적 뒤로가기 버튼 라벨** — 각 패널의 "← 브릿지" 대신 `get_back_label()`로 직전 패널명 표시
-- 브릿지 뷰 (`scenes/ui/bridge_view.tscn`) — 인터랙션 오브젝트 4개(격납고 문, 조립 콘솔, PC 터미널, 관제 콘솔)
-- 서브 패널 4개 — 각 패널별 뒤로가기 버튼
-  - 격납고 (`scenes/ui/panel_hangar.tscn`)
-  - 격납고 조립 팝업 (`scenes/ui/hangar_bay_popup.tscn`)
-  - PC 터미널 (`scenes/ui/panel_shop.tscn`)
-  - 파견 관제 (`scenes/ui/panel_dispatch.tscn`)
-- `scenes/main/main.tscn` — 6개 패널 인스턴스 구조 (브릿지 + 서브 4 + 클리커)
+- **동적 뒤로가기 버튼 라벨** — `get_back_label()`로 직전 패널명 표시
+- `scenes/main/main.tscn` — ShipCanvas + PanelClicker + CreditHUD 구조
+- 레거시 플립 패널(`panel_hangar`, `panel_dispatch`, `panel_shop`, `bridge_view`) 제거 완료
 
 ## 테스트 및 검증 구현 완료
 

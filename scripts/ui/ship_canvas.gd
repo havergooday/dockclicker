@@ -5,7 +5,7 @@ const HANGAR_BAY_POPUP_SCENE := preload("res://scenes/ui/hangar_bay_popup.tscn")
 const SHOP_POPUP_SCENE       := preload("res://scenes/ui/shop_popup.tscn")
 const PARTS_POPUP_SCENE      := preload("res://scenes/ui/parts_shop_popup.tscn")
 const BRIDGE_PILOT_SCR       := preload("res://scripts/ui/bridge_pilot.gd")
-const HANGAR_ZONE_SCR := preload("res://scripts/ui/hangar_zone.gd")
+const HANGAR_ZONE_SCR        := preload("res://scripts/ui/hangar_zone.gd")
 
 const NAV_ITEMS: Array = [
 	{"id": "hangar", "label": "격납고", "x": 0.0},
@@ -15,10 +15,7 @@ const NAV_ITEMS: Array = [
 
 var _scroll: ScrollContainer
 var _content: Control
-var _star_map_popup: Control
-var _hangar_bay_popup: Control
-var _shop_popup: Control
-var _parts_popup: Control
+var _popups: Dictionary = {}           # key → Control
 var _bridge_zone_root: Control = null  # 파일럿 로밍용 컨테이너 참조
 var _bridge_pilots: Dictionary = {}    # pilot_id → BridgePilot node
 var _dragging := false
@@ -63,10 +60,7 @@ func _build_ui() -> void:
 	_build_zone_panels()
 	_build_zone_dividers()
 	_build_nav_bar()
-	_build_star_map_popup()
-	_build_hangar_bay_popup()
-	_build_shop_popup()
-	_build_parts_popup()
+	_build_popups()
 
 
 func _build_background() -> void:
@@ -275,42 +269,65 @@ func _build_zone_dividers() -> void:
 			_content.add_child(edge)
 
 
-func _build_star_map_popup() -> void:
-	_star_map_popup = STAR_MAP_SCENE.instantiate()
-	_star_map_popup.visible = false
-	add_child(_star_map_popup)
-	move_child(_star_map_popup, get_child_count() - 1)
+# ── 팝업 관리 ─────────────────────────────────────────────────
 
-
-func _build_hangar_bay_popup() -> void:
-	_hangar_bay_popup = HANGAR_BAY_POPUP_SCENE.instantiate()
-	_hangar_bay_popup.visible = false
-	_hangar_bay_popup.connect("navigate_to_control_requested", func():
+func _build_popups() -> void:
+	var bay_popup: Control = HANGAR_BAY_POPUP_SCENE.instantiate()
+	bay_popup.connect("navigate_to_control_requested", func():
 		_scroll_to_zone(2420.0)
 		get_tree().create_timer(0.28).timeout.connect(_open_star_map)
 	)
-	add_child(_hangar_bay_popup)
-	move_child(_hangar_bay_popup, get_child_count() - 1)
+	_register_popup("star_map",  STAR_MAP_SCENE.instantiate())
+	_register_popup("hangar_bay", bay_popup)
+	_register_popup("shop",      SHOP_POPUP_SCENE.instantiate())
+	_register_popup("parts",     PARTS_POPUP_SCENE.instantiate())
 
+
+func _register_popup(key: String, node: Control) -> void:
+	node.visible = false
+	add_child(node)
+	move_child(node, get_child_count() - 1)
+	_popups[key] = node
+
+
+func _open_star_map() -> void:
+	if is_instance_valid(_popups.get("star_map")):
+		_popups["star_map"].call("open_for_control_room")
+
+
+func _open_hangar_bay_popup(slot_index: int) -> void:
+	if is_instance_valid(_popups.get("hangar_bay")):
+		_popups["hangar_bay"].call("open_for_slot", slot_index)
+
+
+func _open_shop() -> void:
+	if is_instance_valid(_popups.get("shop")):
+		_popups["shop"].call("open_popup")
+
+
+func _open_parts_shop() -> void:
+	if is_instance_valid(_popups.get("parts")):
+		_popups["parts"].call("open_popup")
+
+
+# ── 파일럿 동기화 ─────────────────────────────────────────────
 
 func _sync_bridge_pilots() -> void:
 	if _bridge_zone_root == null:
 		return
-	# 새로 고용된 파일럿 추가
 	for p in GameState.hired_pilots:
 		var pid: String = str(p.get("id", ""))
 		if _bridge_pilots.has(pid):
 			continue
 		var node: Control = BRIDGE_PILOT_SCR.new()
 		_bridge_zone_root.add_child(node)
-		var zone_w := 1220.0  # 브릿지 폭
+		var zone_w := 1220.0
 		var zone_h := _bridge_zone_root.size.y if _bridge_zone_root.size.y > 0 else 240.0
 		var start_x := randf_range(20.0, zone_w - 68.0)
 		var start_y := zone_h * 0.55
 		node.position = Vector2(start_x, start_y)
 		node.call("setup", p, 0.0, zone_w)
 		_bridge_pilots[pid] = node
-	# 혹시 제거된 파일럿 정리 (현재는 고용 제한 없으므로 거의 없음)
 	for pid in _bridge_pilots.keys():
 		var still_hired := false
 		for p in GameState.hired_pilots:
@@ -322,39 +339,7 @@ func _sync_bridge_pilots() -> void:
 			_bridge_pilots.erase(pid)
 
 
-func _build_shop_popup() -> void:
-	_shop_popup = SHOP_POPUP_SCENE.instantiate()
-	_shop_popup.visible = false
-	add_child(_shop_popup)
-	move_child(_shop_popup, get_child_count() - 1)
-
-
-func _build_parts_popup() -> void:
-	_parts_popup = PARTS_POPUP_SCENE.instantiate()
-	_parts_popup.visible = false
-	add_child(_parts_popup)
-	move_child(_parts_popup, get_child_count() - 1)
-
-
-func _open_shop() -> void:
-	if is_instance_valid(_shop_popup):
-		(_shop_popup as Control).call("open_popup")
-
-
-func _open_parts_shop() -> void:
-	if is_instance_valid(_parts_popup):
-		(_parts_popup as Control).call("open_popup")
-
-
-func _open_star_map() -> void:
-	if is_instance_valid(_star_map_popup):
-		(_star_map_popup as Control).call("open_for_control_room")
-
-
-func _open_hangar_bay_popup(slot_index: int) -> void:
-	if is_instance_valid(_hangar_bay_popup):
-		(_hangar_bay_popup as Control).call("open_for_slot", slot_index)
-
+# ── 네비게이션 ────────────────────────────────────────────────
 
 func _scroll_to_zone(x_pos: float) -> void:
 	if _scroll == null:
@@ -368,11 +353,9 @@ func _scroll_to_zone(x_pos: float) -> void:
 func _input(event: InputEvent) -> void:
 	if not visible or _scroll == null:
 		return
-	if (is_instance_valid(_star_map_popup) and _star_map_popup.visible) \
-			or (is_instance_valid(_hangar_bay_popup) and _hangar_bay_popup.visible) \
-			or (is_instance_valid(_shop_popup) and _shop_popup.visible) \
-			or (is_instance_valid(_parts_popup) and _parts_popup.visible):
-		return
+	for popup in _popups.values():
+		if is_instance_valid(popup) and popup.visible:
+			return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
 		if event.pressed:
 			_dragging = true
@@ -390,11 +373,8 @@ func _input(event: InputEvent) -> void:
 
 
 func _on_visibility_changed() -> void:
-	if not visible and is_instance_valid(_star_map_popup):
-		_star_map_popup.hide()
-	if not visible and is_instance_valid(_hangar_bay_popup):
-		_hangar_bay_popup.hide()
-	if not visible and is_instance_valid(_shop_popup):
-		_shop_popup.hide()
-	if not visible and is_instance_valid(_parts_popup):
-		_parts_popup.hide()
+	if visible:
+		return
+	for popup in _popups.values():
+		if is_instance_valid(popup):
+			popup.hide()
