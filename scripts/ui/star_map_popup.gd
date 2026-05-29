@@ -38,6 +38,9 @@ var _bay_panel_dragging: bool = false
 var _bay_drag_anchor_x: float = 0.0
 var _bay_drag_scroll_start: int = 0
 var _bay_select_mode: bool = false
+var _confirm_panel: PanelContainer = null
+var _confirm_msg_lbl: Label = null
+var _pending_dispatch: Callable = Callable()
 
 
 func _ready() -> void:
@@ -73,6 +76,8 @@ func _restore_saved_scroll() -> void:
 func close_popup() -> void:
 	if not visible:
 		return
+	_confirm_panel.visible = false
+	_pending_dispatch = Callable()
 	_saved_planet_scroll_x = _planet_scroll.scroll_horizontal
 	var tween := create_tween()
 	tween.tween_property(_main_panel, "offset_top", -POPUP_HEIGHT, 0.18).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_SINE)
@@ -158,6 +163,7 @@ func _build_ui() -> void:
 	_build_bay_panel()
 	_build_float_popups()
 	_build_toast()
+	_build_confirm_panel()
 
 
 func _build_planet_area() -> void:
@@ -250,10 +256,15 @@ func _build_slide_panel() -> void:
 	direct_btn.text = "▶ 직접 파견"
 	direct_btn.custom_minimum_size = Vector2(0, 32)
 	direct_btn.pressed.connect(func():
-		GameState.selected_planet = _selected_planet_id
-		GameState.start_direct_dispatch()
-		PanelManager.show_panel("clicker")
-		hide()
+		var planet := GameState.get_planet(_selected_planet_id)
+		_show_dispatch_confirm(
+			"직접 파견\n→ %s" % str(planet.get("name", _selected_planet_id)),
+			func():
+				GameState.selected_planet = _selected_planet_id
+				GameState.start_direct_dispatch()
+				PanelManager.show_panel("clicker")
+				hide()
+		)
 	)
 	info_section.add_child(direct_btn)
 
@@ -352,6 +363,78 @@ func _build_toast() -> void:
 	_toast_label.offset_bottom = -12.0
 	_toast_label.modulate = Color(0.85, 0.92, 1.0)
 	add_child(_toast_label)
+
+
+func _build_confirm_panel() -> void:
+	_confirm_panel = PanelContainer.new()
+	_confirm_panel.anchor_left = 0.5
+	_confirm_panel.anchor_right = 0.5
+	_confirm_panel.anchor_top = 0.0
+	_confirm_panel.anchor_bottom = 0.0
+	_confirm_panel.offset_left  = -130.0
+	_confirm_panel.offset_right =  130.0
+	_confirm_panel.offset_top   =   80.0
+	_confirm_panel.offset_bottom = 170.0
+	_confirm_panel.visible = false
+	_confirm_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	var sty := StyleBoxFlat.new()
+	sty.bg_color     = Color(0.06, 0.09, 0.16, 0.98)
+	sty.border_color = Color(0.38, 0.56, 0.86, 0.92)
+	sty.set_border_width_all(1)
+	sty.set_corner_radius_all(6)
+	sty.content_margin_left   = 16
+	sty.content_margin_right  = 16
+	sty.content_margin_top    = 12
+	sty.content_margin_bottom = 12
+	_confirm_panel.add_theme_stylebox_override("panel", sty)
+	add_child(_confirm_panel)
+
+	var vb := VBoxContainer.new()
+	vb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vb.add_theme_constant_override("separation", 10)
+	_confirm_panel.add_child(vb)
+
+	_confirm_msg_lbl = Label.new()
+	_confirm_msg_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_confirm_msg_lbl.add_theme_font_size_override("font_size", 12)
+	_confirm_msg_lbl.modulate = Color(0.88, 0.94, 1.0)
+	vb.add_child(_confirm_msg_lbl)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	vb.add_child(row)
+
+	var cancel_btn := Button.new()
+	cancel_btn.text = "취소"
+	cancel_btn.custom_minimum_size = Vector2(72, 28)
+	cancel_btn.pressed.connect(func():
+		_confirm_panel.visible = false
+		_pending_dispatch = Callable()
+	)
+	row.add_child(cancel_btn)
+
+	var ok_btn := Button.new()
+	ok_btn.text = "출격"
+	ok_btn.custom_minimum_size = Vector2(72, 28)
+	ok_btn.pressed.connect(func():
+		_confirm_panel.visible = false
+		if _pending_dispatch.is_valid():
+			_pending_dispatch.call()
+		_pending_dispatch = Callable()
+	)
+	row.add_child(ok_btn)
+
+
+func _show_dispatch_confirm(msg: String, on_confirm: Callable) -> void:
+	_confirm_msg_lbl.text = msg
+	_pending_dispatch = on_confirm
+	_confirm_panel.visible = true
+
+
+func _is_pilot_idle(pilot_id: String) -> bool:
+	var p := GameState.get_hired_pilot(pilot_id)
+	return not p.is_empty() and str(p.get("status", "")) == "idle"
 
 
 func _select_default_planet() -> void:
@@ -700,33 +783,41 @@ func _make_bay_card(bay_index: int, slot: DispatchManager.AutoSlot) -> PanelCont
 	return card
 
 
-func _can_dispatch_bay(_bay_index: int) -> bool:
+func _can_dispatch_bay(bay_index: int) -> bool:
 	if _selected_planet_id == "":
 		return false
-	var pilot_id := _get_first_idle_pilot_id()
+	var slot := GameState.auto_slots[bay_index] as DispatchManager.AutoSlot
+	var pilot_id := slot.assigned_pilot_id
+	if pilot_id == "" or not _is_pilot_idle(pilot_id):
+		pilot_id = _get_first_idle_pilot_id()
 	if pilot_id == "":
 		return false
-	var pilot := GameState.get_hired_pilot(pilot_id)
-	if pilot.is_empty():
-		return false
-	var pilot_tier := int(pilot.get("tier", 1))
-	for p in GameState._dispatch.get_pilot_accessible_planets(pilot_tier):
+	for p in GameState.get_pilot_accessible_planets(pilot_id):
 		if str(p.get("id", "")) == _selected_planet_id:
 			return true
 	return false
 
 
 func _dispatch_from_bay(bay_index: int) -> void:
-	_hide_bay_panel()
-	var pilot_id := _get_first_idle_pilot_id()
+	var slot := GameState.auto_slots[bay_index] as DispatchManager.AutoSlot
+	var pilot_id := slot.assigned_pilot_id
+	if pilot_id == "" or not _is_pilot_idle(pilot_id):
+		pilot_id = _get_first_idle_pilot_id()
 	if pilot_id == "":
 		_show_toast("대기 파일럿이 없습니다.")
 		return
-	if not GameState._dispatch.start_auto_dispatch(bay_index, pilot_id, _selected_planet_id):
-		_show_toast("BAY %02d 파견 실패" % (bay_index + 1))
-		return
-	_show_toast("BAY %02d 파견 시작" % (bay_index + 1))
-	_rebuild_slots()
+	var pilot := GameState.get_hired_pilot(pilot_id)
+	var planet := GameState.get_planet(_selected_planet_id)
+	_show_dispatch_confirm(
+		"BAY %02d  ·  %s\n→ %s" % [bay_index + 1, str(pilot.get("name", pilot_id)), str(planet.get("name", _selected_planet_id))],
+		func():
+			_hide_bay_panel()
+			if not GameState.start_auto_dispatch(bay_index, pilot_id, _selected_planet_id):
+				_show_toast("BAY %02d 파견 실패" % (bay_index + 1))
+				return
+			_show_toast("BAY %02d 파견 시작" % (bay_index + 1))
+			_rebuild_slots()
+	)
 
 
 func _get_first_idle_pilot_id() -> String:
@@ -802,7 +893,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not visible:
 		return
 	if event.is_action_pressed("ui_cancel"):
-		if _bay_select_mode:
+		if _confirm_panel.visible:
+			_confirm_panel.visible = false
+			_pending_dispatch = Callable()
+		elif _bay_select_mode:
 			_hide_bay_panel()
 		elif _planet_detail_mode:
 			_deselect_planet()

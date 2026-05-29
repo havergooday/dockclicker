@@ -24,12 +24,23 @@ var _draft_machine: Dictionary = {}
 var _sel_dragging: bool = false
 var _sel_drag_start_y: float = 0.0
 var _sel_drag_start_scroll: int = 0
+var _countdown_lbl: Label = null
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_build_ui()
 	hide()
+
+
+func _process(_dt: float) -> void:
+	if not visible or not is_instance_valid(_countdown_lbl):
+		return
+	if _slot_index < 0 or _slot_index >= GameState.auto_slots.size():
+		return
+	var slot := GameState.auto_slots[_slot_index] as DispatchManager.AutoSlot
+	if slot.state in ["on_mission", "returning"]:
+		_countdown_lbl.text = _mission_countdown(slot)
 
 
 func _input(event: InputEvent) -> void:
@@ -163,6 +174,7 @@ func _build_ui() -> void:
 
 
 func _rebuild_content() -> void:
+	_countdown_lbl = null
 	for child in _content_root.get_children():
 		child.queue_free()
 
@@ -170,7 +182,7 @@ func _rebuild_content() -> void:
 		return
 
 	var slot: DispatchManager.AutoSlot = GameState.auto_slots[_slot_index]
-	var accent := _border_color(slot.state)
+	var accent := HangarHelpers.border_color(slot.state)
 
 	var content := HBoxContainer.new()
 	content.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -339,7 +351,7 @@ func _build_spec_panel(slot: DispatchManager.AutoSlot, accent: Color) -> VBoxCon
 	_add_kv(stat_box, "전투력", str(int(_part_tier(slot, "body")) + int(_part_tier(slot, "weapon")) + int(_part_tier(slot, "legs"))))
 	_add_kv(stat_box, "파견 시간", _format_time(float(preview["mission_time"])))
 	_add_kv(stat_box, "복귀 시간", _format_time(float(preview["return_time"])))
-	_add_kv(stat_box, "예상 보상", "%s CR" % _fmt(int(preview["credits"])))
+	_add_kv(stat_box, "예상 보상", "%s CR" % HangarHelpers.fmt(int(preview["credits"])))
 	_add_kv(stat_box, "CR/s", str(int(preview["rate"])))
 	_add_kv(stat_box, "파일럿 상태", _pilot_status_text(slot))
 
@@ -371,11 +383,11 @@ func _build_spec_panel(slot: DispatchManager.AutoSlot, accent: Color) -> VBoxCon
 	_add_option_line(opt_box, "다리", _part_option_text("legs", legs_t), Color(0.72, 0.82, 1.0))
 	if slot.state in ["on_mission", "returning"]:
 		_add_option_line(opt_box, "행성", str(GameState.get_planet(slot.planet).get("name", slot.planet)), Color(0.78, 0.70, 1.0))
-		_add_option_line(opt_box, "남은 시간", _mission_countdown(slot), Color(0.70, 1.0, 0.80))
+		_countdown_lbl = _add_option_line(opt_box, "남은 시간", _mission_countdown(slot), Color(0.70, 1.0, 0.80))
 	elif slot.state == "returned":
-		_add_option_line(opt_box, "보상", "+%s CR" % _fmt(slot.credits_earned), Color(0.70, 1.0, 0.80))
+		_add_option_line(opt_box, "보상", "+%s CR" % HangarHelpers.fmt(slot.credits_earned), Color(0.70, 1.0, 0.80))
 	elif slot.state == "locked":
-		_add_option_line(opt_box, "해금", "%s CR 필요" % _fmt(slot.unlock_cost), Color(0.90, 0.72, 0.48))
+		_add_option_line(opt_box, "해금", "%s CR 필요" % HangarHelpers.fmt(slot.unlock_cost), Color(0.90, 0.72, 0.48))
 
 	return panel
 
@@ -900,7 +912,7 @@ func _add_kv(parent: Control, key: String, value: String) -> void:
 	row.add_child(value_lbl)
 
 
-func _add_option_line(parent: Control, title: String, text: String, color: Color) -> void:
+func _add_option_line(parent: Control, title: String, text: String, color: Color) -> Label:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	parent.add_child(row)
@@ -919,6 +931,7 @@ func _add_option_line(parent: Control, title: String, text: String, color: Color
 	text_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	text_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	row.add_child(text_lbl)
+	return text_lbl
 
 
 func _pilot_id(slot: DispatchManager.AutoSlot) -> String:
@@ -1107,22 +1120,3 @@ func _state_label(state: String) -> String:
 		_: return state
 
 
-func _border_color(state: String) -> Color:
-	match state:
-		"locked": return Color(0.33, 0.35, 0.48)
-		"empty": return Color(0.34, 0.48, 0.62)
-		"offline": return Color(0.55, 0.18, 0.18)
-		"on_mission": return Color(0.28, 0.58, 0.95)
-		"returning": return Color(0.95, 0.74, 0.20)
-		"returned": return Color(0.26, 0.95, 0.46)
-		_: return Color(0.45, 0.45, 0.55)
-
-
-func _fmt(n: int) -> String:
-	var s := str(n)
-	var out := ""
-	for i: int in s.length():
-		if i > 0 and (s.length() - i) % 3 == 0:
-			out += ","
-		out += s[i]
-	return out
