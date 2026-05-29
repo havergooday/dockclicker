@@ -2,6 +2,14 @@ class_name PartsData
 
 const DAMAGE_UPGRADE_COSTS: Array = [20, 50, 100, 200]
 
+const CLICK_RANGE_COSTS: Array  = [400, 1200, 3000]
+const CLICK_RANGE_PX: Array     = [40.0, 80.0, 130.0]
+
+const COMBO_COSTS: Array        = [600, 1800, 4500]
+const COMBO_THRESHOLDS: Array   = [3, 5, 8]
+const COMBO_MULTIPLIERS: Array  = [1.5, 2.0, 3.0]
+const COMBO_WINDOW_SEC: float   = 0.8
+
 const DICT: Dictionary = {
 	"body": {
 		"name": "몸체",

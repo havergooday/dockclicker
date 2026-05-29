@@ -7,6 +7,10 @@ var player_status: String = "idle"  # idle / on_mission / returned
 var click_damage: int = 1
 var damage_upgrade_level: int = 0
 var auto_attack_unlocked: bool = false
+var click_range_level: int = 0
+var combo_level: int = 0
+
+signal upgrade_changed
 
 const AUTO_ATTACK_COST := 800
 var unlocked_planets: Array = ["sector_a"]
@@ -105,6 +109,52 @@ func unlock_auto_attack() -> bool:
 	total_credits -= AUTO_ATTACK_COST
 	auto_attack_unlocked = true
 	credits_changed.emit(total_credits)
+	upgrade_changed.emit()
+	return true
+
+func get_click_range_cost() -> int:
+	if click_range_level >= PartsData.CLICK_RANGE_COSTS.size():
+		return -1
+	return PartsData.CLICK_RANGE_COSTS[click_range_level]
+
+func get_click_range_px() -> float:
+	if click_range_level <= 0:
+		return 0.0
+	return PartsData.CLICK_RANGE_PX[click_range_level - 1]
+
+func upgrade_click_range() -> bool:
+	var cost := get_click_range_cost()
+	if cost < 0 or total_credits < cost:
+		return false
+	total_credits -= cost
+	click_range_level += 1
+	credits_changed.emit(total_credits)
+	upgrade_changed.emit()
+	return true
+
+func get_combo_cost() -> int:
+	if combo_level >= PartsData.COMBO_COSTS.size():
+		return -1
+	return PartsData.COMBO_COSTS[combo_level]
+
+func get_combo_threshold() -> int:
+	if combo_level <= 0:
+		return 0
+	return PartsData.COMBO_THRESHOLDS[combo_level - 1]
+
+func get_combo_multiplier() -> float:
+	if combo_level <= 0:
+		return 1.0
+	return PartsData.COMBO_MULTIPLIERS[combo_level - 1]
+
+func upgrade_combo() -> bool:
+	var cost := get_combo_cost()
+	if cost < 0 or total_credits < cost:
+		return false
+	total_credits -= cost
+	combo_level += 1
+	credits_changed.emit(total_credits)
+	upgrade_changed.emit()
 	return true
 
 func upgrade_click_damage() -> bool:
@@ -115,6 +165,7 @@ func upgrade_click_damage() -> bool:
 	damage_upgrade_level += 1
 	click_damage += 1
 	credits_changed.emit(total_credits)
+	upgrade_changed.emit()
 	return true
 
 # ── 직접 파견 ─────────────────────────────────────────────────

@@ -45,6 +45,11 @@ var _current_item_iid: String = ""
 var _shop_items: Array = []
 var _stock_last_day: int = -1
 var _stock_refresh_count: int = 0
+var _body_node: Control = null
+var _upgrade_body: Control = null
+var _upgrade_list_box: VBoxContainer = null
+
+const UPGRADE_IDS: Array = ["click_damage", "auto_attack", "click_range", "combo"]
 
 
 func _ready() -> void:
@@ -53,9 +58,10 @@ func _ready() -> void:
 	_rebuild_stock(true)
 	_build_ui()
 	_refresh_all()
-	GameState.credits_changed.connect(func(_v): _update_refresh_button(); _refresh_detail())
+	GameState.credits_changed.connect(func(_v): _update_refresh_button(); _refresh_detail(); _rebuild_upgrade_cards())
 	GameState.planet_unlocked.connect(func(_id): _rebuild_stock(true); _refresh_all())
 	GameState.part_purchased.connect(func(_pt, _t): _refresh_detail())
+	GameState.upgrade_changed.connect(_rebuild_upgrade_cards)
 
 	_refresh_timer = Timer.new()
 	_refresh_timer.wait_time = 1.0
@@ -129,7 +135,10 @@ func _build_ui() -> void:
 
 	root.add_child(_build_top_bar())
 	root.add_child(_build_tabs_row())
-	root.add_child(_build_body())
+	_body_node = _build_body()
+	root.add_child(_body_node)
+	_upgrade_body = _build_upgrade_body()
+	root.add_child(_upgrade_body)
 
 
 func _build_top_bar() -> Control:
@@ -182,12 +191,13 @@ func _build_tabs_row() -> Control:
 	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var group := ButtonGroup.new()
-	for part_type in PART_ORDER:
+	var all_tabs: Array = PART_ORDER + ["upgrade"]
+	for part_type in all_tabs:
 		var btn := Button.new()
-		btn.text = _part_caption(part_type)
+		btn.text = _tab_caption(part_type)
 		btn.toggle_mode = true
 		btn.button_group = group
-		btn.custom_minimum_size = Vector2(104, 26)
+		btn.custom_minimum_size = Vector2(80, 26)
 		btn.add_theme_font_size_override("font_size", 11)
 		var cap: String = part_type
 		btn.pressed.connect(func():
@@ -383,11 +393,27 @@ func _build_detail_box(title: String) -> PanelContainer:
 
 func _refresh_all() -> void:
 	_ensure_selection()
+	_sync_body_visibility()
 	_refresh_tabs()
-	_refresh_grid()
-	_refresh_detail()
-	_update_refresh_button()
-	_update_timer_label()
+	if _current_part_type != "upgrade":
+		_refresh_grid()
+		_refresh_detail()
+		_update_refresh_button()
+		_update_timer_label()
+	else:
+		_rebuild_upgrade_cards()
+
+
+func _sync_body_visibility() -> void:
+	var is_upgrade := _current_part_type == "upgrade"
+	if _body_node != null:
+		_body_node.visible = not is_upgrade
+	if _upgrade_body != null:
+		_upgrade_body.visible = is_upgrade
+	if _timer_label != null:
+		_timer_label.visible = not is_upgrade
+	if _refresh_btn != null:
+		_refresh_btn.visible = not is_upgrade
 
 
 func _refresh_tabs() -> void:
@@ -528,6 +554,8 @@ func _select_part_item(iid: String) -> void:
 
 
 func _ensure_selection() -> void:
+	if _current_part_type == "upgrade":
+		return
 	if not GameState.PARTS.has(_current_part_type):
 		_current_part_type = "body"
 	if _current_item_iid != "":
@@ -662,16 +690,239 @@ func _is_locked(part_type: String, item_data: Dictionary) -> bool:
 	return req != "" and not GameState.is_planet_unlocked(req)
 
 
+func _tab_caption(tab: String) -> String:
+	match tab:
+		"body":    return "몸체"
+		"weapon":  return "무기"
+		"legs":    return "다리"
+		"upgrade": return "강화"
+		_:         return tab
+
+
 func _part_caption(part_type: String) -> String:
-	match part_type:
-		"body":
-			return "몸체"
-		"weapon":
-			return "무기"
-		"legs":
-			return "다리"
-		_:
-			return part_type
+	return _tab_caption(part_type)
+
+
+# ── 강화 탭 ───────────────────────────────────────────────────
+
+func _build_upgrade_body() -> Control:
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.visible = false
+
+	_upgrade_list_box = VBoxContainer.new()
+	_upgrade_list_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_upgrade_list_box.add_theme_constant_override("separation", 6)
+	scroll.add_child(_upgrade_list_box)
+	return scroll
+
+
+func _rebuild_upgrade_cards() -> void:
+	if _upgrade_list_box == null or _current_part_type != "upgrade":
+		return
+	for c in _upgrade_list_box.get_children():
+		c.queue_free()
+	for id in UPGRADE_IDS:
+		_upgrade_list_box.add_child(_make_upgrade_card(id))
+
+
+func _make_upgrade_card(upg_id: String) -> Control:
+	var cur_lv  := _upg_level(upg_id)
+	var max_lv  := _upg_max(upg_id)
+	var cost    := _upg_cost(upg_id)
+	var maxed   := cur_lv >= max_lv
+	var tint    := _upg_tint(upg_id)
+	var affordable := not maxed and GameState.total_credits >= cost
+
+	var card := PanelContainer.new()
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var csty := StyleBoxFlat.new()
+	csty.bg_color     = tint.darkened(0.68)
+	csty.border_color = tint.darkened(0.15) if not maxed else tint.darkened(0.30)
+	csty.set_border_width_all(1)
+	csty.set_corner_radius_all(6)
+	csty.content_margin_left   = 10
+	csty.content_margin_right  = 10
+	csty.content_margin_top    = 8
+	csty.content_margin_bottom = 8
+	card.add_theme_stylebox_override("panel", csty)
+
+	var hb := HBoxContainer.new()
+	hb.add_theme_constant_override("separation", 10)
+	card.add_child(hb)
+
+	# 아이콘
+	var icon_box := PanelContainer.new()
+	icon_box.custom_minimum_size = Vector2(44, 44)
+	var isty := StyleBoxFlat.new()
+	isty.bg_color = tint.darkened(0.40)
+	isty.border_color = tint
+	isty.set_border_width_all(1)
+	isty.set_corner_radius_all(5)
+	icon_box.add_theme_stylebox_override("panel", isty)
+	hb.add_child(icon_box)
+
+	var icon_lbl := Label.new()
+	icon_lbl.text = _upg_icon(upg_id)
+	icon_lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	icon_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	icon_lbl.add_theme_font_size_override("font_size", 10)
+	icon_lbl.modulate = tint.lightened(0.35)
+	icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon_box.add_child(icon_lbl)
+
+	# 중앙 정보
+	var info := VBoxContainer.new()
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info.add_theme_constant_override("separation", 3)
+	hb.add_child(info)
+
+	var name_row := HBoxContainer.new()
+	info.add_child(name_row)
+
+	var name_lbl := Label.new()
+	name_lbl.text = _upg_name(upg_id)
+	name_lbl.add_theme_font_size_override("font_size", 12)
+	name_lbl.modulate = Color(0.90, 0.95, 1.0) if not maxed else Color(0.65, 0.75, 0.90)
+	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_row.add_child(name_lbl)
+
+	var lv_lbl := Label.new()
+	lv_lbl.text = "MAX" if maxed else "Lv %d / %d" % [cur_lv, max_lv]
+	lv_lbl.add_theme_font_size_override("font_size", 10)
+	lv_lbl.modulate = tint if maxed else Color(0.65, 0.72, 0.85)
+	name_row.add_child(lv_lbl)
+
+	var eff_lbl := Label.new()
+	eff_lbl.text = _upg_effect(upg_id, cur_lv)
+	eff_lbl.add_theme_font_size_override("font_size", 10)
+	eff_lbl.modulate = Color(0.72, 0.82, 0.96)
+	eff_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info.add_child(eff_lbl)
+
+	# 우측 버튼
+	if maxed:
+		var done_lbl := Label.new()
+		done_lbl.text = "✓"
+		done_lbl.add_theme_font_size_override("font_size", 18)
+		done_lbl.modulate = tint
+		done_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		hb.add_child(done_lbl)
+	else:
+		var btn_vb := VBoxContainer.new()
+		btn_vb.add_theme_constant_override("separation", 2)
+		btn_vb.alignment = BoxContainer.ALIGNMENT_CENTER
+		hb.add_child(btn_vb)
+
+		var cost_lbl := Label.new()
+		cost_lbl.text = "%d CR" % cost
+		cost_lbl.add_theme_font_size_override("font_size", 10)
+		cost_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		cost_lbl.modulate = Color(0.85, 0.75, 0.50) if affordable else Color(0.90, 0.35, 0.35)
+		btn_vb.add_child(cost_lbl)
+
+		var btn := Button.new()
+		btn.text = "강화"
+		btn.custom_minimum_size = Vector2(64, 26)
+		btn.disabled = not affordable
+		var bsty := StyleBoxFlat.new()
+		bsty.bg_color     = tint.darkened(0.35) if affordable else Color(0.12, 0.14, 0.20)
+		bsty.border_color = tint if affordable else Color(0.30, 0.32, 0.42)
+		bsty.set_border_width_all(1)
+		bsty.set_corner_radius_all(4)
+		btn.add_theme_stylebox_override("normal", bsty)
+		btn.add_theme_stylebox_override("hover",  bsty)
+		btn.add_theme_stylebox_override("focus",  bsty)
+		var cap_id := upg_id
+		btn.pressed.connect(func(): _do_upgrade(cap_id))
+		btn_vb.add_child(btn)
+
+	return card
+
+
+func _do_upgrade(upg_id: String) -> void:
+	match upg_id:
+		"click_damage": GameState.upgrade_click_damage()
+		"auto_attack":  GameState.unlock_auto_attack()
+		"click_range":  GameState.upgrade_click_range()
+		"combo":        GameState.upgrade_combo()
+
+
+func _upg_level(id: String) -> int:
+	match id:
+		"click_damage": return GameState.damage_upgrade_level
+		"auto_attack":  return 1 if GameState.auto_attack_unlocked else 0
+		"click_range":  return GameState.click_range_level
+		"combo":        return GameState.combo_level
+	return 0
+
+
+func _upg_max(id: String) -> int:
+	match id:
+		"click_damage": return PartsData.DAMAGE_UPGRADE_COSTS.size()
+		"auto_attack":  return 1
+		"click_range":  return PartsData.CLICK_RANGE_COSTS.size()
+		"combo":        return PartsData.COMBO_COSTS.size()
+	return 1
+
+
+func _upg_cost(id: String) -> int:
+	match id:
+		"click_damage": return GameState.get_damage_upgrade_cost()
+		"auto_attack":  return GameState.AUTO_ATTACK_COST
+		"click_range":  return GameState.get_click_range_cost()
+		"combo":        return GameState.get_combo_cost()
+	return -1
+
+
+func _upg_name(id: String) -> String:
+	match id:
+		"click_damage": return "클릭 데미지"
+		"auto_attack":  return "자동 공격"
+		"click_range":  return "클릭 범위"
+		"combo":        return "연타 콤보"
+	return id
+
+
+func _upg_icon(id: String) -> String:
+	match id:
+		"click_damage": return "DMG"
+		"auto_attack":  return "AUTO"
+		"click_range":  return "RNG"
+		"combo":        return "CMB"
+	return "?"
+
+
+func _upg_tint(id: String) -> Color:
+	match id:
+		"click_damage": return Color(0.95, 0.74, 0.28)
+		"auto_attack":  return Color(0.52, 0.88, 0.62)
+		"click_range":  return Color(0.44, 0.70, 1.00)
+		"combo":        return Color(0.85, 0.45, 0.95)
+	return Color(0.60, 0.65, 0.80)
+
+
+func _upg_effect(id: String, level: int) -> String:
+	match id:
+		"click_damage":
+			if level == 0: return "클릭 데미지  1"
+			return "클릭 데미지  %d" % (level + 1)
+		"auto_attack":
+			return "해금됨 — 1.5초마다 자동 공격" if level > 0 else "미해금"
+		"click_range":
+			if level == 0: return "단일 클릭"
+			return "클릭 반경  %d px" % int(PartsData.CLICK_RANGE_PX[level - 1])
+		"combo":
+			if level == 0: return "비활성"
+			return "%.1f초 내 %d연타  → ×%.1f 배율" % [
+				PartsData.COMBO_WINDOW_SEC,
+				PartsData.COMBO_THRESHOLDS[level - 1],
+				PartsData.COMBO_MULTIPLIERS[level - 1],
+			]
+	return ""
 
 
 func _part_short_code(part_type: String) -> String:

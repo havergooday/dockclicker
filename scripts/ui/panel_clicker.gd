@@ -6,6 +6,9 @@ var _planet_data: Dictionary = {}
 var _auto_attack_timer: float = 0.0
 var _returning := false
 var _float_label: Label
+var _combo_count: int = 0
+var _last_click_time: float = 0.0
+var _combo_label: Label = null
 
 const AUTO_ATTACK_INTERVAL := 1.5
 
@@ -18,6 +21,21 @@ func _ready() -> void:
 	return_button.pressed.connect(_on_return_pressed)
 	PanelManager.panel_changed.connect(_on_panel_changed)
 	_build_float_label()
+	_build_combo_label()
+
+
+func _build_combo_label() -> void:
+	_combo_label = Label.new()
+	_combo_label.anchor_right  = 1.0
+	_combo_label.anchor_bottom = 0.0
+	_combo_label.offset_top    = 4.0
+	_combo_label.offset_bottom = 24.0
+	_combo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_combo_label.add_theme_font_size_override("font_size", 12)
+	_combo_label.add_theme_color_override("font_color", Color(0.95, 0.78, 0.30))
+	_combo_label.modulate.a = 0.0
+	_combo_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_combo_label)
 
 func _build_float_label() -> void:
 	_float_label = Label.new()
@@ -80,6 +98,8 @@ func _start_session() -> void:
 	_planet_data = GameState.get_selected_planet_data()
 	_wave_kills = 0
 	_auto_attack_timer = AUTO_ATTACK_INTERVAL
+	_combo_count = 0
+	_last_click_time = 0.0
 	_returning = false
 	return_button.disabled = false
 	if is_instance_valid(_float_label):
@@ -126,11 +146,55 @@ func _update_enemy_display(enemy: Button) -> void:
 func _on_enemy_clicked(enemy: Button) -> void:
 	if not _enemies.has(enemy):
 		return
-	_enemies[enemy]["hp"] -= GameState.click_damage
-	if _enemies[enemy]["hp"] <= 0:
-		_kill_enemy(enemy)
+	var dmg := _calc_click_damage()
+	var click_center := enemy.position + enemy.custom_minimum_size * 0.5
+
+	# 피격 대상 수집 (범위 포함)
+	var targets: Array = [enemy]
+	var range_px := GameState.get_click_range_px()
+	if range_px > 0.0:
+		for other in _enemies.keys():
+			if other == enemy:
+				continue
+			var other_center := (other as Button).position + (other as Button).custom_minimum_size * 0.5
+			if click_center.distance_to(other_center) <= range_px:
+				targets.append(other)
+
+	for target in targets:
+		if not _enemies.has(target):
+			continue
+		_enemies[target]["hp"] -= dmg
+		if _enemies[target]["hp"] <= 0:
+			_kill_enemy(target)
+		else:
+			_update_enemy_display(target)
+
+
+func _calc_click_damage() -> int:
+	var now := Time.get_unix_time_from_system()
+	if GameState.combo_level > 0 and now - _last_click_time <= PartsData.COMBO_WINDOW_SEC:
+		_combo_count += 1
 	else:
-		_update_enemy_display(enemy)
+		_combo_count = 1
+	_last_click_time = now
+
+	var base := GameState.click_damage
+	var threshold := GameState.get_combo_threshold()
+	if GameState.combo_level > 0 and _combo_count >= threshold:
+		var mult := GameState.get_combo_multiplier()
+		_show_combo_active(mult)
+		return int(ceil(float(base) * mult))
+	return base
+
+
+func _show_combo_active(mult: float) -> void:
+	if _combo_label == null:
+		return
+	_combo_label.text = "COMBO ×%.1f" % mult
+	_combo_label.modulate.a = 1.0
+	var tw := create_tween()
+	tw.tween_interval(0.6)
+	tw.tween_property(_combo_label, "modulate:a", 0.0, 0.3)
 
 func _kill_enemy(enemy: Button) -> void:
 	var credit_per_kill: int = _planet_data.get("credit_per_kill", 10)
