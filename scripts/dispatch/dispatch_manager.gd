@@ -148,7 +148,7 @@ func unlock_auto_slot(index: int) -> bool:
 func get_assembly_cost(body_tier: int, weapon_tier: int, legs_tier: int) -> int:
 	return (body_tier + weapon_tier + legs_tier) * 50
 
-func assemble_machine(slot_index: int, body_tier: int, weapon_tier: int, legs_tier: int, iids: Dictionary = {}) -> bool:
+func assemble_machine(slot_index: int, body_tier: int, weapon_tier: int, legs_tier: int, iids: Dictionary = {}, machine_name: String = "") -> bool:
 	if slot_index < 0 or slot_index >= auto_slots.size():
 		return false
 	var slot: AutoSlot = auto_slots[slot_index]
@@ -174,12 +174,24 @@ func assemble_machine(slot_index: int, body_tier: int, weapon_tier: int, legs_ti
 	slot.machine = {
 		"body": body_tier, "weapon": weapon_tier, "legs": legs_tier,
 		"body_opts": body_opts, "weapon_opts": weapon_opts, "legs_opts": legs_opts,
+		"name": machine_name,
 	}
 	slot.pending_machine = {}
 	slot.pending_pilot_id = ""
 	GameState.credits_changed.emit(GameState.total_credits)
 	auto_slot_changed.emit(slot_index)
 	return true
+
+func rename_machine(slot_index: int, new_name: String) -> bool:
+	if slot_index < 0 or slot_index >= auto_slots.size():
+		return false
+	var slot: AutoSlot = auto_slots[slot_index]
+	if slot.machine.is_empty():
+		return false
+	slot.machine["name"] = new_name.strip_edges()
+	auto_slot_changed.emit(slot_index)
+	return true
+
 
 # ── 파견 ──────────────────────────────────────────────────────
 

@@ -385,8 +385,34 @@ func unlock_auto_slot(index: int) -> bool:
 func get_assembly_cost(body_tier: int, weapon_tier: int, legs_tier: int) -> int:
 	return _dispatch.get_assembly_cost(body_tier, weapon_tier, legs_tier)
 
-func assemble_machine(slot_index: int, body_tier: int, weapon_tier: int, legs_tier: int, iids: Dictionary = {}) -> bool:
-	return _dispatch.assemble_machine(slot_index, body_tier, weapon_tier, legs_tier, iids)
+func assemble_machine(slot_index: int, body_tier: int, weapon_tier: int, legs_tier: int, iids: Dictionary = {}, machine_name: String = "") -> bool:
+	return _dispatch.assemble_machine(slot_index, body_tier, weapon_tier, legs_tier, iids, machine_name)
+
+func rename_machine(slot_index: int, new_name: String) -> bool:
+	return _dispatch.rename_machine(slot_index, new_name)
+
+func calc_part_refund(item: Dictionary) -> int:
+	var type: String = str(item.get("type", ""))
+	var tier: int    = int(item.get("tier", 1))
+	var cost := 0
+	if PARTS.has(type):
+		var tiers: Array = PARTS[type]["tiers"]
+		if tier >= 1 and tier <= tiers.size():
+			cost = int(tiers[tier - 1].get("cost", 0))
+	var has_opts := not (item.get("options", []) as Array).is_empty()
+	var rate := 0.45 if has_opts else 0.35
+	return maxi(1, int(float(cost) * rate))
+
+func disassemble_part(iid: String) -> int:
+	for i in part_inventory.size():
+		var item: Dictionary = part_inventory[i]
+		if str(item.get("iid", "")) == iid:
+			var refund := calc_part_refund(item)
+			part_inventory.remove_at(i)
+			total_credits += refund
+			credits_changed.emit(total_credits)
+			return refund
+	return -1
 
 func get_pilot_accessible_planets(pilot_id: String) -> Array:
 	var p := get_hired_pilot(pilot_id)

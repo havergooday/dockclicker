@@ -348,6 +348,16 @@ func _build_card_content(btn: Button, slot: DispatchManager.AutoSlot,
 	status_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	top_row.add_child(status_lbl)
 
+	var mname: String = str(slot.machine.get("name", ""))
+	if mname != "" and state not in ["locked", "empty", "assembling"]:
+		var mname_lbl := Label.new()
+		mname_lbl.text = mname
+		mname_lbl.add_theme_font_size_override("font_size", 7)
+		mname_lbl.modulate = Color(0.58, 0.72, 0.96)
+		mname_lbl.clip_text = true
+		mname_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		inner.add_child(mname_lbl)
+
 	var sprite_ph := Panel.new()
 	sprite_ph.custom_minimum_size = Vector2(62, 62)
 	sprite_ph.size_flags_horizontal = Control.SIZE_EXPAND_FILL
