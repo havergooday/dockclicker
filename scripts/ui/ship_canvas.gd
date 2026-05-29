@@ -16,6 +16,7 @@ const NAV_ITEMS: Array = [
 const DECK_HEIGHT      := 300.0  # 데크 한 층 높이 (= 창 높이)
 const DECK_SNAP_THRESH := 55.0   # 이 거리 이상 드래그해야 데크 전환
 const AXIS_LOCK_PX     := 10.0   # H/V 축 고정 임계값
+const OPTIONS_H        := 168.0  # 옵션 팝업 높이
 
 var _scroll: ScrollContainer
 var _content: Control
@@ -29,6 +30,8 @@ var _drag_scroll_start := 0
 var _drag_axis: String = ""            # "" | "h" | "v"
 var _current_deck: int = 0            # 0 = 상부, 1 = 하부
 var _deck_btn: Button = null
+var _options_popup: Control = null
+var _options_panel: PanelContainer = null
 var _nav_buttons: Dictionary = {}
 
 
@@ -68,6 +71,7 @@ func _build_ui() -> void:
 	_build_zone_dividers()
 	_build_nav_bar()
 	_build_popups()
+	_build_options_popup()
 
 
 func _build_background() -> void:
@@ -104,6 +108,25 @@ func _build_nav_bar() -> void:
 	row.offset_bottom = -5
 	row.add_theme_constant_override("separation", 8)
 	bar.add_child(row)
+
+	# 왼쪽 옵션 버튼
+	var opt_btn := Button.new()
+	opt_btn.text = "⚙"
+	opt_btn.custom_minimum_size = Vector2(30, 26)
+	opt_btn.add_theme_font_size_override("font_size", 12)
+	opt_btn.pressed.connect(func():
+		if is_instance_valid(_options_popup) and _options_popup.visible:
+			_close_options()
+		else:
+			_open_options()
+	)
+	row.add_child(opt_btn)
+
+	var sep_l := ColorRect.new()
+	sep_l.custom_minimum_size = Vector2(1, 0)
+	sep_l.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sep_l.color = Color(0.28, 0.40, 0.60, 0.45)
+	row.add_child(sep_l)
 
 	var nav_group := ButtonGroup.new()
 	_nav_buttons.clear()
@@ -424,6 +447,8 @@ func _input(event: InputEvent) -> void:
 	for popup in _popups.values():
 		if is_instance_valid(popup) and popup.visible:
 			return
+	if is_instance_valid(_options_popup) and _options_popup.visible:
+		return
 
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
 		if event.pressed:
@@ -485,6 +510,151 @@ func _snap_to_deck(deck: int) -> void:
 func _update_deck_indicator() -> void:
 	if is_instance_valid(_deck_btn):
 		_deck_btn.text = "▼ 숙소" if _current_deck == 0 else "▲ 상부"
+
+
+func _build_options_popup() -> void:
+	_options_popup = Control.new()
+	_options_popup.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_options_popup.visible = false
+	_options_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_options_popup)
+
+	var dim := ColorRect.new()
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.color = Color(0, 0, 0, 0.38)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.gui_input.connect(func(ev: InputEvent):
+		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+			_close_options()
+	)
+	_options_popup.add_child(dim)
+
+	_options_panel = PanelContainer.new()
+	_options_panel.anchor_left   = 0.0
+	_options_panel.anchor_top    = 0.0
+	_options_panel.anchor_right  = 1.0
+	_options_panel.anchor_bottom = 0.0
+	_options_panel.offset_top    = -OPTIONS_H
+	_options_panel.offset_bottom = OPTIONS_H
+	_options_panel.mouse_filter  = Control.MOUSE_FILTER_STOP
+	var sty := StyleBoxFlat.new()
+	sty.bg_color     = Color(0.04, 0.06, 0.11, 0.98)
+	sty.border_color = Color(0.26, 0.38, 0.60, 0.88)
+	sty.border_width_bottom = 1
+	sty.content_margin_left   = 18
+	sty.content_margin_right  = 18
+	sty.content_margin_top    = 8
+	sty.content_margin_bottom = 10
+	_options_panel.add_theme_stylebox_override("panel", sty)
+	_options_popup.add_child(_options_panel)
+
+	var root := VBoxContainer.new()
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.add_theme_constant_override("separation", 6)
+	_options_panel.add_child(root)
+
+	# 헤더
+	var hdr := HBoxContainer.new()
+	hdr.add_theme_constant_override("separation", 8)
+	root.add_child(hdr)
+	var title := Label.new()
+	title.text = "⚙  옵션"
+	title.add_theme_font_size_override("font_size", 13)
+	title.modulate = Color(0.80, 0.90, 1.0)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hdr.add_child(title)
+	var close_btn := Button.new()
+	close_btn.text = "✕"
+	close_btn.flat = true
+	close_btn.custom_minimum_size = Vector2(26, 22)
+	close_btn.pressed.connect(_close_options)
+	hdr.add_child(close_btn)
+
+	root.add_child(HSeparator.new())
+
+	# 전체 음소거
+	var mute_row := HBoxContainer.new()
+	mute_row.add_theme_constant_override("separation", 8)
+	root.add_child(mute_row)
+	var mute_lbl := Label.new()
+	mute_lbl.text = "전체 음소거"
+	mute_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mute_lbl.add_theme_font_size_override("font_size", 11)
+	mute_row.add_child(mute_lbl)
+	var muted := AudioServer.is_bus_mute(0)
+	var mute_btn := Button.new()
+	mute_btn.toggle_mode = true
+	mute_btn.button_pressed = muted
+	mute_btn.text = "ON" if muted else "OFF"
+	mute_btn.custom_minimum_size = Vector2(44, 22)
+	mute_btn.modulate = Color(1.0, 0.50, 0.50) if muted else Color(0.60, 0.62, 0.68)
+	mute_btn.toggled.connect(func(v: bool):
+		mute_btn.text = "ON" if v else "OFF"
+		mute_btn.modulate = Color(1.0, 0.50, 0.50) if v else Color(0.60, 0.62, 0.68)
+		AudioServer.set_bus_mute(0, v)
+	)
+	mute_row.add_child(mute_btn)
+
+	# 볼륨 슬라이더
+	root.add_child(_build_volume_row("마스터", 0))
+	var bgm_idx := AudioServer.get_bus_index("BGM")
+	if bgm_idx >= 0:
+		root.add_child(_build_volume_row("BGM", bgm_idx))
+	var sfx_idx := AudioServer.get_bus_index("SFX")
+	if sfx_idx >= 0:
+		root.add_child(_build_volume_row("SFX", sfx_idx))
+
+
+func _build_volume_row(label: String, bus_idx: int) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	var lbl := Label.new()
+	lbl.text = label
+	lbl.custom_minimum_size = Vector2(56, 0)
+	lbl.add_theme_font_size_override("font_size", 11)
+	lbl.modulate = Color(0.68, 0.76, 0.90)
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(lbl)
+	var cur: float = db_to_linear(AudioServer.get_bus_volume_db(bus_idx))
+	var slider := HSlider.new()
+	slider.min_value = 0.0
+	slider.max_value = 1.0
+	slider.step = 0.01
+	slider.value = cur
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider.custom_minimum_size = Vector2(0, 20)
+	row.add_child(slider)
+	var val_lbl := Label.new()
+	val_lbl.text = "%d%%" % int(cur * 100.0)
+	val_lbl.custom_minimum_size = Vector2(34, 0)
+	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	val_lbl.add_theme_font_size_override("font_size", 10)
+	val_lbl.modulate = Color(0.80, 0.88, 1.0)
+	row.add_child(val_lbl)
+	slider.value_changed.connect(func(v: float):
+		val_lbl.text = "%d%%" % int(v * 100.0)
+		AudioServer.set_bus_volume_db(bus_idx, linear_to_db(maxf(v, 0.001)))
+	)
+	return row
+
+
+func _open_options() -> void:
+	if not is_instance_valid(_options_popup):
+		return
+	_options_popup.visible = true
+	_options_panel.offset_top = -OPTIONS_H
+	var tween := create_tween()
+	tween.tween_property(_options_panel, "offset_top", 0.0, 0.20) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
+
+
+func _close_options() -> void:
+	if not is_instance_valid(_options_popup) or not _options_popup.visible:
+		return
+	var tween := create_tween()
+	tween.tween_property(_options_panel, "offset_top", -OPTIONS_H, 0.16) \
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_SINE)
+	tween.tween_callback(func(): _options_popup.visible = false)
 
 
 func _on_visibility_changed() -> void:
