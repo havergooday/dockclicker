@@ -65,8 +65,11 @@ func open_for_control_room() -> void:
 	_rebuild_planets()
 	call_deferred("_restore_saved_scroll")
 	_main_panel.offset_top = -POPUP_HEIGHT
+	_main_panel.offset_bottom = 0.0
 	var tween := create_tween()
-	tween.tween_property(_main_panel, "offset_top", 0.0, 0.20).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
+	tween.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(_main_panel, "offset_top", 0.0, 0.20)
+	tween.parallel().tween_property(_main_panel, "offset_bottom", POPUP_HEIGHT, 0.20)
 
 
 func _restore_saved_scroll() -> void:
@@ -80,7 +83,9 @@ func close_popup() -> void:
 	_pending_dispatch = Callable()
 	_saved_planet_scroll_x = _planet_scroll.scroll_horizontal
 	var tween := create_tween()
-	tween.tween_property(_main_panel, "offset_top", -POPUP_HEIGHT, 0.18).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_SINE)
+	tween.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(_main_panel, "offset_top", -POPUP_HEIGHT, 0.18)
+	tween.parallel().tween_property(_main_panel, "offset_bottom", 0.0, 0.18)
 	tween.tween_callback(func():
 		hide()
 		_hide_toast()

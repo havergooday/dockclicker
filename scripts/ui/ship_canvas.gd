@@ -530,9 +530,9 @@ func _build_options_popup() -> void:
 	_options_popup.add_child(dim)
 
 	_options_panel = PanelContainer.new()
-	_options_panel.anchor_left   = 0.0
+	_options_panel.anchor_left   = 0.3
 	_options_panel.anchor_top    = 0.0
-	_options_panel.anchor_right  = 1.0
+	_options_panel.anchor_right  = 0.7
 	_options_panel.anchor_bottom = 0.0
 	_options_panel.offset_top    = -OPTIONS_H
 	_options_panel.offset_bottom = OPTIONS_H
@@ -643,17 +643,20 @@ func _open_options() -> void:
 		return
 	_options_popup.visible = true
 	_options_panel.offset_top = -OPTIONS_H
+	_options_panel.offset_bottom = 0.0
 	var tween := create_tween()
-	tween.tween_property(_options_panel, "offset_top", 0.0, 0.20) \
-		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
+	tween.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(_options_panel, "offset_top", 0.0, 0.20)
+	tween.parallel().tween_property(_options_panel, "offset_bottom", OPTIONS_H, 0.20)
 
 
 func _close_options() -> void:
 	if not is_instance_valid(_options_popup) or not _options_popup.visible:
 		return
 	var tween := create_tween()
-	tween.tween_property(_options_panel, "offset_top", -OPTIONS_H, 0.16) \
-		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_SINE)
+	tween.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(_options_panel, "offset_top", -OPTIONS_H, 0.16)
+	tween.parallel().tween_property(_options_panel, "offset_bottom", 0.0, 0.16)
 	tween.tween_callback(func(): _options_popup.visible = false)
 
 
