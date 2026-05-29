@@ -16,8 +16,9 @@ static func build_content(
 	hdr.add_theme_constant_override("separation", 6)
 	vb.add_child(hdr)
 
+	var slot_cname: String = str(GameState.auto_slots[slot_idx].custom_name) if slot_idx < GameState.auto_slots.size() else ""
 	var title := Label.new()
-	title.text = "BAY %02d" % (slot_idx + 1)
+	title.text = slot_cname if slot_cname != "" else "BAY %02d" % (slot_idx + 1)
 	title.add_theme_font_size_override("font_size", 13)
 	title.modulate = Color(0.75, 0.80, 0.95)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL

@@ -153,6 +153,7 @@ func _serialize_slots() -> Array:
 		var s: DispatchManager.AutoSlot = raw as DispatchManager.AutoSlot
 		out.append({
 			"state":             s.state,
+				"custom_name":       s.custom_name,
 			"unlock_cost":       s.unlock_cost,
 			"hangar_group_id":   s.hangar_group_id,
 			"machine":           s.machine.duplicate(),

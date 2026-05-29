@@ -22,6 +22,7 @@ class AutoSlot:
 	var unlock_cost: int = 0
 	var hangar_group_id: int = 0
 	var machine: Dictionary = {}   # {body: int, weapon: int, legs: int}
+	var custom_name: String = ""   # 사용자 지정 베이 이름
 	var assigned_pilot_id: String = ""  # 베이 사전 배정 파일럿 (임무와 무관하게 유지)
 	var pilot_id: String = ""
 	var planet: String = ""
@@ -181,6 +182,14 @@ func assemble_machine(slot_index: int, body_tier: int, weapon_tier: int, legs_ti
 	GameState.credits_changed.emit(GameState.total_credits)
 	auto_slot_changed.emit(slot_index)
 	return true
+
+func rename_bay(slot_index: int, new_name: String) -> bool:
+	if slot_index < 0 or slot_index >= auto_slots.size():
+		return false
+	auto_slots[slot_index].custom_name = new_name.strip_edges()
+	auto_slot_changed.emit(slot_index)
+	return true
+
 
 func rename_machine(slot_index: int, new_name: String) -> bool:
 	if slot_index < 0 or slot_index >= auto_slots.size():
@@ -360,6 +369,7 @@ func apply_save_data(slot_data: Array, save_time: float, groups_data: Array = []
 		slot.hangar_group_id   = int(d.get("hangar_group_id",   i / 4))
 		var mraw               = d.get("machine", {})
 		slot.machine           = (mraw as Dictionary).duplicate() if mraw is Dictionary else {}
+		slot.custom_name       = str(d.get("custom_name",        ""))
 		slot.pilot_id          = str(d.get("pilot_id",          ""))
 		slot.assigned_pilot_id = str(d.get("assigned_pilot_id", ""))
 		slot.planet            = str(d.get("planet",            ""))

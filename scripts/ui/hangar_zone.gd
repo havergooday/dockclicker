@@ -332,8 +332,9 @@ func _build_card_content(btn: Button, slot: DispatchManager.AutoSlot,
 	top_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	inner.add_child(top_row)
 
+	var slot_name: String = str(GameState.auto_slots[index].custom_name) if index < GameState.auto_slots.size() else ""
 	var bay_lbl := Label.new()
-	bay_lbl.text = "BAY %02d" % (index + 1)
+	bay_lbl.text = slot_name if slot_name != "" else "BAY %02d" % (index + 1)
 	bay_lbl.add_theme_font_size_override("font_size", 7)
 	bay_lbl.modulate = Color(0.40, 0.43, 0.52)
 	bay_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL

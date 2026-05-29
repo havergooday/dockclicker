@@ -22,7 +22,7 @@ var _selector_part_key: String = ""
 var _draft_pilot_id: String = ""
 var _draft_machine: Dictionary = {}
 var _draft_iids: Dictionary = {}
-var _draft_name: String = ""
+var _bay_name_input: LineEdit = null
 var _sel_dragging: bool = false
 var _sel_drag_start_y: float = 0.0
 var _sel_drag_start_scroll: int = 0
@@ -75,6 +75,10 @@ func open_for_slot(slot_index: int) -> void:
 	visible = true
 	_init_draft_state()
 	_rebuild_content()
+	if is_instance_valid(_bay_name_input) and slot_index >= 0 and slot_index < GameState.auto_slots.size():
+		var slot := GameState.auto_slots[slot_index] as DispatchManager.AutoSlot
+		_bay_name_input.placeholder_text = "BAY %02d" % (slot_index + 1)
+		_bay_name_input.text = slot.custom_name
 
 	var off := -POPUP_HEIGHT
 	_panel.offset_top = off
@@ -148,24 +152,30 @@ func _build_ui() -> void:
 	_panel.add_child(root)
 
 	var header := HBoxContainer.new()
-	header.add_theme_constant_override("separation", 8)
+	header.add_theme_constant_override("separation", 10)
 	header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	root.add_child(header)
 
-	var left_spacer := Control.new()
-	left_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.add_child(left_spacer)
+	_bay_name_input = LineEdit.new()
+	_bay_name_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_bay_name_input.custom_minimum_size = Vector2(0, 26)
+	_bay_name_input.add_theme_font_size_override("font_size", 14)
+	_bay_name_input.placeholder_text = "BAY --"
+	_bay_name_input.text_submitted.connect(func(t: String):
+		GameState.rename_bay(_slot_index, t)
+		_bay_name_input.release_focus()
+	)
+	_bay_name_input.focus_exited.connect(func():
+		GameState.rename_bay(_slot_index, _bay_name_input.text)
+	)
+	header.add_child(_bay_name_input)
 
 	var close_btn := Button.new()
 	close_btn.text = "닫기"
 	close_btn.flat = true
-	close_btn.custom_minimum_size = Vector2(92, 24)
+	close_btn.custom_minimum_size = Vector2(72, 26)
 	close_btn.pressed.connect(close_popup)
 	header.add_child(close_btn)
-
-	var right_spacer := Control.new()
-	right_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.add_child(right_spacer)
 
 	_content_root = Control.new()
 	_content_root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -191,9 +201,6 @@ func _rebuild_content() -> void:
 	root_vb.add_theme_constant_override("separation", 5)
 	_content_root.add_child(root_vb)
 
-	if slot.state in ["empty", "offline"]:
-		root_vb.add_child(_build_name_bar(slot))
-
 	var content := HBoxContainer.new()
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.size_flags_vertical   = Control.SIZE_EXPAND_FILL
@@ -205,42 +212,6 @@ func _rebuild_content() -> void:
 	content.add_child(_build_spec_panel(slot, accent))
 	content.add_child(_build_action_panel(slot, accent))
 	_update_selector_state()
-
-
-func _build_name_bar(slot: DispatchManager.AutoSlot) -> HBoxContainer:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	var lbl := Label.new()
-	lbl.text = "머신 이름"
-	lbl.custom_minimum_size = Vector2(72, 0)
-	lbl.add_theme_font_size_override("font_size", 10)
-	lbl.modulate = Color(0.50, 0.56, 0.70)
-	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	row.add_child(lbl)
-
-	var inp := LineEdit.new()
-	inp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	inp.custom_minimum_size   = Vector2(0, 24)
-	inp.add_theme_font_size_override("font_size", 12)
-	inp.placeholder_text = "이름 없음"
-
-	if slot.state == "empty":
-		inp.text = _draft_name
-		inp.text_changed.connect(func(t: String): _draft_name = t)
-	else:
-		inp.text = str(slot.machine.get("name", ""))
-		var cap_slot := _slot_index
-		inp.text_submitted.connect(func(t: String):
-			GameState.rename_machine(cap_slot, t)
-			inp.release_focus()
-		)
-		inp.focus_exited.connect(func():
-			GameState.rename_machine(cap_slot, inp.text)
-		)
-	row.add_child(inp)
-	return row
 
 
 func _build_pilot_panel(slot: DispatchManager.AutoSlot, accent: Color) -> VBoxContainer:
@@ -518,7 +489,7 @@ func _on_unlock_pressed() -> void:
 func _on_commit_assembly_pressed() -> void:
 	if not _can_commit_assembly():
 		return
-	if not GameState.assemble_machine(_slot_index, _draft_machine.get("body", 0), _draft_machine.get("weapon", 0), _draft_machine.get("legs", 0), _draft_iids, _draft_name):
+	if not GameState.assemble_machine(_slot_index, _draft_machine.get("body", 0), _draft_machine.get("weapon", 0), _draft_machine.get("legs", 0), _draft_iids):
 		return
 	if _draft_pilot_id != "":
 		GameState.assign_pilot_to_slot(_slot_index, _draft_pilot_id)
@@ -669,13 +640,11 @@ func _init_draft_state() -> void:
 	_draft_pilot_id = ""
 	_draft_machine = {"body": 0, "weapon": 0, "legs": 0}
 	_draft_iids = {}
-	_draft_name = ""
 	if _slot_index < 0 or _slot_index >= GameState.auto_slots.size():
 		return
 	var slot: DispatchManager.AutoSlot = GameState.auto_slots[_slot_index]
 	if slot.state != "empty":
-		_draft_machine = slot.machine.duplicate()
-		_draft_name    = str(slot.machine.get("name", ""))
+		_draft_machine  = slot.machine.duplicate()
 		_draft_pilot_id = slot.pilot_id if slot.pilot_id != "" else slot.assigned_pilot_id
 	else:
 		if not slot.pending_machine.is_empty():

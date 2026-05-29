@@ -388,6 +388,9 @@ func get_assembly_cost(body_tier: int, weapon_tier: int, legs_tier: int) -> int:
 func assemble_machine(slot_index: int, body_tier: int, weapon_tier: int, legs_tier: int, iids: Dictionary = {}, machine_name: String = "") -> bool:
 	return _dispatch.assemble_machine(slot_index, body_tier, weapon_tier, legs_tier, iids, machine_name)
 
+func rename_bay(slot_index: int, new_name: String) -> bool:
+	return _dispatch.rename_bay(slot_index, new_name)
+
 func rename_machine(slot_index: int, new_name: String) -> bool:
 	return _dispatch.rename_machine(slot_index, new_name)
 
