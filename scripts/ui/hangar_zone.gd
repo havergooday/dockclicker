@@ -38,6 +38,8 @@ func _process(_dt: float) -> void:
 	if not visible or not _needs_rebuild:
 		return
 	_needs_rebuild = false
+	if is_instance_valid(_scroll_ref):
+		_bay_scroll_pos = _scroll_ref.scroll_horizontal
 	var prev_popup := _popup_slot
 	_build()
 	if prev_popup >= 0:

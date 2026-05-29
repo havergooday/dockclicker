@@ -158,7 +158,7 @@ func _make_bridge_zone() -> void:
 	_bridge_zone_root = roam_layer
 
 	GameState.pilot_hired.connect(func(_id): _sync_bridge_pilots())
-	_sync_bridge_pilots()
+	call_deferred("_sync_bridge_pilots")
 
 
 func _make_control_zone() -> void:
@@ -315,26 +315,21 @@ func _open_parts_shop() -> void:
 func _sync_bridge_pilots() -> void:
 	if _bridge_zone_root == null:
 		return
+	var zone_w := 1220.0
+	var zone_h := maxf(_bridge_zone_root.size.y, 240.0)
+	var current_ids := {}
 	for p in GameState.hired_pilots:
 		var pid: String = str(p.get("id", ""))
+		current_ids[pid] = true
 		if _bridge_pilots.has(pid):
 			continue
 		var node: Control = BRIDGE_PILOT_SCR.new()
 		_bridge_zone_root.add_child(node)
-		var zone_w := 1220.0
-		var zone_h := _bridge_zone_root.size.y if _bridge_zone_root.size.y > 0 else 240.0
-		var start_x := randf_range(20.0, zone_w - 68.0)
-		var start_y := zone_h * 0.55
-		node.position = Vector2(start_x, start_y)
+		node.position = Vector2(randf_range(20.0, zone_w - 68.0), zone_h * 0.55)
 		node.call("setup", p, 0.0, zone_w)
 		_bridge_pilots[pid] = node
 	for pid in _bridge_pilots.keys():
-		var still_hired := false
-		for p in GameState.hired_pilots:
-			if str(p.get("id", "")) == pid:
-				still_hired = true
-				break
-		if not still_hired:
+		if not current_ids.has(pid):
 			(_bridge_pilots[pid] as Control).queue_free()
 			_bridge_pilots.erase(pid)
 
