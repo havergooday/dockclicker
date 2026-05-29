@@ -128,7 +128,7 @@ func _update_enemy_positions(delta: float) -> void:
 
 
 func _move_enemy(enemy: Button, delta: float, area: Vector2) -> void:
-	var d := _enemies[enemy]
+	var d: Dictionary = _enemies[enemy]
 	var sz: Vector2 = enemy.custom_minimum_size
 	var max_x := area.x - sz.x
 	var max_y := area.y - sz.y
@@ -147,13 +147,15 @@ func _move_enemy(enemy: Button, delta: float, area: Vector2) -> void:
 			enemy.position.x = clampf(d["ax"] + cos(d["phase"]) * d["amp"].x, 0.0, max_x)
 			enemy.position.y = clampf(d["ay"] + sin(d["phase"]) * d["amp"].y, 0.0, max_y)
 		"bounce":
-			var nx := enemy.position.x + d["vx"] * delta
-			var ny := enemy.position.y + d["vy"] * delta
+			var vx: float = d["vx"]
+			var vy: float = d["vy"]
+			var nx: float = enemy.position.x + vx * delta
+			var ny: float = enemy.position.y + vy * delta
 			if nx < 0.0 or nx > max_x:
-				d["vx"] = -d["vx"]
+				d["vx"] = -vx
 				nx = clampf(nx, 0.0, max_x)
 			if ny < 0.0 or ny > max_y:
-				d["vy"] = -d["vy"]
+				d["vy"] = -vy
 				ny = clampf(ny, 0.0, max_y)
 			enemy.position = Vector2(nx, ny)
 		"figure8":
@@ -167,13 +169,15 @@ func _move_enemy(enemy: Button, delta: float, area: Vector2) -> void:
 				var angle := randf() * TAU
 				d["vx"] = cos(angle) * d["speed"]
 				d["vy"] = sin(angle) * d["speed"]
-			var nx := enemy.position.x + d["vx"] * delta
-			var ny := enemy.position.y + d["vy"] * delta
+			var evx: float = d["vx"]
+			var evy: float = d["vy"]
+			var nx: float = enemy.position.x + evx * delta
+			var ny: float = enemy.position.y + evy * delta
 			if nx < 0.0 or nx > max_x:
-				d["vx"] = -d["vx"]
+				d["vx"] = -evx
 				nx = clampf(nx, 0.0, max_x)
 			if ny < 0.0 or ny > max_y:
-				d["vy"] = -d["vy"]
+				d["vy"] = -evy
 				ny = clampf(ny, 0.0, max_y)
 			enemy.position = Vector2(nx, ny)
 
@@ -341,7 +345,7 @@ func _make_enemy_style(col: Color, hover: bool) -> StyleBoxFlat:
 
 
 func _update_enemy_display(enemy: Button) -> void:
-	var d := _enemies[enemy]
+	var d: Dictionary = _enemies[enemy]
 	enemy.text = "%s\n%d/%d" % [d["glyph"], d["hp"], d["max_hp"]]
 
 
@@ -418,7 +422,7 @@ func _try_drop_part() -> void:
 	var max_tier := clampi(planet_idx / 3 + 1, 1, 3)
 	var tier     := randi_range(1, max_tier)
 	var types    := ["body", "weapon", "legs"]
-	var ptype    := types[randi() % types.size()]
+	var ptype: String = types[randi() % types.size()]
 	var options  := _gen_drop_options()
 	GameState.part_inventory.append({
 		"iid":     "drop_%d" % Time.get_ticks_usec(),
@@ -460,7 +464,7 @@ func _show_drop_toast(ptype: String, tier: int, options: Array) -> void:
 	if _drop_label == null:
 		return
 	var type_names := {"body": "몸체", "weapon": "무기", "legs": "다리"}
-	var tier_str   := ["T1", "T2", "T3"][clampi(tier - 1, 0, 2)]
+	var tier_str: String = ["T1", "T2", "T3"][clampi(tier - 1, 0, 2)]
 	var opt_parts  := []
 	for opt in options:
 		match opt.get("type", ""):
