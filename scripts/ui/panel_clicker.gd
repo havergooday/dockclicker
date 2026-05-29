@@ -1,8 +1,34 @@
 extends Control
 
+# ── 생물 정의 ──────────────────────────────────────────────────
+# 난이도 티어 0(쉬움) ~ 5(어려움)
+# wave/circle/figure8 → speed = rad/s,  amp 사용
+# bounce/erratic      → speed = px/s,   amp 미사용
+const CREATURE_DEFS: Array = [
+	# 0: 슬라임 — 좌우 파동, 느리고 큼
+	{"glyph": "●",  "color": Color(0.40, 0.82, 0.36),
+	 "size": Vector2(72, 58), "pattern": "h_wave",  "speed": 1.6,  "amp": Vector2(68, 0)},
+	# 1: 날벌레 — 상하 파동
+	{"glyph": "▸",  "color": Color(0.46, 0.66, 1.00),
+	 "size": Vector2(64, 52), "pattern": "v_wave",  "speed": 2.0,  "amp": Vector2(0, 40)},
+	# 2: 유영체 — 원운동
+	{"glyph": "◎",  "color": Color(0.92, 0.58, 0.26),
+	 "size": Vector2(60, 50), "pattern": "circle",  "speed": 2.4,  "amp": Vector2(56, 36)},
+	# 3: 거미 — 직선 반사
+	{"glyph": "✕",  "color": Color(0.88, 0.28, 0.38),
+	 "size": Vector2(54, 46), "pattern": "bounce",  "speed": 130.0, "amp": Vector2.ZERO},
+	# 4: 환영체 — 8자 궤적
+	{"glyph": "◇",  "color": Color(0.70, 0.34, 1.00),
+	 "size": Vector2(50, 42), "pattern": "figure8", "speed": 2.8,  "amp": Vector2(80, 32)},
+	# 5: 변이체 — 무작위 방향 전환, 작고 빠름
+	{"glyph": "⟡",  "color": Color(1.00, 0.82, 0.14),
+	 "size": Vector2(46, 38), "pattern": "erratic", "speed": 175.0, "amp": Vector2.ZERO},
+]
+
 var _enemies: Dictionary = {}
 var _wave_kills: int = 0
 var _planet_data: Dictionary = {}
+var _planet_tier: int = 0
 var _auto_attack_timer: float = 0.0
 var _returning := false
 var _float_label: Label
@@ -18,6 +44,7 @@ const DROP_RATE := 0.40
 @onready var session_label: Label = $Header/SessionLabel
 @onready var return_button: Button = $Header/ReturnButton
 
+
 func _ready() -> void:
 	PanelManager.register_panel("clicker", self)
 	return_button.pressed.connect(_on_return_pressed)
@@ -27,10 +54,29 @@ func _ready() -> void:
 	_build_drop_label()
 
 
+func _build_float_label() -> void:
+	_float_label = Label.new()
+	_float_label.anchor_left   = 0.5
+	_float_label.anchor_right  = 0.5
+	_float_label.anchor_top    = 0.5
+	_float_label.anchor_bottom = 0.5
+	_float_label.offset_left   = -200.0
+	_float_label.offset_right  =  200.0
+	_float_label.offset_top    =  -50.0
+	_float_label.offset_bottom =   50.0
+	_float_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_float_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	_float_label.add_theme_font_size_override("font_size", 42)
+	_float_label.add_theme_color_override("font_color", Color(0.88, 0.96, 1.0))
+	_float_label.modulate.a = 0.0
+	_float_label.z_index = 20
+	_float_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_float_label)
+
+
 func _build_combo_label() -> void:
 	_combo_label = Label.new()
 	_combo_label.anchor_right  = 1.0
-	_combo_label.anchor_bottom = 0.0
 	_combo_label.offset_top    = 4.0
 	_combo_label.offset_bottom = 24.0
 	_combo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -40,33 +86,99 @@ func _build_combo_label() -> void:
 	_combo_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_combo_label)
 
-func _build_float_label() -> void:
-	_float_label = Label.new()
-	_float_label.anchor_left = 0.5
-	_float_label.anchor_right = 0.5
-	_float_label.anchor_top = 0.5
-	_float_label.anchor_bottom = 0.5
-	_float_label.offset_left = -200.0
-	_float_label.offset_right = 200.0
-	_float_label.offset_top = -50.0
-	_float_label.offset_bottom = 50.0
-	_float_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_float_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_float_label.add_theme_font_size_override("font_size", 42)
-	_float_label.add_theme_color_override("font_color", Color(0.88, 0.96, 1.0))
-	_float_label.modulate.a = 0.0
-	_float_label.z_index = 20
-	_float_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_float_label)
+
+func _build_drop_label() -> void:
+	_drop_label = Label.new()
+	_drop_label.anchor_left   = 0.0
+	_drop_label.anchor_right  = 1.0
+	_drop_label.anchor_top    = 1.0
+	_drop_label.anchor_bottom = 1.0
+	_drop_label.offset_top    = -22.0
+	_drop_label.offset_bottom =  -2.0
+	_drop_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_drop_label.add_theme_font_size_override("font_size", 11)
+	_drop_label.add_theme_color_override("font_color", Color(0.55, 1.00, 0.72))
+	_drop_label.modulate.a = 0.0
+	_drop_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_drop_label)
+
+
+# ── 메인 루프 ─────────────────────────────────────────────────
 
 func _process(delta: float) -> void:
-	if not visible or not GameState.auto_attack_unlocked or _enemies.is_empty():
+	if not visible:
 		return
-	_auto_attack_timer -= delta
-	if _auto_attack_timer <= 0.0:
-		_auto_attack_timer = AUTO_ATTACK_INTERVAL
-		_do_auto_attack()
+	_update_enemy_positions(delta)
+	if GameState.auto_attack_unlocked and not _enemies.is_empty():
+		_auto_attack_timer -= delta
+		if _auto_attack_timer <= 0.0:
+			_auto_attack_timer = AUTO_ATTACK_INTERVAL
+			_do_auto_attack()
 
+
+# ── 생물 이동 ─────────────────────────────────────────────────
+
+func _update_enemy_positions(delta: float) -> void:
+	if _enemies.is_empty():
+		return
+	var area := battle_area.size
+	for enemy in _enemies.keys():
+		if is_instance_valid(enemy):
+			_move_enemy(enemy as Button, delta, area)
+
+
+func _move_enemy(enemy: Button, delta: float, area: Vector2) -> void:
+	var d := _enemies[enemy]
+	var sz: Vector2 = enemy.custom_minimum_size
+	var max_x := area.x - sz.x
+	var max_y := area.y - sz.y
+
+	match d["pattern"]:
+		"h_wave":
+			d["phase"] += delta * d["speed"]
+			enemy.position.x = clampf(d["ax"] + sin(d["phase"]) * d["amp"].x, 0.0, max_x)
+			enemy.position.y = d["ay"]
+		"v_wave":
+			d["phase"] += delta * d["speed"]
+			enemy.position.x = d["ax"]
+			enemy.position.y = clampf(d["ay"] + sin(d["phase"]) * d["amp"].y, 0.0, max_y)
+		"circle":
+			d["phase"] += delta * d["speed"]
+			enemy.position.x = clampf(d["ax"] + cos(d["phase"]) * d["amp"].x, 0.0, max_x)
+			enemy.position.y = clampf(d["ay"] + sin(d["phase"]) * d["amp"].y, 0.0, max_y)
+		"bounce":
+			var nx := enemy.position.x + d["vx"] * delta
+			var ny := enemy.position.y + d["vy"] * delta
+			if nx < 0.0 or nx > max_x:
+				d["vx"] = -d["vx"]
+				nx = clampf(nx, 0.0, max_x)
+			if ny < 0.0 or ny > max_y:
+				d["vy"] = -d["vy"]
+				ny = clampf(ny, 0.0, max_y)
+			enemy.position = Vector2(nx, ny)
+		"figure8":
+			d["phase"] += delta * d["speed"]
+			enemy.position.x = clampf(d["ax"] + sin(d["phase"] * 2.0) * d["amp"].x, 0.0, max_x)
+			enemy.position.y = clampf(d["ay"] + sin(d["phase"]) * d["amp"].y, 0.0, max_y)
+		"erratic":
+			d["timer"] -= delta
+			if d["timer"] <= 0.0:
+				d["timer"] = randf_range(0.25, 0.65)
+				var angle := randf() * TAU
+				d["vx"] = cos(angle) * d["speed"]
+				d["vy"] = sin(angle) * d["speed"]
+			var nx := enemy.position.x + d["vx"] * delta
+			var ny := enemy.position.y + d["vy"] * delta
+			if nx < 0.0 or nx > max_x:
+				d["vx"] = -d["vx"]
+				nx = clampf(nx, 0.0, max_x)
+			if ny < 0.0 or ny > max_y:
+				d["vy"] = -d["vy"]
+				ny = clampf(ny, 0.0, max_y)
+			enemy.position = Vector2(nx, ny)
+
+
+# ── 자동 공격 ─────────────────────────────────────────────────
 
 func _do_auto_attack() -> void:
 	var keys := _enemies.keys()
@@ -86,6 +198,8 @@ func _do_auto_attack() -> void:
 		tw.tween_property(enemy, "modulate", Color.WHITE, 0.12)
 
 
+# ── 입력 ──────────────────────────────────────────────────────
+
 func _input(event: InputEvent) -> void:
 	if not visible:
 		return
@@ -93,12 +207,17 @@ func _input(event: InputEvent) -> void:
 		_on_return_pressed()
 		get_viewport().set_input_as_handled()
 
+
+# ── 세션 관리 ─────────────────────────────────────────────────
+
 func _on_panel_changed(panel_id: String) -> void:
 	if panel_id == "clicker":
 		_start_session()
 
+
 func _start_session() -> void:
 	_planet_data = GameState.get_selected_planet_data()
+	_planet_tier = _get_planet_tier()
 	_wave_kills = 0
 	_auto_attack_timer = AUTO_ATTACK_INTERVAL
 	_combo_count = 0
@@ -111,10 +230,13 @@ func _start_session() -> void:
 	_refresh_session_label()
 	_fill_to_max.call_deferred()
 
+
 func _clear_enemies() -> void:
 	for enemy in _enemies.keys():
-		enemy.queue_free()
+		if is_instance_valid(enemy):
+			enemy.queue_free()
 	_enemies.clear()
+
 
 func _fill_to_max() -> void:
 	if _planet_data.is_empty():
@@ -126,25 +248,104 @@ func _fill_to_max() -> void:
 		_spawn_enemy()
 		total += 1
 
+
+# ── 생물 스폰 ─────────────────────────────────────────────────
+
+func _get_planet_tier() -> int:
+	var pid := str(_planet_data.get("id", ""))
+	for i in GameState.PLANETS.size():
+		if str(GameState.PLANETS[i].get("id", "")) == pid:
+			return clampi(i * CREATURE_DEFS.size() / GameState.PLANETS.size(), 0, CREATURE_DEFS.size() - 1)
+	return 0
+
+
+func _pick_creature_def() -> Dictionary:
+	var tier := _planet_tier
+	# 고난이도 행성에서 이전 티어 혼합 스폰 (30%)
+	if tier > 0 and randf() < 0.30:
+		tier = randi_range(maxi(0, tier - 2), tier - 1)
+	return CREATURE_DEFS[tier]
+
+
 func _spawn_enemy() -> void:
-	var enemy_hp: int = _planet_data.get("enemy_hp", 2)
+	var hp: int = _planet_data.get("enemy_hp", 2)
+	var def := _pick_creature_def()
+	var sz: Vector2  = def["size"]
+	var col: Color   = def["color"]
+	var pattern: String = def["pattern"]
+	var speed: float = def["speed"]
+	var amp: Vector2 = def["amp"]
+	var area := battle_area.size
+
+	# 버튼 생성 + 스타일
 	var btn := Button.new()
-	btn.custom_minimum_size = Vector2(80, 60)
+	btn.custom_minimum_size = sz
+	var sty := _make_enemy_style(col, false)
+	var hov := _make_enemy_style(col, true)
+	btn.add_theme_stylebox_override("normal",   sty)
+	btn.add_theme_stylebox_override("hover",    hov)
+	btn.add_theme_stylebox_override("pressed",  sty)
+	btn.add_theme_stylebox_override("focus",    sty)
+	btn.add_theme_stylebox_override("disabled", sty)
+	btn.add_theme_color_override("font_color",       col.lightened(0.45))
+	btn.add_theme_color_override("font_hover_color", col.lightened(0.60))
+	btn.add_theme_font_size_override("font_size", 13)
 	battle_area.add_child(btn)
-	_enemies[btn] = {"hp": enemy_hp, "max_hp": enemy_hp}
+
+	# 앵커 위치 — 파동 패턴은 진폭 여백 확보
+	var mx: float = amp.x if pattern in ["h_wave", "circle", "figure8"] else 0.0
+	var my: float = amp.y if pattern in ["v_wave", "circle", "figure8"] else 0.0
+	var ax := randf_range(
+		maxf(mx, 4.0),
+		maxf(mx + 1.0, area.x - sz.x - mx - 4.0)
+	)
+	var ay := randf_range(
+		maxf(my, 4.0),
+		maxf(my + 1.0, area.y - sz.y - my - 4.0)
+	)
+	btn.position = Vector2(ax, ay)
+
+	# 이동 데이터
+	var d: Dictionary = {
+		"hp": hp, "max_hp": hp,
+		"glyph": def["glyph"],
+		"pattern": pattern,
+		"amp": amp,
+		"ax": ax, "ay": ay,
+		"phase": randf() * TAU,
+		"speed": speed,
+	}
+	match pattern:
+		"bounce":
+			var angle := randf() * TAU
+			d["vx"] = cos(angle) * speed
+			d["vy"] = sin(angle) * speed
+		"erratic":
+			var angle := randf() * TAU
+			d["vx"] = cos(angle) * speed
+			d["vy"] = sin(angle) * speed
+			d["timer"] = randf_range(0.1, 0.5)
+
+	_enemies[btn] = d
 	_update_enemy_display(btn)
 	btn.pressed.connect(func(): _on_enemy_clicked(btn))
-	_randomize_position(btn)
 
-func _randomize_position(node: Button) -> void:
-	var area_size := battle_area.size
-	var w := maxf(area_size.x - node.custom_minimum_size.x, 0.0)
-	var h := maxf(area_size.y - node.custom_minimum_size.y, 0.0)
-	node.position = Vector2(randf_range(0, w), randf_range(0, h))
+
+func _make_enemy_style(col: Color, hover: bool) -> StyleBoxFlat:
+	var sty := StyleBoxFlat.new()
+	sty.bg_color     = col.darkened(0.55) if not hover else col.darkened(0.36)
+	sty.border_color = col if not hover else col.lightened(0.22)
+	sty.set_border_width_all(2)
+	sty.set_corner_radius_all(5)
+	return sty
+
 
 func _update_enemy_display(enemy: Button) -> void:
-	var data: Dictionary = _enemies[enemy]
-	enemy.text = "👾\n%d/%d" % [data["hp"], data["max_hp"]]
+	var d := _enemies[enemy]
+	enemy.text = "%s\n%d/%d" % [d["glyph"], d["hp"], d["max_hp"]]
+
+
+# ── 전투 ──────────────────────────────────────────────────────
 
 func _on_enemy_clicked(enemy: Button) -> void:
 	if not _enemies.has(enemy):
@@ -152,15 +353,14 @@ func _on_enemy_clicked(enemy: Button) -> void:
 	var dmg := _calc_click_damage()
 	var click_center := enemy.position + enemy.custom_minimum_size * 0.5
 
-	# 피격 대상 수집 (범위 포함)
 	var targets: Array = [enemy]
 	var range_px := GameState.get_click_range_px()
 	if range_px > 0.0:
 		for other in _enemies.keys():
 			if other == enemy:
 				continue
-			var other_center := (other as Button).position + (other as Button).custom_minimum_size * 0.5
-			if click_center.distance_to(other_center) <= range_px:
+			var oc := (other as Button).position + (other as Button).custom_minimum_size * 0.5
+			if click_center.distance_to(oc) <= range_px:
 				targets.append(other)
 
 	for target in targets:
@@ -190,21 +390,22 @@ func _calc_click_damage() -> int:
 	return base
 
 
-func _build_drop_label() -> void:
-	_drop_label = Label.new()
-	_drop_label.anchor_left   = 0.0
-	_drop_label.anchor_right  = 1.0
-	_drop_label.anchor_top    = 1.0
-	_drop_label.anchor_bottom = 1.0
-	_drop_label.offset_top    = -22.0
-	_drop_label.offset_bottom = -2.0
-	_drop_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_drop_label.add_theme_font_size_override("font_size", 11)
-	_drop_label.add_theme_color_override("font_color", Color(0.55, 1.00, 0.72))
-	_drop_label.modulate.a = 0.0
-	_drop_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_drop_label)
+func _kill_enemy(enemy: Button) -> void:
+	var credit_per_kill: int = _planet_data.get("credit_per_kill", 10)
+	GameState.add_pending_credit(credit_per_kill)
+	_enemies.erase(enemy)
+	enemy.queue_free()
+	_wave_kills += 1
+	_try_drop_part()
+	_refresh_session_label()
+	var wave_size: int = _planet_data.get("wave_size", 5)
+	if _wave_kills >= wave_size:
+		_on_wave_complete()
+	else:
+		_fill_to_max()
 
+
+# ── 드랍 ──────────────────────────────────────────────────────
 
 func _try_drop_part() -> void:
 	if randf() > DROP_RATE:
@@ -243,6 +444,18 @@ func _gen_drop_options() -> Array:
 	return opts
 
 
+# ── 연출 ──────────────────────────────────────────────────────
+
+func _show_combo_active(mult: float) -> void:
+	if _combo_label == null:
+		return
+	_combo_label.text = "COMBO ×%.1f" % mult
+	_combo_label.modulate.a = 1.0
+	var tw := create_tween()
+	tw.tween_interval(0.6)
+	tw.tween_property(_combo_label, "modulate:a", 0.0, 0.3)
+
+
 func _show_drop_toast(ptype: String, tier: int, options: Array) -> void:
 	if _drop_label == null:
 		return
@@ -254,35 +467,12 @@ func _show_drop_toast(ptype: String, tier: int, options: Array) -> void:
 			"credits_pct":       opt_parts.append("수익+%d%%" % opt["value"])
 			"dispatch_time_pct": opt_parts.append("파견-%d%%" % opt["value"])
 			"return_time_pct":   opt_parts.append("복귀-%d%%" % opt["value"])
-	_drop_label.text = "▼ PART DROP  %s %s  [%s]" % [tier_str, type_names.get(ptype, "?"), "  ".join(opt_parts)]
+	_drop_label.text = "▼ DROP  %s %s  [%s]" % [tier_str, type_names.get(ptype, "?"), "  ".join(opt_parts)]
 	_drop_label.modulate.a = 1.0
 	var tw := create_tween()
 	tw.tween_interval(2.2)
 	tw.tween_property(_drop_label, "modulate:a", 0.0, 0.5)
 
-
-func _show_combo_active(mult: float) -> void:
-	if _combo_label == null:
-		return
-	_combo_label.text = "COMBO ×%.1f" % mult
-	_combo_label.modulate.a = 1.0
-	var tw := create_tween()
-	tw.tween_interval(0.6)
-	tw.tween_property(_combo_label, "modulate:a", 0.0, 0.3)
-
-func _kill_enemy(enemy: Button) -> void:
-	var credit_per_kill: int = _planet_data.get("credit_per_kill", 10)
-	GameState.add_pending_credit(credit_per_kill)
-	_enemies.erase(enemy)
-	enemy.queue_free()
-	_wave_kills += 1
-	_try_drop_part()
-	_refresh_session_label()
-	var wave_size: int = _planet_data.get("wave_size", 5)
-	if _wave_kills >= wave_size:
-		_on_wave_complete()
-	else:
-		_fill_to_max()
 
 func _on_wave_complete() -> void:
 	if _returning:
@@ -315,11 +505,11 @@ func _do_return() -> void:
 	GameState.collect_player_credits(return_button.global_position)
 	PanelManager.go_back()
 
+
 func _refresh_session_label() -> void:
 	var wave_size: int = _planet_data.get("wave_size", 5)
 	session_label.text = "%s  처치: %d/%d  보류: %d CR" % [
 		_planet_data.get("name", ""),
 		_wave_kills, wave_size,
-		GameState.pending_credits
+		GameState.pending_credits,
 	]
-
