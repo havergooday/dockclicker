@@ -442,7 +442,7 @@ func _input(event: InputEvent) -> void:
 
 	elif event is InputEventMouseMotion and _dragging:
 		_drag_current_pos = event.position
-		var delta := event.position - _drag_anchor
+		var delta: Vector2 = (event as InputEventMouseMotion).position - _drag_anchor
 
 		if _drag_axis == "":
 			if abs(delta.x) >= AXIS_LOCK_PX:
