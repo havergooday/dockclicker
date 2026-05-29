@@ -431,7 +431,8 @@ func _build_card_confirm(btn: Button, slot: DispatchManager.AutoSlot, index: int
 	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	btn.add_child(vb)
 
-	HangarHelpers.add_lbl(vb, "BAY %02d" % (index + 1), 9, HORIZONTAL_ALIGNMENT_CENTER, Color(0.60, 0.65, 0.80))
+	var _bcn: String = str(GameState.auto_slots[index].custom_name) if index < GameState.auto_slots.size() else ""
+	HangarHelpers.add_lbl(vb, (_bcn if _bcn != "" else "BAY %02d" % (index + 1)), 9, HORIZONTAL_ALIGNMENT_CENTER, Color(0.60, 0.65, 0.80))
 	HangarHelpers.add_lbl(vb, "%s CR" % HangarHelpers.fmt(slot.unlock_cost), 13, HORIZONTAL_ALIGNMENT_CENTER,
 			Color(0.85, 0.75, 0.50) if can_afford else Color(0.90, 0.35, 0.35))
 	vb.add_child(HangarHelpers.vspacer())

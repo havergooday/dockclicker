@@ -743,7 +743,8 @@ func _make_bay_card(bay_index: int, slot: DispatchManager.AutoSlot) -> PanelCont
 	vbox.add_theme_constant_override("separation", 4)
 	card.add_child(vbox)
 	var num_lbl := Label.new()
-	num_lbl.text = "BAY %02d" % (bay_index + 1)
+	var _bcn: String = str(GameState.auto_slots[bay_index].custom_name) if bay_index < GameState.auto_slots.size() else ""
+	num_lbl.text = _bcn if _bcn != "" else "BAY %02d" % (bay_index + 1)
 	num_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	num_lbl.add_theme_font_size_override("font_size", 11)
 	vbox.add_child(num_lbl)
@@ -808,14 +809,16 @@ func _dispatch_from_bay(bay_index: int) -> void:
 		return
 	var pilot := GameState.get_hired_pilot(pilot_id)
 	var planet := GameState.get_planet(_selected_planet_id)
+	var _bcn2: String = str(GameState.auto_slots[bay_index].custom_name) if bay_index < GameState.auto_slots.size() else ""
+	var _bay_label: String = _bcn2 if _bcn2 != "" else "BAY %02d" % (bay_index + 1)
 	_show_dispatch_confirm(
-		"BAY %02d  ·  %s\n→ %s" % [bay_index + 1, str(pilot.get("name", pilot_id)), str(planet.get("name", _selected_planet_id))],
+		"%s  ·  %s\n→ %s" % [_bay_label, str(pilot.get("name", pilot_id)), str(planet.get("name", _selected_planet_id))],
 		func():
 			_hide_bay_panel()
 			if not GameState.start_auto_dispatch(bay_index, pilot_id, _selected_planet_id):
-				_show_toast("BAY %02d 파견 실패" % (bay_index + 1))
+				_show_toast("%s 파견 실패" % _bay_label)
 				return
-			_show_toast("BAY %02d 파견 시작" % (bay_index + 1))
+			_show_toast("%s 파견 시작" % _bay_label)
 			_rebuild_slots()
 	)
 
