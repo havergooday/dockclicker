@@ -7,6 +7,7 @@ const CARD_NAV_DUR  := 0.14
 const ART_W         := 240   # 전신 아트 존 너비
 const ROW1_H        := 62    # 초상화+이름 행 높이
 const ACTION_H      := 36    # 비용+버튼 행 높이
+const HIRE_BAR_W    := 88    # 우측 고용 버튼 폭
 
 const TIER_COLORS: Array = [
 	Color(0.55, 0.55, 0.58),
@@ -348,7 +349,7 @@ func _make_pilot_card(p: Dictionary) -> Control:
 	bg.add_theme_stylebox_override("panel", cs)
 	card.add_child(bg)
 
-	# 내부 HBox (전신 | 구분선 | 우측패널)
+	# 내부 HBox (전신 | 구분선 | 우측패널 | 구분선 | 고용버튼)
 	var hb := HBoxContainer.new()
 	hb.set_anchors_preset(Control.PRESET_FULL_RECT)
 	hb.add_theme_constant_override("separation", 0)
@@ -381,7 +382,15 @@ func _make_pilot_card(p: Dictionary) -> Control:
 	var sep2 := _make_hsep()
 	right_vb.add_child(sep2)
 
-	right_vb.add_child(_make_row3(pid, hired, cost, can_afford))
+	right_vb.add_child(_make_row3(cost))
+
+	var vsep2 := ColorRect.new()
+	vsep2.color = Color(0.20, 0.30, 0.50, 0.35)
+	vsep2.custom_minimum_size = Vector2(1, 0)
+	vsep2.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	hb.add_child(vsep2)
+
+	hb.add_child(_make_hire_bar(pid, hired, can_afford))
 
 	return card
 
@@ -533,10 +542,10 @@ func _make_row2(p: Dictionary) -> Control:
 	return margin
 
 
-func _make_row3(pid: String, hired: bool, cost: int, can_afford: bool) -> Control:
+func _make_row3(cost: int) -> Control:
 	var hb := HBoxContainer.new()
 	hb.custom_minimum_size = Vector2(0, ACTION_H)
-	hb.add_theme_constant_override("separation", 8)
+	hb.add_theme_constant_override("separation", 0)
 	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var lpad := Control.new()
@@ -548,29 +557,40 @@ func _make_row3(pid: String, hired: bool, cost: int, can_afford: bool) -> Contro
 	cost_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cost_lbl.add_theme_font_size_override("font_size", 13)
 	cost_lbl.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
-	cost_lbl.modulate = Color(0.95, 0.82, 0.40) if (can_afford and not hired) \
-		else Color(1, 1, 1, 0.30)
+	cost_lbl.modulate = Color(0.95, 0.82, 0.40)
 	hb.add_child(cost_lbl)
-
-	var btn := Button.new()
-	btn.custom_minimum_size = Vector2(100, 28)
-	btn.add_theme_font_size_override("font_size", 11)
-	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	if hired:
-		btn.text     = "✓ ON BOARD"
-		btn.disabled = true
-		btn.modulate = Color(0.38, 0.88, 0.52)
-	else:
-		btn.text     = "고용하기"
-		btn.disabled = not can_afford
-		btn.pressed.connect(func(): GameState.hire_pilot(pid))
-	hb.add_child(btn)
 
 	var rpad := Control.new()
 	rpad.custom_minimum_size = Vector2(14, 0)
 	hb.add_child(rpad)
 
 	return hb
+
+
+func _make_hire_bar(pid: String, hired: bool, can_afford: bool) -> Control:
+	var wrap := MarginContainer.new()
+	wrap.custom_minimum_size = Vector2(HIRE_BAR_W, 0)
+	wrap.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	wrap.add_theme_constant_override("margin_left", 10)
+	wrap.add_theme_constant_override("margin_right", 14)
+	wrap.add_theme_constant_override("margin_top", 8)
+	wrap.add_theme_constant_override("margin_bottom", 8)
+	wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var btn := Button.new()
+	btn.text = "고용"
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+	btn.add_theme_font_size_override("font_size", 14)
+	btn.pressed.connect(func(): GameState.hire_pilot(pid))
+	btn.disabled = hired or not can_afford
+
+	if hired:
+		btn.text = "고용됨"
+		btn.modulate = Color(0.38, 0.88, 0.52)
+
+	wrap.add_child(btn)
+	return wrap
 
 
 func _make_hsep() -> ColorRect:
