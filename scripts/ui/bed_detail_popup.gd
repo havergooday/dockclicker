@@ -1,7 +1,5 @@
 extends Control
 
-signal pilot_detail_requested(pilot_id: String, bed_idx: int, slot_idx: int)
-
 const POPUP_W       := 660.0   # 파일럿 3명 카드 나란히
 const POPUP_HEIGHT  := 280.0
 const ANIM_DURATION := 0.20
@@ -130,7 +128,7 @@ func _rebuild() -> void:
 		cards_hb.add_child(_make_pilot_card(s, pid))
 
 
-func _make_pilot_card(slot_idx: int, pilot_id: String) -> Control:
+func _make_pilot_card(_slot_idx: int, pilot_id: String) -> Control:
 	var occupied := pilot_id != ""
 	var pilot: Dictionary = GameState.get_hired_pilot(pilot_id) if occupied else {}
 	var is_mission := occupied and str(pilot.get("status", "")) == "on_mission"
@@ -140,18 +138,13 @@ func _make_pilot_card(slot_idx: int, pilot_id: String) -> Control:
 	elif occupied:              border_col = Color(0.30, 0.75, 0.48)
 	else:                       border_col = Color(0.20, 0.26, 0.40)
 
-	var card := Button.new()
-	card.text = ""
+	# 클릭 없이 바로 상세 표시 — Control (not Button)
+	var card := PanelContainer.new()
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	card.size_flags_vertical   = Control.SIZE_EXPAND_FILL
-	card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if occupied \
-		else Control.CURSOR_ARROW
-
-	var sty := _card_sty(border_col, false)
-	card.add_theme_stylebox_override("normal",  sty)
-	card.add_theme_stylebox_override("hover",   _card_sty(border_col, true) if occupied else sty)
-	card.add_theme_stylebox_override("pressed", sty)
-	card.add_theme_stylebox_override("focus",   sty)
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sty := _card_sty(border_col)
+	card.add_theme_stylebox_override("panel", sty)
 
 	var inner := VBoxContainer.new()
 	inner.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -165,7 +158,6 @@ func _make_pilot_card(slot_idx: int, pilot_id: String) -> Control:
 	if occupied:
 		var pcol := Color.html(str(pilot.get("portrait_color", "#4499DD")))
 
-		# 초상화 (pilot_detail_popup과 동일 스타일)
 		var portrait := Panel.new()
 		portrait.custom_minimum_size = Vector2(56, 56)
 		portrait.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -185,25 +177,24 @@ func _make_pilot_card(slot_idx: int, pilot_id: String) -> Control:
 		portrait.add_child(init_lbl)
 		inner.add_child(portrait)
 
-		_add_lbl(inner, str(pilot.get("name", "")), 11, Color(0.88, 0.93, 1.0))
-		_add_lbl(inner, "T%d 파일럿" % int(pilot.get("tier", 1)), 9, Color(0.55, 0.68, 0.88))
+		_add_lbl(inner, str(pilot.get("name", "")),              11, Color(0.88, 0.93, 1.0))
+		_add_lbl(inner, "T%d 파일럿" % int(pilot.get("tier", 1)), 9,  Color(0.55, 0.68, 0.88))
+
+		var sep := HSeparator.new()
+		sep.modulate = Color(1, 1, 1, 0.08)
+		inner.add_child(sep)
 
 		var status_col := Color(0.55, 0.78, 1.0) if is_mission else Color(0.38, 1.0, 0.55)
 		_add_lbl(inner, "파견 중" if is_mission else "대기 중", 9, status_col)
 
 		var bay_idx := _find_assigned_bay(pilot_id)
-		if bay_idx >= 0:
-			_add_lbl(inner, "BAY %02d" % (bay_idx + 1), 9, Color(0.68, 0.75, 0.90))
+		_add_lbl(inner, "BAY %02d" % (bay_idx + 1) if bay_idx >= 0 else "베이 미배정",
+			9, Color(0.68, 0.75, 0.90) if bay_idx >= 0 else Color(0.40, 0.46, 0.58))
 
 		var bonus_type: String = str(pilot.get("bonus_type", "none"))
 		if bonus_type != "none":
 			_add_lbl(inner, _bonus_label(bonus_type, int(pilot.get("bonus_value", 0))),
 				9, Color(0.50, 0.95, 0.68))
-
-		var cap_pid := pilot_id; var cap_s := slot_idx; var cap_b := _bed_idx
-		card.pressed.connect(func():
-			pilot_detail_requested.emit(cap_pid, cap_b, cap_s)
-		)
 	else:
 		_add_lbl(inner, "비어있음", 10, Color(0.28, 0.34, 0.46))
 
@@ -235,9 +226,9 @@ func _add_lbl(parent: Control, text: String, size: int, col: Color) -> void:
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	parent.add_child(lbl)
 
-func _card_sty(col: Color, hover: bool) -> StyleBoxFlat:
+func _card_sty(col: Color) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
-	s.bg_color     = col.darkened(0.75).lightened(0.06 if hover else 0.0)
-	s.border_color = col.darkened(0.30 if hover else 0.50)
+	s.bg_color     = col.darkened(0.75)
+	s.border_color = col.darkened(0.45)
 	s.set_border_width_all(1); s.set_corner_radius_all(6)
 	return s

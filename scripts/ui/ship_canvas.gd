@@ -348,11 +348,7 @@ func _build_popups() -> void:
 	_register_popup("shop",         SHOP_POPUP_SCENE.instantiate())
 	_register_popup("parts",        PARTS_POPUP_SCENE.instantiate())
 	_register_popup("pilot_detail", PILOT_DETAIL_SCR.new())
-	var bed_popup := BED_DETAIL_SCR.new()
-	bed_popup.connect("pilot_detail_requested", func(pid: String, b: int, s: int):
-		_open_pilot_detail(pid, b, s)
-	)
-	_register_popup("bed_detail", bed_popup)
+	_register_popup("bed_detail", BED_DETAIL_SCR.new())
 
 
 func _register_popup(key: String, node: Control) -> void:
