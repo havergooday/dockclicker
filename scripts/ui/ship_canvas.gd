@@ -358,22 +358,39 @@ func _register_popup(key: String, node: Control) -> void:
 	_popups[key] = node
 
 
+# 독점 팝업 키 목록 — 동시에 하나만 열릴 수 있음
+const EXCLUSIVE_POPUPS: Array = ["star_map", "hangar_bay", "shop", "parts"]
+
+# 독점 팝업을 열기 전 나머지 독점 팝업을 모두 닫음
+func _close_exclusive_popups(except_key: String = "") -> void:
+	for key in EXCLUSIVE_POPUPS:
+		if key == except_key: continue
+		var popup = _popups.get(key)
+		if is_instance_valid(popup) and popup.visible:
+			if popup.has_method("close_popup"): popup.call("close_popup")
+			else: popup.hide()
+
+
 func _open_star_map() -> void:
+	_close_exclusive_popups("star_map")
 	if is_instance_valid(_popups.get("star_map")):
 		_popups["star_map"].call("open_for_control_room")
 
 
 func _open_hangar_bay_popup(slot_index: int) -> void:
+	_close_exclusive_popups("hangar_bay")
 	if is_instance_valid(_popups.get("hangar_bay")):
 		_popups["hangar_bay"].call("open_for_slot", slot_index)
 
 
 func _open_shop() -> void:
+	_close_exclusive_popups("shop")
 	if is_instance_valid(_popups.get("shop")):
 		_popups["shop"].call("open_popup")
 
 
 func _open_parts_shop() -> void:
+	_close_exclusive_popups("parts")
 	if is_instance_valid(_popups.get("parts")):
 		_popups["parts"].call("open_popup")
 
@@ -652,5 +669,6 @@ func _on_visibility_changed() -> void:
 	if visible:
 		return
 	for popup in _popups.values():
-		if is_instance_valid(popup):
-			popup.hide()
+		if is_instance_valid(popup) and popup.visible:
+			if popup.has_method("close_popup"): popup.call("close_popup")
+			else: popup.hide()
