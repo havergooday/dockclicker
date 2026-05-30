@@ -12,6 +12,7 @@ func _ready() -> void:
 	GameState.pilot_status_changed.connect(func(_id): save())
 	GameState.board_refreshed.connect(func(): save())
 	GameState.quarters_changed.connect(func(): save())
+	GameState.feature_unlocked.connect(func(_id: String): save())
 
 # ── 저장 ─────────────────────────────────────────────────────────
 
@@ -38,6 +39,7 @@ func save() -> void:
 		"board_last_day":      GameState.board_last_day,
 		"board_refresh_count": GameState.board_refresh_count,
 		"quarters_beds":       _serialize_quarters(),
+		"unlocked_features":   GameState.unlocked_features.duplicate(),
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file == null:
@@ -73,6 +75,8 @@ func load_save() -> bool:
 	GameState.combo_level          = int(d.get("combo_level",          0))
 	GameState.selected_planet      = str(d.get("selected_planet",      "sector_a"))
 	GameState.unlocked_planets     = (d.get("unlocked_planets", ["sector_a"]) as Array).duplicate()
+	var feat_raw = d.get("unlocked_features", [])
+	GameState.unlocked_features = (feat_raw as Array).duplicate() if feat_raw is Array else []
 
 	GameState.part_inventory.clear()
 	if d.has("part_inventory"):

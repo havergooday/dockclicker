@@ -36,6 +36,9 @@ var _deck_btn: Button = null
 var _options_popup: Control = null
 var _options_panel: PanelContainer = null
 var _nav_buttons: Dictionary = {}
+var _hire_btn: Button = null
+var _parts_btn: Button = null
+var _canvas_toast: Label = null
 
 
 func _ready() -> void:
@@ -75,6 +78,13 @@ func _build_ui() -> void:
 	_build_nav_bar()
 	_build_popups()
 	_build_options_popup()
+	_build_canvas_toast()
+	call_deferred("_refresh_control_buttons")
+	call_deferred("_refresh_nav_buttons")
+	GameState.feature_unlocked.connect(func(_id: String):
+		_refresh_control_buttons()
+		_refresh_nav_buttons()
+	)
 
 
 func _build_background() -> void:
@@ -135,6 +145,7 @@ func _build_nav_bar() -> void:
 	_nav_buttons.clear()
 	for item in NAV_ITEMS:
 		var zone_x := float(item["x"])
+		var zone_id := str(item["id"])
 		var btn := Button.new()
 		btn.text = str(item["label"])
 		btn.custom_minimum_size = Vector2(0, 26)
@@ -142,10 +153,17 @@ func _build_nav_bar() -> void:
 		btn.toggle_mode = true
 		btn.button_group = nav_group
 		btn.pressed.connect(func():
+			if not _can_navigate_to_zone(zone_id):
+				if zone_id == "quarters":
+					if GameState.unlock_feature("quarters"):
+						_scroll_to_zone(zone_x)
+					else:
+						_show_canvas_toast("크레딧 부족 (300 CR 필요)")
+				return
 			_scroll_to_zone(zone_x)
 		)
 		row.add_child(btn)
-		_nav_buttons[str(item["id"])] = btn
+		_nav_buttons[zone_id] = btn
 
 	if _nav_buttons.has("bridge"):
 		_nav_buttons["bridge"].button_pressed = true
@@ -160,9 +178,17 @@ func _build_nav_bar() -> void:
 	# 데크 전환 버튼
 	_deck_btn = Button.new()
 	_deck_btn.text = "▼ 격납고"
-	_deck_btn.custom_minimum_size = Vector2(72, 26)
+	_deck_btn.custom_minimum_size = Vector2(88, 26)
 	_deck_btn.add_theme_font_size_override("font_size", 10)
-	_deck_btn.pressed.connect(func(): _snap_to_deck(1 - _current_deck))
+	_deck_btn.pressed.connect(func():
+		if not GameState.is_feature_unlocked("pilot_workshop"):
+			if GameState.unlock_feature("pilot_workshop"):
+				_snap_to_deck(1 - _current_deck)
+			else:
+				_show_canvas_toast("크레딧 부족 (1,000 CR 필요)")
+			return
+		_snap_to_deck(1 - _current_deck)
+	)
 	row.add_child(_deck_btn)
 
 
@@ -230,28 +256,39 @@ func _make_control_zone() -> void:
 	var body := zone.get_node("ZoneRoot/Body") as VBoxContainer
 	body.add_theme_constant_override("separation", 8)
 
-	var intro := Label.new()
-	intro.text = "항성지도 팝업으로 파견, 슬롯, 기체 선택을 시작"
-	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body.add_child(intro)
-
 	var star_btn := Button.new()
-	star_btn.text = "항성지도 열기"
+	star_btn.text = "항성지도"
 	star_btn.custom_minimum_size = Vector2(0, 34)
 	star_btn.pressed.connect(func(): _open_star_map())
 	body.add_child(star_btn)
 
 	var hire_btn := Button.new()
-	hire_btn.text = "파일럿 고용"
 	hire_btn.custom_minimum_size = Vector2(0, 34)
-	hire_btn.pressed.connect(func(): _open_shop())
+	hire_btn.pressed.connect(func():
+		if not GameState.is_feature_unlocked("pilot_workshop"):
+			if GameState.unlock_feature("pilot_workshop"):
+				_open_shop()
+			else:
+				_show_canvas_toast("크레딧 부족 (1,000 CR 필요)")
+			return
+		_open_shop()
+	)
 	body.add_child(hire_btn)
+	_hire_btn = hire_btn
 
 	var parts_btn := Button.new()
-	parts_btn.text = "파츠 구매"
 	parts_btn.custom_minimum_size = Vector2(0, 34)
-	parts_btn.pressed.connect(func(): _open_parts_shop())
+	parts_btn.pressed.connect(func():
+		if not GameState.is_feature_unlocked("pc_terminal"):
+			if GameState.unlock_feature("pc_terminal"):
+				_open_parts_shop()
+			else:
+				_show_canvas_toast("크레딧 부족 (100 CR 필요)")
+			return
+		_open_parts_shop()
+	)
 	body.add_child(parts_btn)
+	_parts_btn = parts_btn
 
 
 func _make_zone_base(x_start: float, x_end: float, title: String) -> Control:
@@ -672,3 +709,67 @@ func _on_visibility_changed() -> void:
 		if is_instance_valid(popup) and popup.visible:
 			if popup.has_method("close_popup"): popup.call("close_popup")
 			else: popup.hide()
+
+
+func _can_navigate_to_zone(zone_id: String) -> bool:
+	match zone_id:
+		"quarters": return GameState.is_feature_unlocked("quarters")
+		_: return true
+
+
+func _refresh_control_buttons() -> void:
+	if is_instance_valid(_hire_btn):
+		var locked := not GameState.is_feature_unlocked("pilot_workshop")
+		_hire_btn.modulate = Color(0.50, 0.50, 0.60) if locked else Color(1, 1, 1)
+		_hire_btn.text = "파일럿  [잠금]" if locked else "파일럿"
+	if is_instance_valid(_parts_btn):
+		var locked := not GameState.is_feature_unlocked("pc_terminal")
+		_parts_btn.modulate = Color(0.50, 0.50, 0.60) if locked else Color(1, 1, 1)
+		_parts_btn.text = "파츠  [잠금]" if locked else "파츠"
+
+
+func _refresh_nav_buttons() -> void:
+	var q_locked := not GameState.is_feature_unlocked("quarters")
+	if _nav_buttons.has("quarters"):
+		var btn: Button = _nav_buttons["quarters"]
+		btn.modulate = Color(0.50, 0.50, 0.60) if q_locked else Color(1, 1, 1)
+		btn.text = "숙소 [잠]" if q_locked else "숙소"
+	if is_instance_valid(_deck_btn):
+		var h_locked := not GameState.is_feature_unlocked("pilot_workshop")
+		_deck_btn.modulate = Color(0.50, 0.50, 0.60) if h_locked else Color(1, 1, 1)
+		if h_locked:
+			_deck_btn.text = "▼ 격납고 [잠]"
+		else:
+			_update_deck_indicator()
+
+
+
+
+
+
+func _build_canvas_toast() -> void:
+	_canvas_toast = Label.new()
+	_canvas_toast.visible = false
+	_canvas_toast.anchor_left   = 0.5
+	_canvas_toast.anchor_top    = 1.0
+	_canvas_toast.anchor_right  = 0.5
+	_canvas_toast.anchor_bottom = 1.0
+	_canvas_toast.offset_left   = -200.0
+	_canvas_toast.offset_right  =  200.0
+	_canvas_toast.offset_top    = -52.0
+	_canvas_toast.offset_bottom = -16.0
+	_canvas_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_canvas_toast.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_canvas_toast.add_theme_font_size_override("font_size", 11)
+	_canvas_toast.modulate = Color(1.0, 0.85, 0.50)
+	add_child(_canvas_toast)
+
+
+func _show_canvas_toast(msg: String) -> void:
+	if not is_instance_valid(_canvas_toast):
+		return
+	_canvas_toast.text = msg
+	_canvas_toast.visible = true
+	var tween := create_tween()
+	tween.tween_interval(2.2)
+	tween.tween_callback(func(): _canvas_toast.visible = false)

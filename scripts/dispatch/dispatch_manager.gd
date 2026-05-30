@@ -81,14 +81,9 @@ func _init_default_layout() -> void:
 		hg.locked = g > 0  # 격납고 0만 기본 해금
 		hg.unlock_cost = HANGAR_COSTS[g]
 		hangar_groups.append(hg)
-		# 격납고 0의 첫 베이(g*4+0)는 기본 오픈, 나머지는 잠금
+		# 모든 베이는 잠금 시작. pilot_workshop 해금 시 첫 베이(0) 자동 오픈
 		for b in 4:
-			var slot: AutoSlot
-			if g == 0 and b == 0:
-				slot = AutoSlot.make_empty(g)
-			else:
-				slot = AutoSlot.make_locked(BAY_COSTS[b] if b > 0 else BAY_COSTS[0], g)
-			auto_slots.append(slot)
+			auto_slots.append(AutoSlot.make_locked(BAY_COSTS[b] if b > 0 else 0, g))
 
 # ── 타이머 ────────────────────────────────────────────────────
 

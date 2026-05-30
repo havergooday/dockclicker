@@ -638,6 +638,9 @@ func _select_planet(planet_id: String) -> void:
 
 func _deselect_planet() -> void:
 	_planet_detail_mode = false
+	if _confirm_panel.visible:
+		_confirm_panel.visible = false
+		_pending_dispatch = Callable()
 	if _bay_select_mode:
 		_bay_select_mode = false
 		_bay_panel_dragging = false

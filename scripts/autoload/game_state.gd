@@ -1,7 +1,7 @@
 extends Node
 
 var hangar_preselect_slot: int = -1
-var total_credits: int = 100000
+var total_credits: int = 1000000
 var pending_credits: int = 0
 var player_status: String = "idle"  # idle / on_mission / returned
 var click_damage: int = 1
@@ -15,6 +15,17 @@ signal upgrade_changed
 const AUTO_ATTACK_COST := 800
 var unlocked_planets: Array = ["sector_a"]
 var selected_planet: String = "sector_a"
+
+# ── 기능 해금 ─────────────────────────────────────────────────
+const FEATURE_DEFS: Array = [
+	{"id": "pc_terminal",    "name": "PC 터미널",       "desc": "파츠 구매 · 업그레이드",     "cost": 100},
+	{"id": "quarters",       "name": "숙소",             "desc": "침대 1개 · 파일럿 거주 공간", "cost": 300},
+	{"id": "pilot_workshop", "name": "공작실 · 파일럿", "desc": "머신 조립 · 파일럿 고용 · 격납고", "cost": 1000},
+]
+
+var unlocked_features: Array = []
+
+signal feature_unlocked(feature_id: String)
 var part_inventory: Array = []  # Array of {iid, type, tier}
 
 # ── 파일럿 ────────────────────────────────────────────────────
@@ -77,13 +88,23 @@ func _ready() -> void:
 	add_child(_dispatch)
 	_dispatch.auto_slot_changed.connect(func(i: int): auto_slot_changed.emit(i))
 	_dispatch.auto_dispatch_returned.connect(func(i: int): auto_dispatch_returned.emit(i))
+	feature_unlocked.connect(_on_feature_unlocked)
 	_init_quarters()
+
+func _on_feature_unlocked(feature_id: String) -> void:
+	if feature_id == "pilot_workshop" and _dispatch != null:
+		var slots: Array = _dispatch.auto_slots
+		if slots.size() > 0:
+			var s: DispatchManager.AutoSlot = slots[0]
+			if s.state == "locked":
+				s.state = "empty"
+				_dispatch.auto_slot_changed.emit(0)
 
 func _init_quarters() -> void:
 	quarters_beds.clear()
 	for i in MAX_BEDS:
 		quarters_beds.append({
-			"locked":       i > 0,
+			"locked":       true,
 			"unlock_cost":  BED_COSTS[i] if i < BED_COSTS.size() else 99999,
 			"slots":        ["", "", ""],   # 침대당 3 슬롯
 		})
@@ -175,6 +196,33 @@ func unlock_planet(planet_id: String) -> bool:
 	credits_changed.emit(total_credits)
 	planet_unlocked.emit(planet_id)
 	return true
+
+func is_feature_unlocked(feature_id: String) -> bool:
+	return feature_id in unlocked_features
+
+func unlock_feature(feature_id: String) -> bool:
+	if is_feature_unlocked(feature_id):
+		return false
+	var def := _get_feature_def(feature_id)
+	if def.is_empty():
+		return false
+	var cost: int = int(def["cost"])
+	if total_credits < cost:
+		return false
+	total_credits -= cost
+	unlocked_features.append(feature_id)
+	if feature_id == "quarters":
+		quarters_beds[0]["locked"] = false
+		quarters_changed.emit()
+	credits_changed.emit(total_credits)
+	feature_unlocked.emit(feature_id)
+	return true
+
+func _get_feature_def(feature_id: String) -> Dictionary:
+	for f in FEATURE_DEFS:
+		if str(f["id"]) == feature_id:
+			return f
+	return {}
 
 # ── 클릭 데미지 강화 ──────────────────────────────────────────
 
