@@ -3,13 +3,12 @@ extends Control
 
 signal bed_clicked(bed_idx: int)
 
-# 침대 아이콘 배치 (4×2 그리드, 구역 내 가구처럼)
-const ICON_W   := 120
-const ICON_H   := 100
-const COLS     := 4
-const PAD_X    := 20   # 좌우 여백
-const PAD_TOP  := 36   # 제목 아래
-const ROW_GAP  := 12   # 행 간격
+# 침대 아이콘 — 1행, 가로 길쭉, 상단 배치
+const ICON_W   := 128  # 넓고
+const ICON_H   := 58   # 낮은 가로형
+const ICON_GAP := 10   # 침대 간격
+const ZONE_W   := 1200
+const ROW_Y    := 34   # 상단에서의 Y 위치 (제목 아래)
 
 var _needs_rebuild: bool = false
 
@@ -53,17 +52,15 @@ func _build() -> void:
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(title)
 
-	# 침대 아이콘 배치
+	# 침대 아이콘 — 1행, 상단 배치
 	var beds: Array = GameState.quarters_beds
-	var total_row_w := COLS * ICON_W + (COLS - 1) * int(PAD_X * 0.6)
-	var start_x := (1200 - total_row_w) / 2   # 구역 너비 1200 기준 중앙 정렬
+	var n := beds.size()
+	var total_w := n * ICON_W + (n - 1) * ICON_GAP
+	var start_x := float(ZONE_W - total_w) / 2.0   # 수평 중앙 정렬
 
-	for i in beds.size():
-		var col: int = i % COLS
-		var row: int = i / COLS
-		var bx: float = float(start_x + col * (ICON_W + int(PAD_X * 0.6)))
-		var by: float = float(PAD_TOP + row * (ICON_H + ROW_GAP))
-		add_child(_make_bed_icon(i, beds[i], bx, by))
+	for i in n:
+		var bx: float = start_x + float(i) * float(ICON_W + ICON_GAP)
+		add_child(_make_bed_icon(i, beds[i], bx, float(ROW_Y)))
 
 
 func _make_bed_icon(bed_idx: int, bed: Dictionary, bx: float, by: float) -> Button:
