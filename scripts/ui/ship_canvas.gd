@@ -8,9 +8,9 @@ const BRIDGE_PILOT_SCR       := preload("res://scripts/ui/bridge_pilot.gd")
 const HANGAR_ZONE_SCR        := preload("res://scripts/ui/hangar_zone.gd")
 
 const NAV_ITEMS: Array = [
-	{"id": "hangar", "label": "격납고", "x": 0.0},
-	{"id": "bridge", "label": "브릿지", "x": 1200.0},
-	{"id": "control", "label": "관제실", "x": 2420.0},
+	{"id": "quarters", "label": "숙소",   "x": 0.0},
+	{"id": "bridge",   "label": "브릿지", "x": 1200.0},
+	{"id": "control",  "label": "관제실", "x": 2420.0},
 ]
 
 const DECK_HEIGHT      := 300.0  # 데크 한 층 높이 (= 창 높이)
@@ -156,18 +156,18 @@ func _build_nav_bar() -> void:
 
 	# 데크 전환 버튼
 	_deck_btn = Button.new()
-	_deck_btn.text = "▼ 숙소"
-	_deck_btn.custom_minimum_size = Vector2(66, 26)
+	_deck_btn.text = "▼ 격납고"
+	_deck_btn.custom_minimum_size = Vector2(72, 26)
 	_deck_btn.add_theme_font_size_override("font_size", 10)
 	_deck_btn.pressed.connect(func(): _snap_to_deck(1 - _current_deck))
 	row.add_child(_deck_btn)
 
 
 func _build_zone_panels() -> void:
-	_make_hangar_zone()
+	_make_quarters_zone()
 	_make_bridge_zone()
 	_make_control_zone()
-	_make_lower_deck()
+	_make_hangar_zone()
 
 
 func _make_hangar_zone() -> void:
@@ -177,9 +177,9 @@ func _make_hangar_zone() -> void:
 	zone.anchor_right  = 0.0
 	zone.anchor_bottom = 0.0
 	zone.offset_left   = 0.0
-	zone.offset_top    = 0.0
-	zone.offset_right  = 1200.0
-	zone.offset_bottom = DECK_HEIGHT
+	zone.offset_top    = DECK_HEIGHT        # 하부 데크
+	zone.offset_right  = 3700.0
+	zone.offset_bottom = DECK_HEIGHT * 2.0
 	zone.connect("navigate_to_control_requested", func():
 		_scroll_to_zone(2420.0)
 		get_tree().create_timer(0.28).timeout.connect(_open_star_map)
@@ -190,17 +190,74 @@ func _make_hangar_zone() -> void:
 	_content.add_child(zone)
 
 
-func _make_bridge_zone() -> void:
-	var zone := _make_zone_base(1200.0, 2420.0, "브릿지 / 파일럿 라운지")
+func _make_quarters_zone() -> void:
+	var zone := Control.new()
+	zone.anchor_left   = 0.0; zone.anchor_top    = 0.0
+	zone.anchor_right  = 0.0; zone.anchor_bottom = 0.0
+	zone.offset_left   = 0.0;    zone.offset_top    = 0.0
+	zone.offset_right  = 1200.0; zone.offset_bottom = DECK_HEIGHT
+	zone.mouse_filter  = Control.MOUSE_FILTER_IGNORE
 
-	# 파일럿 로밍 레이어 — ZoneRoot 위에 별도 Control
+	# 배경 — 브릿지보다 약간 따뜻한 어두운 톤
+	var style := StyleBoxFlat.new()
+	style.bg_color     = Color(0.05, 0.07, 0.10, 0.82)
+	style.border_color = Color(0.22, 0.30, 0.48, 0.70)
+	style.set_border_width_all(1)
+	var bg := PanelContainer.new()
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.add_theme_stylebox_override("panel", style)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	zone.add_child(bg)
+
+	# 수평 침대 라인 — 숙소 느낌
+	for i in 4:
+		var stripe := ColorRect.new()
+		stripe.anchor_left   = 0.0; stripe.anchor_right  = 1.0
+		stripe.anchor_top    = 0.0; stripe.anchor_bottom = 0.0
+		stripe.offset_top    = 52.0 + float(i) * 52.0
+		stripe.offset_bottom = stripe.offset_top + 1.0
+		stripe.color = Color(0.16, 0.22, 0.36, 0.22)
+		stripe.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		zone.add_child(stripe)
+
+	# 세로 룸 구분선 (3칸으로 나눔)
+	for i in 2:
+		var div := ColorRect.new()
+		div.anchor_left = 0.0; div.anchor_right  = 0.0
+		div.anchor_top  = 0.0; div.anchor_bottom = 1.0
+		div.offset_left   = float(i + 1) * 360.0 - 1.0
+		div.offset_right  = float(i + 1) * 360.0 + 1.0
+		div.offset_top    = 46.0; div.offset_bottom = -4.0
+		div.color = Color(0.20, 0.28, 0.44, 0.35)
+		div.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		zone.add_child(div)
+
+	var title_lbl := Label.new()
+	title_lbl.text = "파일럿 숙소"
+	title_lbl.add_theme_font_size_override("font_size", 12)
+	title_lbl.modulate = Color(0.52, 0.64, 0.82, 0.55)
+	title_lbl.anchor_left = 0.0; title_lbl.anchor_top = 0.0
+	title_lbl.offset_left = 16.0; title_lbl.offset_top = 8.0
+	title_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	zone.add_child(title_lbl)
+
+	_content.add_child(zone)
+
+
+func _make_bridge_zone() -> void:
+	_make_zone_base(1200.0, 2420.0, "브릿지 / 파일럿 라운지")
+
+	# 파일럿 로밍 레이어 — 숙소(0~1200) + 브릿지(1200~2420) 전체를 커버
 	var roam_layer := Control.new()
 	roam_layer.name = "RoamLayer"
-	roam_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	roam_layer.anchor_left   = 0.0; roam_layer.anchor_top    = 0.0
+	roam_layer.anchor_right  = 0.0; roam_layer.anchor_bottom = 0.0
+	roam_layer.offset_left   = 0.0
 	roam_layer.offset_top    = 50.0
-	roam_layer.offset_bottom = -10.0
+	roam_layer.offset_right  = 2420.0
+	roam_layer.offset_bottom = DECK_HEIGHT - 10.0
 	roam_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	zone.add_child(roam_layer)
+	_content.add_child(roam_layer)
 	_bridge_zone_root = roam_layer
 
 	GameState.pilot_hired.connect(func(_id): _sync_bridge_pilots())
@@ -315,54 +372,6 @@ func _build_zone_dividers() -> void:
 			_content.add_child(edge)
 
 
-func _make_lower_deck() -> void:
-	var zone := Control.new()
-	zone.anchor_left   = 0.0
-	zone.anchor_top    = 0.0
-	zone.anchor_right  = 0.0
-	zone.anchor_bottom = 0.0
-	zone.offset_left   = 0.0
-	zone.offset_top    = DECK_HEIGHT
-	zone.offset_right  = 3700.0
-	zone.offset_bottom = DECK_HEIGHT * 2.0
-	zone.mouse_filter  = Control.MOUSE_FILTER_IGNORE
-
-	# 배경
-	var bg_sty := StyleBoxFlat.new()
-	bg_sty.bg_color       = Color(0.03, 0.05, 0.09, 1.0)
-	bg_sty.border_color   = Color(0.20, 0.32, 0.50, 0.70)
-	bg_sty.border_width_top = 2
-	var bg := PanelContainer.new()
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.add_theme_stylebox_override("panel", bg_sty)
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	zone.add_child(bg)
-
-	# 바닥 줄무늬 — 숙소 느낌
-	for i in 6:
-		var stripe := ColorRect.new()
-		stripe.anchor_left   = 0.0
-		stripe.anchor_top    = 0.0
-		stripe.anchor_right  = 1.0
-		stripe.anchor_bottom = 0.0
-		stripe.offset_top    = float(i) * 50.0
-		stripe.offset_bottom = float(i) * 50.0 + 1.0
-		stripe.color = Color(0.12, 0.20, 0.34, 0.18)
-		stripe.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		zone.add_child(stripe)
-
-	# 플레이스홀더 레이블
-	var lbl := Label.new()
-	lbl.text = "하부 데크 — 숙소"
-	lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	lbl.add_theme_font_size_override("font_size", 15)
-	lbl.modulate = Color(0.22, 0.32, 0.48)
-	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	zone.add_child(lbl)
-
-	_content.add_child(zone)
 
 
 # ── 팝업 관리 ─────────────────────────────────────────────────
@@ -411,7 +420,7 @@ func _open_parts_shop() -> void:
 func _sync_bridge_pilots() -> void:
 	if _bridge_zone_root == null:
 		return
-	var zone_w := 1220.0
+	var zone_w := 2400.0  # 숙소(0~1200) + 브릿지(1200~2420) 전체
 	var zone_h := maxf(_bridge_zone_root.size.y, 240.0)
 	var current_ids := {}
 	for p in GameState.hired_pilots:
@@ -509,7 +518,7 @@ func _snap_to_deck(deck: int) -> void:
 
 func _update_deck_indicator() -> void:
 	if is_instance_valid(_deck_btn):
-		_deck_btn.text = "▼ 숙소" if _current_deck == 0 else "▲ 상부"
+		_deck_btn.text = "▼ 격납고" if _current_deck == 0 else "▲ 상부"
 
 
 func _build_options_popup() -> void:

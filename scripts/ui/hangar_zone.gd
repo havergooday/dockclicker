@@ -16,7 +16,7 @@ var _popup_root:     Control         = null
 var _drag_start_x:   float           = -1.0
 var _drag_start_h:   int             = 0
 var _was_dragging:   bool            = false
-var _bay_scroll_pos: int             = 999999
+var _bay_scroll_pos: int             = -1    # -1 = 미초기화, 첫 빌드에서 중앙 정렬
 var _needs_rebuild:  bool            = false
 
 # 인라인 확인 상태 ("" | "hangar" | "bay")
@@ -129,8 +129,8 @@ func _build_grid(area: Control) -> void:
 	var margin := MarginContainer.new()
 	margin.add_theme_constant_override("margin_top",    10)
 	margin.add_theme_constant_override("margin_bottom", 10)
-	margin.add_theme_constant_override("margin_left",   0)
-	margin.add_theme_constant_override("margin_right",  0)
+	margin.add_theme_constant_override("margin_left",   12)
+	margin.add_theme_constant_override("margin_right",  12)
 	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	scroll.add_child(margin)
 
@@ -140,30 +140,64 @@ func _build_grid(area: Control) -> void:
 	margin.add_child(hbox)
 
 	var groups: Array = GameState.hangar_groups
-	var num := groups.size()
 
-	# 높은 인덱스(좌측)부터 0(우측) 순서로 추가
-	for rev in num:
-		var g_idx: int = num - 1 - rev
-		if rev > 0:
-			hbox.add_child(_make_sep())
+	# 새 레이아웃: [그룹3][그룹2] | [그룹0 중앙] | [그룹1]
+	# 좌측 확장: 3, 2 / 중앙 기본: 0 / 우측 확장: 1
+	var left_idxs  := [3, 2]
+	var center_idx := 0
+	var right_idxs := [1]
+
+	for g_idx: int in left_idxs:
+		if g_idx >= groups.size():
+			continue
+		var group: DispatchManager.HangarGroup = groups[g_idx]
+		if group.locked:
+			hbox.add_child(_make_hangar_block(g_idx, group))
+		else:
+			hbox.add_child(_make_hangar_grid(g_idx))
+		hbox.add_child(_make_sep())
+
+	var center_group: DispatchManager.HangarGroup = groups[center_idx]
+	if center_group.locked:
+		hbox.add_child(_make_hangar_block(center_idx, center_group))
+	else:
+		hbox.add_child(_make_hangar_grid(center_idx))
+
+	for g_idx: int in right_idxs:
+		if g_idx >= groups.size():
+			continue
+		hbox.add_child(_make_sep())
 		var group: DispatchManager.HangarGroup = groups[g_idx]
 		if group.locked:
 			hbox.add_child(_make_hangar_block(g_idx, group))
 		else:
 			hbox.add_child(_make_hangar_grid(g_idx))
 
-	var rpad := Control.new()
-	rpad.custom_minimum_size = Vector2(12, 0)
-	rpad.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hbox.add_child(rpad)
-
 	call_deferred("_restore_scroll")
+	call_deferred("_center_on_group0")
 
 
 func _restore_scroll() -> void:
-	if is_instance_valid(_scroll_ref):
+	if not is_instance_valid(_scroll_ref):
+		return
+	if _bay_scroll_pos >= 0:
 		_scroll_ref.scroll_horizontal = _bay_scroll_pos
+	# _bay_scroll_pos < 0 이면 _center_on_group0 가 처리
+
+
+func _center_on_group0() -> void:
+	if not is_instance_valid(_scroll_ref):
+		return
+	if _bay_scroll_pos >= 0:
+		return  # 이미 저장된 위치 복원 중
+	# 좌측 그룹 2개(3, 2) + 구분선 2개 + 마진이 group0 앞에 위치
+	const LPAD  : int = 12
+	const GRP_W : int = CARD_W * 2 + CARD_SEP   # 224
+	const SEP_W : int = GROUP_SEP                 # 24
+	var left_w  : int = GRP_W + SEP_W + GRP_W + SEP_W  # 496
+	var group0_center_x : int = LPAD + left_w + GRP_W / 2   # 620
+	var target : int = maxi(0, group0_center_x - int(_scroll_ref.size.x * 0.5))
+	_scroll_ref.scroll_horizontal = target
 
 
 # ── 격납고 구성 요소 ─────────────────────────────────────────
