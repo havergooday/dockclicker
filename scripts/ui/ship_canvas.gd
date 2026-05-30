@@ -8,6 +8,7 @@ const BRIDGE_PILOT_SCR       := preload("res://scripts/ui/bridge_pilot.gd")
 const HANGAR_ZONE_SCR        := preload("res://scripts/ui/hangar_zone.gd")
 const QUARTERS_ZONE_SCR      := preload("res://scripts/ui/quarters_zone.gd")
 const PILOT_DETAIL_SCR       := preload("res://scripts/ui/pilot_detail_popup.gd")
+const BED_DETAIL_SCR         := preload("res://scripts/ui/bed_detail_popup.gd")
 
 const NAV_ITEMS: Array = [
 	{"id": "quarters", "label": "숙소",   "x": 0.0},
@@ -198,8 +199,8 @@ func _make_quarters_zone() -> void:
 	zone.anchor_right  = 0.0; zone.anchor_bottom = 0.0
 	zone.offset_left   = 0.0;    zone.offset_top    = 0.0
 	zone.offset_right  = 1200.0; zone.offset_bottom = DECK_HEIGHT
-	zone.connect("pilot_detail_requested", func(pid: String, b: int, s: int):
-		_open_pilot_detail(pid, b, s)
+	zone.connect("bed_clicked", func(bed_idx: int):
+		_open_bed_detail(bed_idx)
 	)
 	_content.add_child(zone)
 
@@ -347,6 +348,11 @@ func _build_popups() -> void:
 	_register_popup("shop",         SHOP_POPUP_SCENE.instantiate())
 	_register_popup("parts",        PARTS_POPUP_SCENE.instantiate())
 	_register_popup("pilot_detail", PILOT_DETAIL_SCR.new())
+	var bed_popup := BED_DETAIL_SCR.new()
+	bed_popup.connect("pilot_detail_requested", func(pid: String, b: int, s: int):
+		_open_pilot_detail(pid, b, s)
+	)
+	_register_popup("bed_detail", bed_popup)
 
 
 func _register_popup(key: String, node: Control) -> void:
@@ -379,6 +385,11 @@ func _open_parts_shop() -> void:
 func _open_pilot_detail(pilot_id: String, bed_idx: int, slot_idx: int) -> void:
 	if is_instance_valid(_popups.get("pilot_detail")):
 		_popups["pilot_detail"].call("open", pilot_id, bed_idx, slot_idx)
+
+
+func _open_bed_detail(bed_idx: int) -> void:
+	if is_instance_valid(_popups.get("bed_detail")):
+		_popups["bed_detail"].call("open", bed_idx)
 
 
 # ── 파일럿 동기화 ─────────────────────────────────────────────
@@ -422,10 +433,10 @@ func _scroll_to_zone(x_pos: float) -> void:
 func _input(event: InputEvent) -> void:
 	if not visible or _scroll == null:
 		return
-	# pilot_detail은 상단 고정 팝업이라 하단 캔버스 드래그를 허용
+	# 상단 고정 팝업은 하단 캔버스 드래그 허용
 	for key in _popups:
 		var popup: Control = _popups[key]
-		if key == "pilot_detail": continue
+		if key == "pilot_detail" or key == "bed_detail": continue
 		if is_instance_valid(popup) and popup.visible:
 			return
 	if is_instance_valid(_options_popup) and _options_popup.visible:

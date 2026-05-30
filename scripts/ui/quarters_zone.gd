@@ -1,19 +1,17 @@
 class_name QuartersZone
 extends Control
 
-signal pilot_detail_requested(pilot_id: String, bed_idx: int, slot_idx: int)
+signal bed_clicked(bed_idx: int)
 
-const SLOTS_PER_BED   := 3
-const BED_BTN_H       := 46
-const BED_BTN_W       := 100
-const SLOT_CARD_MAX_W := 280
-const BED_SEP         := 8
+# 침대 아이콘 배치 (4×2 그리드, 구역 내 가구처럼)
+const ICON_W   := 120
+const ICON_H   := 100
+const COLS     := 4
+const PAD_X    := 20   # 좌우 여백
+const PAD_TOP  := 36   # 제목 아래
+const ROW_GAP  := 12   # 행 간격
 
-var _selected_bed: int = -1   # 현재 선택된 침대 인덱스
-
-var _bed_row:      HBoxContainer = null
-var _slot_area:    Control       = null
-var _needs_rebuild: bool         = false
+var _needs_rebuild: bool = false
 
 
 func _ready() -> void:
@@ -29,24 +27,13 @@ func _process(_dt: float) -> void:
 	_build()
 
 
-# ── 전체 빌드 ─────────────────────────────────────────────────
-
 func _build() -> void:
 	for c in get_children(): c.queue_free()
-	_bed_row   = null
-	_slot_area = null
-
-	# 자동 선택: 없으면 첫 번째 해금 침대
-	if _selected_bed < 0 or _is_bed_locked(_selected_bed):
-		for b in GameState.quarters_beds.size():
-			if not GameState.quarters_beds[b].get("locked", true):
-				_selected_bed = b
-				break
 
 	# 배경
 	var bg_sty := StyleBoxFlat.new()
-	bg_sty.bg_color     = Color(0.04, 0.06, 0.10, 0.90)
-	bg_sty.border_color = Color(0.22, 0.30, 0.48, 0.75)
+	bg_sty.bg_color     = Color(0.04, 0.06, 0.10, 0.88)
+	bg_sty.border_color = Color(0.22, 0.30, 0.48, 0.70)
 	bg_sty.set_border_width_all(1)
 	var bg := PanelContainer.new()
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -54,282 +41,92 @@ func _build() -> void:
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)
 
-	# 상단 바 (침대 탭 + 정원 표시)
-	_build_top_bar()
+	# 제목
+	var cap  := GameState.get_quarters_capacity()
+	var cur  := GameState.hired_pilots.size()
+	var title := Label.new()
+	title.text = "파일럿 숙소  %d / %d" % [cur, cap]
+	title.add_theme_font_size_override("font_size", 11)
+	title.modulate = Color(0.52, 0.64, 0.82, 0.70)
+	title.anchor_left = 0.0; title.anchor_top = 0.0
+	title.offset_left = 14.0; title.offset_top = 8.0
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(title)
 
-	# 하단 슬롯 뷰
-	_slot_area = Control.new()
-	_slot_area.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_slot_area.offset_top = float(BED_BTN_H + 2)
-	_slot_area.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_slot_area)
-	_build_slot_view()
-
-
-func _build_top_bar() -> void:
-	var bar_bg := ColorRect.new()
-	bar_bg.color = Color(0.06, 0.09, 0.15, 0.85)
-	bar_bg.anchor_left = 0.0; bar_bg.anchor_right  = 1.0
-	bar_bg.anchor_top  = 0.0; bar_bg.anchor_bottom = 0.0
-	bar_bg.offset_bottom = float(BED_BTN_H)
-	bar_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(bar_bg)
-
-	var bar := HBoxContainer.new()
-	bar.anchor_left = 0.0; bar.anchor_right  = 1.0
-	bar.anchor_top  = 0.0; bar.anchor_bottom = 0.0
-	bar.offset_left = 10.0; bar.offset_right = -10.0
-	bar.offset_top  = 4.0;  bar.offset_bottom = float(BED_BTN_H) - 4.0
-	bar.add_theme_constant_override("separation", BED_SEP)
-	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(bar)
-	_bed_row = bar
-
-	# 정원 레이블
-	var cap := GameState.get_quarters_capacity()
-	var cur := GameState.hired_pilots.size()
-	var cap_lbl := Label.new()
-	cap_lbl.text = "숙소  %d / %d" % [cur, cap]
-	cap_lbl.add_theme_font_size_override("font_size", 11)
-	cap_lbl.modulate = Color(0.55, 0.68, 0.88)
-	cap_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	cap_lbl.custom_minimum_size = Vector2(90, 0)
-	cap_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	bar.add_child(cap_lbl)
-
-	# 구분선
-	var sep := ColorRect.new()
-	sep.color = Color(0.25, 0.35, 0.55, 0.45)
-	sep.custom_minimum_size = Vector2(1, 0)
-	sep.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	bar.add_child(sep)
-
-	# 침대 탭 버튼들
+	# 침대 아이콘 배치
 	var beds: Array = GameState.quarters_beds
-	for b in beds.size():
-		var bed: Dictionary = beds[b]
-		var locked: bool = bed.get("locked", true)
-		var is_sel: bool = (b == _selected_bed)
-		bar.add_child(_make_bed_tab(b, bed, locked, is_sel))
+	var total_row_w := COLS * ICON_W + (COLS - 1) * int(PAD_X * 0.6)
+	var start_x := (1200 - total_row_w) / 2   # 구역 너비 1200 기준 중앙 정렬
+
+	for i in beds.size():
+		var col: int = i % COLS
+		var row: int = i / COLS
+		var bx: float = float(start_x + col * (ICON_W + int(PAD_X * 0.6)))
+		var by: float = float(PAD_TOP + row * (ICON_H + ROW_GAP))
+		add_child(_make_bed_icon(i, beds[i], bx, by))
 
 
-func _make_bed_tab(b_idx: int, bed: Dictionary, locked: bool, is_sel: bool) -> Button:
-	var cost: int = int(bed.get("unlock_cost", 0))
-	var can_afford: bool = GameState.total_credits >= cost
+func _make_bed_icon(bed_idx: int, bed: Dictionary, bx: float, by: float) -> Button:
+	var locked: bool      = bed.get("locked", true)
+	var slots: Array      = bed.get("slots", ["","",""])
+	var cost: int         = int(bed.get("unlock_cost", 0))
+	var can_afford: bool  = GameState.total_credits >= cost
+
+	var occupied := 0
+	for s in slots:
+		if str(s) != "": occupied += 1
 
 	var btn := Button.new()
 	btn.text = ""
-	btn.custom_minimum_size = Vector2(BED_BTN_W, 0)
-	btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	btn.anchor_left = 0.0; btn.anchor_top    = 0.0
+	btn.anchor_right = 0.0; btn.anchor_bottom = 0.0
+	btn.offset_left  = bx;        btn.offset_top    = by
+	btn.offset_right = bx + ICON_W; btn.offset_bottom = by + ICON_H
 	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
-	var norm := _tab_sty(is_sel, locked)
-	var hov  := _tab_sty(true, locked)
-	btn.add_theme_stylebox_override("normal",  norm)
-	btn.add_theme_stylebox_override("hover",   hov)
-	btn.add_theme_stylebox_override("pressed", norm)
-	btn.add_theme_stylebox_override("focus",   norm)
+	var sty := StyleBoxFlat.new()
+	if locked:
+		sty.bg_color     = Color(0.04, 0.05, 0.09, 0.80)
+		sty.border_color = Color(0.20, 0.26, 0.38, 0.55)
+	else:
+		sty.bg_color     = Color(0.06, 0.10, 0.18, 0.85)
+		sty.border_color = Color(0.30, 0.44, 0.68, 0.75) if occupied > 0 \
+			else Color(0.22, 0.30, 0.48, 0.55)
+	sty.set_border_width_all(1); sty.set_corner_radius_all(6)
+	var hov := sty.duplicate() as StyleBoxFlat
+	hov.bg_color = sty.bg_color.lightened(0.08)
+	hov.border_color = sty.border_color.lightened(0.15)
+	for state in ["normal", "pressed", "focus"]:
+		btn.add_theme_stylebox_override(state, sty)
+	btn.add_theme_stylebox_override("hover", hov)
 
 	var vb := VBoxContainer.new()
 	vb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vb.offset_left = 6.0; vb.offset_right  = -6.0
+	vb.offset_top  = 6.0; vb.offset_bottom = -6.0
 	vb.alignment = BoxContainer.ALIGNMENT_CENTER
-	vb.add_theme_constant_override("separation", 2)
+	vb.add_theme_constant_override("separation", 4)
 	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	btn.add_child(vb)
 
 	if locked:
-		_add_lbl(vb, "🔒", 11, Color(0.50, 0.54, 0.62))
-		_add_lbl(vb, _fmt(cost) + " CR", 8,
+		_add_lbl(vb, "🔒", 16, Color(0.40, 0.44, 0.54))
+		_add_lbl(vb, _fmt(cost) + " CR", 9,
 			Color(0.85, 0.75, 0.50) if can_afford else Color(0.80, 0.35, 0.35))
-		btn.pressed.connect(func(): _try_unlock_bed(b_idx))
-	else:
-		# 점유 수 표시
-		var slots: Array = bed.get("slots", [])
-		var occupied := 0
-		for s in slots:
-			if str(s) != "": occupied += 1
-		_add_lbl(vb, "침대 %d" % (b_idx + 1), 10,
-			Color(0.85, 0.92, 1.0) if is_sel else Color(0.55, 0.62, 0.78))
-		_add_lbl(vb, "%d / %d" % [occupied, SLOTS_PER_BED], 9,
-			Color(0.42, 0.85, 0.55) if occupied > 0 else Color(0.38, 0.44, 0.56))
 		btn.pressed.connect(func():
-			_selected_bed = b_idx
-			_build()
+			if GameState.unlock_bed(bed_idx):
+				pass  # quarters_changed 시그널로 자동 리빌드
 		)
+	else:
+		_add_lbl(vb, "🛏", 18, Color(0.60, 0.75, 1.00))
+		_add_lbl(vb, "침대 %d" % (bed_idx + 1), 10, Color(0.70, 0.80, 0.95))
+		_add_lbl(vb, "%d / 3" % occupied, 9,
+			Color(0.42, 0.85, 0.55) if occupied > 0 else Color(0.35, 0.42, 0.55))
+		var cap_idx := bed_idx
+		btn.pressed.connect(func(): bed_clicked.emit(cap_idx))
 
 	return btn
 
-
-# ── 슬롯 뷰 ──────────────────────────────────────────────────
-
-func _build_slot_view() -> void:
-	if _slot_area == null: return
-
-	if _selected_bed < 0:
-		var hint := Label.new()
-		hint.text = "침대를 선택하세요"
-		hint.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		hint.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-		hint.add_theme_font_size_override("font_size", 12)
-		hint.modulate = Color(0.30, 0.36, 0.50)
-		hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_slot_area.add_child(hint)
-		return
-
-	var bed: Dictionary = GameState.quarters_beds[_selected_bed]
-	var slots: Array    = bed.get("slots", ["", "", ""])
-
-	# 3슬롯 가로 배치
-	var hbox := HBoxContainer.new()
-	hbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	hbox.offset_left  = 16.0; hbox.offset_right  = -16.0
-	hbox.offset_top   = 10.0; hbox.offset_bottom = -10.0
-	hbox.add_theme_constant_override("separation", 12)
-	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_slot_area.add_child(hbox)
-
-	for s in SLOTS_PER_BED:
-		var pid: String = str(slots[s]) if s < slots.size() else ""
-		hbox.add_child(_make_pilot_card(_selected_bed, s, pid))
-
-
-func _make_pilot_card(bed_idx: int, slot_idx: int, pilot_id: String) -> Control:
-	var occupied := pilot_id != ""
-	var pilot: Dictionary = GameState.get_hired_pilot(pilot_id) if occupied else {}
-	var is_mission := occupied and str(pilot.get("status", "")) == "on_mission"
-
-	var card := Button.new()
-	card.text = ""
-	card.custom_minimum_size = Vector2(0, 0)
-	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	card.size_flags_vertical   = Control.SIZE_EXPAND_FILL
-
-	var border_col: Color
-	if occupied and is_mission:
-		border_col = Color(0.40, 0.60, 1.00)
-	elif occupied:
-		border_col = Color(0.30, 0.75, 0.48)
-	else:
-		border_col = Color(0.22, 0.28, 0.42)
-
-	var sty := _card_sty(border_col, false)
-	var hov := _card_sty(border_col, true)
-	card.add_theme_stylebox_override("normal",  sty)
-	card.add_theme_stylebox_override("hover",   hov)
-	card.add_theme_stylebox_override("pressed", sty)
-	card.add_theme_stylebox_override("focus",   sty)
-	card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if occupied \
-		else Control.CURSOR_ARROW
-
-	var inner := VBoxContainer.new()
-	inner.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	inner.offset_left = 10.0; inner.offset_right  = -10.0
-	inner.offset_top  =  8.0; inner.offset_bottom =  -8.0
-	inner.add_theme_constant_override("separation", 6)
-	inner.alignment = BoxContainer.ALIGNMENT_CENTER
-	inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	card.add_child(inner)
-
-	if occupied:
-		var pcol := Color.html(str(pilot.get("portrait_color", "#4499DD")))
-
-		# 초상화
-		var portrait := Panel.new()
-		portrait.custom_minimum_size = Vector2(64, 64)
-		portrait.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var ps := StyleBoxFlat.new()
-		ps.bg_color = pcol.darkened(0.55); ps.border_color = pcol.darkened(0.20)
-		ps.set_border_width_all(2); ps.set_corner_radius_all(8)
-		portrait.add_theme_stylebox_override("panel", ps)
-		var init_lbl := Label.new()
-		init_lbl.text = str(pilot.get("name", "?")).substr(0, 1)
-		init_lbl.add_theme_font_size_override("font_size", 26)
-		init_lbl.modulate = pcol.lightened(0.25)
-		init_lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		init_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		init_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-		init_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		portrait.add_child(init_lbl)
-		inner.add_child(portrait)
-
-		# 이름
-		var name_lbl := Label.new()
-		name_lbl.text = str(pilot.get("name", ""))
-		name_lbl.add_theme_font_size_override("font_size", 11)
-		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		name_lbl.clip_contents = true
-		name_lbl.modulate = Color(0.88, 0.93, 1.0)
-		name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		inner.add_child(name_lbl)
-
-		# 상태
-		var status_lbl := Label.new()
-		status_lbl.text = "파견 중" if is_mission else "대기"
-		status_lbl.add_theme_font_size_override("font_size", 9)
-		status_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		status_lbl.modulate = Color(0.55, 0.78, 1.0) if is_mission else Color(0.38, 1.0, 0.55)
-		status_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		inner.add_child(status_lbl)
-
-		var cap_pid := pilot_id; var cap_b := bed_idx; var cap_s := slot_idx
-		card.pressed.connect(func():
-			pilot_detail_requested.emit(cap_pid, cap_b, cap_s)
-		)
-	else:
-		# 빈 슬롯
-		var slot_lbl := Label.new()
-		slot_lbl.text = "비어있음"
-		slot_lbl.add_theme_font_size_override("font_size", 10)
-		slot_lbl.modulate = Color(0.28, 0.34, 0.46)
-		slot_lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		slot_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		slot_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-		slot_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		card.add_child(slot_lbl)
-
-	return card
-
-
-# ── 침대 해금 ─────────────────────────────────────────────────
-
-func _try_unlock_bed(bed_idx: int) -> void:
-	if GameState.unlock_bed(bed_idx):
-		_selected_bed = bed_idx
-		# _build는 quarters_changed 시그널로 자동 트리거
-
-
-func _is_bed_locked(b: int) -> bool:
-	if b < 0 or b >= GameState.quarters_beds.size(): return true
-	return GameState.quarters_beds[b].get("locked", true)
-
-
-# ── 스타일 헬퍼 ───────────────────────────────────────────────
-
-func _tab_sty(active: bool, locked: bool) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
-	if locked:
-		s.bg_color     = Color(0.04, 0.05, 0.09, 0.80)
-		s.border_color = Color(0.22, 0.28, 0.40, 0.60)
-	elif active:
-		s.bg_color     = Color(0.10, 0.18, 0.34, 0.95)
-		s.border_color = Color(0.38, 0.58, 1.00, 0.90)
-	else:
-		s.bg_color     = Color(0.06, 0.09, 0.16, 0.80)
-		s.border_color = Color(0.25, 0.34, 0.52, 0.60)
-	s.set_border_width_all(1); s.set_corner_radius_all(4)
-	s.content_margin_left = 4; s.content_margin_right = 4
-	return s
-
-func _card_sty(col: Color, hover: bool) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
-	s.bg_color     = col.darkened(0.75).lightened(0.06 if hover else 0.0)
-	s.border_color = col.darkened(0.30 if hover else 0.50)
-	s.set_border_width_all(1); s.set_corner_radius_all(6)
-	return s
 
 func _add_lbl(parent: Control, text: String, size: int, col: Color) -> void:
 	var lbl := Label.new()
