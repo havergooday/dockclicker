@@ -91,7 +91,6 @@ func close_popup() -> void:
 
 func _rebuild() -> void:
 	for c in _content_vb.get_children(): c.queue_free()
-	_move_vb = null
 
 	var pilot: Dictionary = GameState.get_hired_pilot(_pilot_id)
 	if pilot.is_empty(): close_popup(); return
