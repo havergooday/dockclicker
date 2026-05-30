@@ -138,8 +138,12 @@ func load_save() -> bool:
 			GameState.quarters_beds[i]["locked"]      = bool(br.get("locked", i > 0))
 			GameState.quarters_beds[i]["unlock_cost"] = int(br.get("unlock_cost",
 				GameState.quarters_beds[i]["unlock_cost"]))
-			var sl = br.get("slots", ["", ""])
-			GameState.quarters_beds[i]["slots"] = [str((sl as Array)[0]), str((sl as Array)[1])]
+			var sl: Array = (br.get("slots", ["", "", ""]) as Array)
+			GameState.quarters_beds[i]["slots"] = [
+				str(sl[0] if sl.size() > 0 else ""),
+				str(sl[1] if sl.size() > 1 else ""),
+				str(sl[2] if sl.size() > 2 else ""),
+			]
 
 	return true
 
@@ -200,7 +204,7 @@ func _serialize_quarters() -> Array:
 		out.append({
 			"locked":      bed.get("locked", true),
 			"unlock_cost": bed.get("unlock_cost", 0),
-			"slots":       (bed.get("slots", ["", ""]) as Array).duplicate(),
+			"slots":       (bed.get("slots", ["", "", ""]) as Array).duplicate(),
 		})
 	return out
 

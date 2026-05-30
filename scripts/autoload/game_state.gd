@@ -85,7 +85,7 @@ func _init_quarters() -> void:
 		quarters_beds.append({
 			"locked":       i > 0,
 			"unlock_cost":  BED_COSTS[i] if i < BED_COSTS.size() else 99999,
-			"slots":        ["", ""],
+			"slots":        ["", "", ""],   # 침대당 3 슬롯
 		})
 
 # ── 숙소 함수 ────────────────────────────────────────────────
@@ -93,7 +93,7 @@ func _init_quarters() -> void:
 func get_quarters_capacity() -> int:
 	var cap := 0
 	for bed in quarters_beds:
-		if not bed.get("locked", true): cap += 2
+		if not bed.get("locked", true): cap += 3
 	return cap
 
 func can_hire_more_pilots() -> bool:
@@ -112,7 +112,7 @@ func assign_pilot_to_bed(pilot_id: String, bed_idx: int, slot_idx: int) -> bool:
 	if bed_idx < 0 or bed_idx >= quarters_beds.size(): return false
 	var bed: Dictionary = quarters_beds[bed_idx]
 	if bed.get("locked", true): return false
-	if slot_idx < 0 or slot_idx > 1: return false
+	if slot_idx < 0 or slot_idx > 2: return false
 	var current_occupant: String = str(bed["slots"][slot_idx])
 	if current_occupant != "" and current_occupant != pilot_id: return false
 	# 기존 위치 비우기
@@ -132,7 +132,7 @@ func _auto_assign_bed(pilot_id: String) -> void:
 	for b in quarters_beds.size():
 		var bed: Dictionary = quarters_beds[b]
 		if bed.get("locked", true): continue
-		for s in 2:
+		for s in 3:
 			if str(bed["slots"][s]) == "":
 				quarters_beds[b]["slots"][s] = pilot_id
 				quarters_changed.emit()
