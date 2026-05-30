@@ -419,7 +419,10 @@ func _scroll_to_zone(x_pos: float) -> void:
 func _input(event: InputEvent) -> void:
 	if not visible or _scroll == null:
 		return
-	for popup in _popups.values():
+	# pilot_detail은 상단 고정 팝업이라 하단 캔버스 드래그를 허용
+	for key in _popups:
+		var popup: Control = _popups[key]
+		if key == "pilot_detail": continue
 		if is_instance_valid(popup) and popup.visible:
 			return
 	if is_instance_valid(_options_popup) and _options_popup.visible:
