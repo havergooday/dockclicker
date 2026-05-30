@@ -1,12 +1,11 @@
 extends Control
 
-# 침대 클릭 → 3파일럿 동시 표시 팝업 (항성지도 패턴)
-
 signal pilot_detail_requested(pilot_id: String, bed_idx: int, slot_idx: int)
 
-const POPUP_HEIGHT  := 220.0
-const SLOTS_PER_BED := 3
+const POPUP_W       := 660.0   # 파일럿 3명 카드 나란히
+const POPUP_HEIGHT  := 280.0
 const ANIM_DURATION := 0.20
+const SLOTS_PER_BED := 3
 
 var _main_panel: PanelContainer = null
 var _content_vb: VBoxContainer  = null
@@ -21,9 +20,10 @@ func _ready() -> void:
 
 
 func _build_ui() -> void:
+	# 딤 — pilot_detail_popup과 동일
 	var overlay := ColorRect.new()
 	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	overlay.color = Color(0, 0, 0, 0.40)
+	overlay.color = Color(0, 0, 0, 0.46)
 	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	overlay.gui_input.connect(func(ev: InputEvent):
 		if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and ev.pressed:
@@ -31,13 +31,15 @@ func _build_ui() -> void:
 	)
 	add_child(overlay)
 
+	# 패널 — pilot_detail_popup과 동일한 viewport 기준 중앙 정렬
+	var vp_w := get_viewport_rect().size.x
 	_main_panel = PanelContainer.new()
 	_main_panel.anchor_left   = 0.0
 	_main_panel.anchor_top    = 0.0
-	_main_panel.anchor_right  = 1.0
+	_main_panel.anchor_right  = 0.0
 	_main_panel.anchor_bottom = 0.0
-	_main_panel.offset_left   = 0.0
-	_main_panel.offset_right  = 0.0
+	_main_panel.offset_left   = (vp_w - POPUP_W) * 0.5
+	_main_panel.offset_right  = (vp_w + POPUP_W) * 0.5
 	_main_panel.offset_top    = -POPUP_HEIGHT
 	_main_panel.offset_bottom = 0.0
 	var sty := StyleBoxFlat.new()
@@ -45,13 +47,13 @@ func _build_ui() -> void:
 	sty.border_color = Color(0.28, 0.40, 0.62, 0.96)
 	sty.set_border_width_all(1)
 	sty.content_margin_left = 16; sty.content_margin_right  = 16
-	sty.content_margin_top  = 10; sty.content_margin_bottom = 12
+	sty.content_margin_top  = 12; sty.content_margin_bottom = 14
 	_main_panel.add_theme_stylebox_override("panel", sty)
 	add_child(_main_panel)
 
 	_content_vb = VBoxContainer.new()
 	_content_vb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_content_vb.add_theme_constant_override("separation", 8)
+	_content_vb.add_theme_constant_override("separation", 10)
 	_content_vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_main_panel.add_child(_content_vb)
 
@@ -90,7 +92,7 @@ func _rebuild() -> void:
 	var bed: Dictionary = GameState.quarters_beds[_bed_idx]
 	var slots: Array    = bed.get("slots", ["", "", ""])
 
-	# 헤더
+	# 헤더 (pilot_detail_popup과 동일 스타일)
 	var hdr := HBoxContainer.new()
 	hdr.add_theme_constant_override("separation", 8)
 	hdr.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -98,8 +100,8 @@ func _rebuild() -> void:
 
 	var title := Label.new()
 	title.text = "침대 %d" % (_bed_idx + 1)
-	title.add_theme_font_size_override("font_size", 14)
-	title.modulate = Color(0.80, 0.90, 1.0)
+	title.add_theme_font_size_override("font_size", 16)
+	title.modulate = Color(0.90, 0.94, 1.0)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hdr.add_child(title)
@@ -119,7 +121,7 @@ func _rebuild() -> void:
 	var cards_hb := HBoxContainer.new()
 	cards_hb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cards_hb.size_flags_vertical   = Control.SIZE_EXPAND_FILL
-	cards_hb.add_theme_constant_override("separation", 12)
+	cards_hb.add_theme_constant_override("separation", 10)
 	cards_hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_content_vb.add_child(cards_hb)
 
@@ -146,9 +148,8 @@ func _make_pilot_card(slot_idx: int, pilot_id: String) -> Control:
 		else Control.CURSOR_ARROW
 
 	var sty := _card_sty(border_col, false)
-	var hov := _card_sty(border_col, true)
 	card.add_theme_stylebox_override("normal",  sty)
-	card.add_theme_stylebox_override("hover",   hov if occupied else sty)
+	card.add_theme_stylebox_override("hover",   _card_sty(border_col, true) if occupied else sty)
 	card.add_theme_stylebox_override("pressed", sty)
 	card.add_theme_stylebox_override("focus",   sty)
 
@@ -164,18 +165,19 @@ func _make_pilot_card(slot_idx: int, pilot_id: String) -> Control:
 	if occupied:
 		var pcol := Color.html(str(pilot.get("portrait_color", "#4499DD")))
 
+		# 초상화 (pilot_detail_popup과 동일 스타일)
 		var portrait := Panel.new()
 		portrait.custom_minimum_size = Vector2(56, 56)
 		portrait.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var ps := StyleBoxFlat.new()
-		ps.bg_color = pcol.darkened(0.55); ps.border_color = pcol.darkened(0.20)
-		ps.set_border_width_all(2); ps.set_corner_radius_all(8)
+		ps.bg_color = pcol.darkened(0.55); ps.border_color = pcol.darkened(0.15)
+		ps.set_border_width_all(2); ps.set_corner_radius_all(5)
 		portrait.add_theme_stylebox_override("panel", ps)
 		var init_lbl := Label.new()
 		init_lbl.text = str(pilot.get("name", "?")).substr(0, 1)
-		init_lbl.add_theme_font_size_override("font_size", 22)
-		init_lbl.modulate = pcol.lightened(0.25)
+		init_lbl.add_theme_font_size_override("font_size", 24)
+		init_lbl.modulate = pcol.lightened(0.30)
 		init_lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		init_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		init_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
@@ -183,47 +185,55 @@ func _make_pilot_card(slot_idx: int, pilot_id: String) -> Control:
 		portrait.add_child(init_lbl)
 		inner.add_child(portrait)
 
-		var name_lbl := Label.new()
-		name_lbl.text = str(pilot.get("name", ""))
-		name_lbl.add_theme_font_size_override("font_size", 11)
-		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		name_lbl.modulate = Color(0.88, 0.93, 1.0)
-		name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		inner.add_child(name_lbl)
+		_add_lbl(inner, str(pilot.get("name", "")), 11, Color(0.88, 0.93, 1.0))
+		_add_lbl(inner, "T%d 파일럿" % int(pilot.get("tier", 1)), 9, Color(0.55, 0.68, 0.88))
 
-		var tier_lbl := Label.new()
-		tier_lbl.text = "T%d" % int(pilot.get("tier", 1))
-		tier_lbl.add_theme_font_size_override("font_size", 9)
-		tier_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		tier_lbl.modulate = Color(0.55, 0.68, 0.88)
-		tier_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		inner.add_child(tier_lbl)
+		var status_col := Color(0.55, 0.78, 1.0) if is_mission else Color(0.38, 1.0, 0.55)
+		_add_lbl(inner, "파견 중" if is_mission else "대기 중", 9, status_col)
 
-		var status_lbl := Label.new()
-		status_lbl.text = "파견 중" if is_mission else "대기"
-		status_lbl.add_theme_font_size_override("font_size", 9)
-		status_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		status_lbl.modulate = Color(0.55, 0.78, 1.0) if is_mission else Color(0.38, 1.0, 0.55)
-		status_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		inner.add_child(status_lbl)
+		var bay_idx := _find_assigned_bay(pilot_id)
+		if bay_idx >= 0:
+			_add_lbl(inner, "BAY %02d" % (bay_idx + 1), 9, Color(0.68, 0.75, 0.90))
+
+		var bonus_type: String = str(pilot.get("bonus_type", "none"))
+		if bonus_type != "none":
+			_add_lbl(inner, _bonus_label(bonus_type, int(pilot.get("bonus_value", 0))),
+				9, Color(0.50, 0.95, 0.68))
 
 		var cap_pid := pilot_id; var cap_s := slot_idx; var cap_b := _bed_idx
 		card.pressed.connect(func():
 			pilot_detail_requested.emit(cap_pid, cap_b, cap_s)
 		)
 	else:
-		var empty_lbl := Label.new()
-		empty_lbl.text = "비어있음"
-		empty_lbl.add_theme_font_size_override("font_size", 10)
-		empty_lbl.modulate = Color(0.28, 0.34, 0.46)
-		empty_lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		empty_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		empty_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-		empty_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		card.add_child(empty_lbl)
+		_add_lbl(inner, "비어있음", 10, Color(0.28, 0.34, 0.46))
 
 	return card
 
+
+# ── 헬퍼 ──────────────────────────────────────────────────────
+
+func _find_assigned_bay(pilot_id: String) -> int:
+	for i in GameState.auto_slots.size():
+		var s: DispatchManager.AutoSlot = GameState.auto_slots[i]
+		if s.assigned_pilot_id == pilot_id or s.pilot_id == pilot_id:
+			return i
+	return -1
+
+func _bonus_label(btype: String, bval: int) -> String:
+	match btype:
+		"credits_pct":       return "수익 +%d%%" % bval
+		"dispatch_time_pct": return "파견 -%d%%" % bval
+		"return_time_pct":   return "복귀 -%d%%" % bval
+	return btype
+
+func _add_lbl(parent: Control, text: String, size: int, col: Color) -> void:
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.add_theme_font_size_override("font_size", size)
+	lbl.modulate = col
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(lbl)
 
 func _card_sty(col: Color, hover: bool) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()

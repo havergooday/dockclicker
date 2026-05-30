@@ -8,7 +8,7 @@ const ICON_W   := 128  # 넓고
 const ICON_H   := 58   # 낮은 가로형
 const ICON_GAP := 10   # 침대 간격
 const ZONE_W   := 1200
-const ROW_Y    := 34   # 상단에서의 Y 위치 (제목 아래)
+const ROW_Y    := 80   # 상단에서의 Y 위치
 
 var _needs_rebuild: bool = false
 
@@ -58,8 +58,9 @@ func _build() -> void:
 	var total_w := n * ICON_W + (n - 1) * ICON_GAP
 	var start_x := float(ZONE_W - total_w) / 2.0   # 수평 중앙 정렬
 
+	# 우측(침대0) → 좌측(침대N) 정렬: 인덱스 역순으로 x 배치
 	for i in n:
-		var bx: float = start_x + float(i) * float(ICON_W + ICON_GAP)
+		var bx: float = start_x + float(n - 1 - i) * float(ICON_W + ICON_GAP)
 		add_child(_make_bed_icon(i, beds[i], bx, float(ROW_Y)))
 
 
