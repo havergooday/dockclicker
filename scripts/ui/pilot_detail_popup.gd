@@ -16,6 +16,7 @@ var _popup_w:  float  = 0.0
 
 
 func _ready() -> void:
+	set_anchors_preset(Control.PRESET_FULL_RECT)  # .new()로 생성되므로 직접 설정
 	mouse_filter = MOUSE_FILTER_STOP
 	visible = false
 	_build_ui()
