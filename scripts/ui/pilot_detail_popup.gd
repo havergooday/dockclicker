@@ -1,7 +1,6 @@
 extends Control
 
 const POPUP_HEIGHT  := 300.0
-const POPUP_W_RATIO := 0.50   # 화면 너비의 50%
 const ANIM_DURATION := 0.20
 
 var _main_panel:  PanelContainer = null
@@ -32,15 +31,14 @@ func _build_ui() -> void:
 	)
 	add_child(overlay)
 
-	# 메인 패널 — 중앙 정렬, 고정 높이
-	var popup_w := get_viewport_rect().size.x * POPUP_W_RATIO
+	# 메인 패널 — 항성지도와 동일한 전체 너비 구조
 	_main_panel = PanelContainer.new()
-	_main_panel.anchor_left   = 0.5
+	_main_panel.anchor_left   = 0.0
 	_main_panel.anchor_top    = 0.0
-	_main_panel.anchor_right  = 0.5
+	_main_panel.anchor_right  = 1.0
 	_main_panel.anchor_bottom = 0.0
-	_main_panel.offset_left   = -popup_w * 0.5
-	_main_panel.offset_right  =  popup_w * 0.5
+	_main_panel.offset_left   = 0.0
+	_main_panel.offset_right  = 0.0
 	_main_panel.offset_top    = -POPUP_HEIGHT  # 숨김 상태
 	_main_panel.offset_bottom = 0.0
 	var sty := StyleBoxFlat.new()

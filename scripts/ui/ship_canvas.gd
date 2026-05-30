@@ -414,6 +414,9 @@ func _scroll_to_zone(x_pos: float) -> void:
 	var target := clampi(int(x_pos), 0, max_scroll)
 	var tween := create_tween()
 	tween.tween_property(_scroll, "scroll_horizontal", target, 0.24).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	# 상부 존 이동 시 하부 데크(격납고)에 있으면 상부로 올라옴
+	if _current_deck != 0:
+		_snap_to_deck(0)
 
 
 func _input(event: InputEvent) -> void:
