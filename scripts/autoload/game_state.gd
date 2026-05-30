@@ -20,6 +20,14 @@ var part_inventory: Array = []  # Array of {iid, type, tier}
 # ── 파일럿 ────────────────────────────────────────────────────
 var hired_pilots: Array = []  # Array of pilot instance dicts
 
+# ── 숙소 침대 ────────────────────────────────────────────────
+# 각 침대: {locked: bool, unlock_cost: int, slots: [pilot_id|"", pilot_id|""]}
+# slots[0] = 상단, slots[1] = 하단
+var quarters_beds: Array = []
+const BED_COSTS: Array   = [0, 300, 700, 1500, 3500, 8000, 18000, 40000]
+const MAX_BEDS:  int     = 8
+signal quarters_changed
+
 # ── 모집 공고판 ───────────────────────────────────────────────
 const BOARD_SLOT_COUNT    := 3
 const BOARD_REFRESH_COST  := 300
@@ -69,6 +77,78 @@ func _ready() -> void:
 	add_child(_dispatch)
 	_dispatch.auto_slot_changed.connect(func(i: int): auto_slot_changed.emit(i))
 	_dispatch.auto_dispatch_returned.connect(func(i: int): auto_dispatch_returned.emit(i))
+	_init_quarters()
+
+func _init_quarters() -> void:
+	quarters_beds.clear()
+	for i in MAX_BEDS:
+		quarters_beds.append({
+			"locked":       i > 0,
+			"unlock_cost":  BED_COSTS[i] if i < BED_COSTS.size() else 99999,
+			"slots":        ["", ""],
+		})
+
+# ── 숙소 함수 ────────────────────────────────────────────────
+
+func get_quarters_capacity() -> int:
+	var cap := 0
+	for bed in quarters_beds:
+		if not bed.get("locked", true): cap += 2
+	return cap
+
+func can_hire_more_pilots() -> bool:
+	return hired_pilots.size() < get_quarters_capacity()
+
+func get_pilot_bed_pos(pilot_id: String) -> Dictionary:
+	for b in quarters_beds.size():
+		var bed: Dictionary = quarters_beds[b]
+		var slots: Array = bed.get("slots", [])
+		for s in slots.size():
+			if str(slots[s]) == pilot_id:
+				return {"bed": b, "slot": s}
+	return {}
+
+func assign_pilot_to_bed(pilot_id: String, bed_idx: int, slot_idx: int) -> bool:
+	if bed_idx < 0 or bed_idx >= quarters_beds.size(): return false
+	var bed: Dictionary = quarters_beds[bed_idx]
+	if bed.get("locked", true): return false
+	if slot_idx < 0 or slot_idx > 1: return false
+	var current_occupant: String = str(bed["slots"][slot_idx])
+	if current_occupant != "" and current_occupant != pilot_id: return false
+	# 기존 위치 비우기
+	var old := get_pilot_bed_pos(pilot_id)
+	if not old.is_empty():
+		quarters_beds[old["bed"]]["slots"][old["slot"]] = ""
+	quarters_beds[bed_idx]["slots"][slot_idx] = pilot_id
+	quarters_changed.emit()
+	return true
+
+func move_pilot_bed(pilot_id: String, target_bed: int, target_slot: int) -> bool:
+	if not assign_pilot_to_bed(pilot_id, target_bed, target_slot): return false
+	quarters_changed.emit()
+	return true
+
+func _auto_assign_bed(pilot_id: String) -> void:
+	for b in quarters_beds.size():
+		var bed: Dictionary = quarters_beds[b]
+		if bed.get("locked", true): continue
+		for s in 2:
+			if str(bed["slots"][s]) == "":
+				quarters_beds[b]["slots"][s] = pilot_id
+				quarters_changed.emit()
+				return
+
+func unlock_bed(bed_idx: int) -> bool:
+	if bed_idx < 0 or bed_idx >= quarters_beds.size(): return false
+	var bed: Dictionary = quarters_beds[bed_idx]
+	if not bed.get("locked", true): return false
+	var cost: int = int(bed.get("unlock_cost", 99999))
+	if total_credits < cost: return false
+	total_credits -= cost
+	quarters_beds[bed_idx]["locked"] = false
+	credits_changed.emit(total_credits)
+	quarters_changed.emit()
+	return true
 
 # ── 행성 ──────────────────────────────────────────────────────
 
@@ -270,6 +350,8 @@ func hire_pilot(pilot_id: String) -> bool:
 	var data := get_pilot_data(pilot_id)
 	if data.is_empty() or is_pilot_hired(pilot_id):
 		return false
+	if not can_hire_more_pilots():
+		return false
 	if total_credits < int(data["cost"]):
 		return false
 	total_credits -= int(data["cost"])
@@ -282,6 +364,7 @@ func hire_pilot(pilot_id: String) -> bool:
 		"portrait_color": data["portrait_color"],
 		"status":         "idle",
 	})
+	_auto_assign_bed(pilot_id)
 	credits_changed.emit(total_credits)
 	pilot_hired.emit(pilot_id)
 	board_pilot_ids = _select_board_from_pool(_build_board_pool(), _board_seed())
@@ -290,6 +373,8 @@ func hire_pilot(pilot_id: String) -> bool:
 
 func create_custom_pilot(custom_name: String, color_hex: String) -> bool:
 	if custom_name.strip_edges().is_empty():
+		return false
+	if not can_hire_more_pilots():
 		return false
 	var cost := 300
 	if total_credits < cost:
@@ -306,6 +391,7 @@ func create_custom_pilot(custom_name: String, color_hex: String) -> bool:
 		"status":         "idle",
 		"is_custom":      true,
 	})
+	_auto_assign_bed(uid)
 	credits_changed.emit(total_credits)
 	pilot_hired.emit(uid)
 	return true

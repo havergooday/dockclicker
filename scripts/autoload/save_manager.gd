@@ -11,6 +11,7 @@ func _ready() -> void:
 	GameState.pilot_hired.connect(func(_id): save())
 	GameState.pilot_status_changed.connect(func(_id): save())
 	GameState.board_refreshed.connect(func(): save())
+	GameState.quarters_changed.connect(func(): save())
 
 # ── 저장 ─────────────────────────────────────────────────────────
 
@@ -36,6 +37,7 @@ func save() -> void:
 		"board_pilot_ids":     GameState.board_pilot_ids.duplicate(),
 		"board_last_day":      GameState.board_last_day,
 		"board_refresh_count": GameState.board_refresh_count,
+		"quarters_beds":       _serialize_quarters(),
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file == null:
@@ -128,6 +130,17 @@ func load_save() -> bool:
 	GameState.board_last_day      = int(d.get("board_last_day",      -1))
 	GameState.board_refresh_count = int(d.get("board_refresh_count",  0))
 
+	var beds_raw = d.get("quarters_beds", [])
+	if beds_raw is Array and (beds_raw as Array).size() > 0:
+		for i in GameState.quarters_beds.size():
+			if i >= (beds_raw as Array).size(): break
+			var br: Dictionary = (beds_raw as Array)[i] as Dictionary
+			GameState.quarters_beds[i]["locked"]      = bool(br.get("locked", i > 0))
+			GameState.quarters_beds[i]["unlock_cost"] = int(br.get("unlock_cost",
+				GameState.quarters_beds[i]["unlock_cost"]))
+			var sl = br.get("slots", ["", ""])
+			GameState.quarters_beds[i]["slots"] = [str((sl as Array)[0]), str((sl as Array)[1])]
+
 	return true
 
 # ── 직렬화 헬퍼 ───────────────────────────────────────────────────
@@ -179,6 +192,16 @@ func _serialize_hangar_groups() -> Array:
 	for raw in GameState.hangar_groups:
 		var hg: DispatchManager.HangarGroup = raw as DispatchManager.HangarGroup
 		out.append({"id": hg.id, "locked": hg.locked, "unlock_cost": hg.unlock_cost})
+	return out
+
+func _serialize_quarters() -> Array:
+	var out: Array = []
+	for bed in GameState.quarters_beds:
+		out.append({
+			"locked":      bed.get("locked", true),
+			"unlock_cost": bed.get("unlock_cost", 0),
+			"slots":       (bed.get("slots", ["", ""]) as Array).duplicate(),
+		})
 	return out
 
 func _enc(v: float) -> float:

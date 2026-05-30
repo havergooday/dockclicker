@@ -598,11 +598,15 @@ func _make_hire_bar(pid: String, hired: bool, can_afford: bool) -> Control:
 	btn.size_flags_vertical   = Control.SIZE_EXPAND_FILL
 	btn.add_theme_font_size_override("font_size", 14)
 	btn.pressed.connect(func(): GameState.hire_pilot(pid))
-	btn.disabled = hired or not can_afford
+	var cap_full: bool = not GameState.can_hire_more_pilots()
+	btn.disabled = hired or not can_afford or cap_full
 
 	if hired:
 		btn.text = "고용됨"
 		btn.modulate = Color(0.38, 0.88, 0.52)
+	elif cap_full:
+		btn.text = "숙소 만원"
+		btn.modulate = Color(0.80, 0.55, 0.30)
 
 	wrap.add_child(btn)
 	return wrap

@@ -6,6 +6,8 @@ const SHOP_POPUP_SCENE       := preload("res://scenes/ui/shop_popup.tscn")
 const PARTS_POPUP_SCENE      := preload("res://scenes/ui/parts_shop_popup.tscn")
 const BRIDGE_PILOT_SCR       := preload("res://scripts/ui/bridge_pilot.gd")
 const HANGAR_ZONE_SCR        := preload("res://scripts/ui/hangar_zone.gd")
+const QUARTERS_ZONE_SCR      := preload("res://scripts/ui/quarters_zone.gd")
+const PILOT_DETAIL_SCR       := preload("res://scripts/ui/pilot_detail_popup.gd")
 
 const NAV_ITEMS: Array = [
 	{"id": "quarters", "label": "숙소",   "x": 0.0},
@@ -191,56 +193,14 @@ func _make_hangar_zone() -> void:
 
 
 func _make_quarters_zone() -> void:
-	var zone := Control.new()
+	var zone: Control = QUARTERS_ZONE_SCR.new()
 	zone.anchor_left   = 0.0; zone.anchor_top    = 0.0
 	zone.anchor_right  = 0.0; zone.anchor_bottom = 0.0
 	zone.offset_left   = 0.0;    zone.offset_top    = 0.0
 	zone.offset_right  = 1200.0; zone.offset_bottom = DECK_HEIGHT
-	zone.mouse_filter  = Control.MOUSE_FILTER_IGNORE
-
-	# 배경 — 브릿지보다 약간 따뜻한 어두운 톤
-	var style := StyleBoxFlat.new()
-	style.bg_color     = Color(0.05, 0.07, 0.10, 0.82)
-	style.border_color = Color(0.22, 0.30, 0.48, 0.70)
-	style.set_border_width_all(1)
-	var bg := PanelContainer.new()
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.add_theme_stylebox_override("panel", style)
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	zone.add_child(bg)
-
-	# 수평 침대 라인 — 숙소 느낌
-	for i in 4:
-		var stripe := ColorRect.new()
-		stripe.anchor_left   = 0.0; stripe.anchor_right  = 1.0
-		stripe.anchor_top    = 0.0; stripe.anchor_bottom = 0.0
-		stripe.offset_top    = 52.0 + float(i) * 52.0
-		stripe.offset_bottom = stripe.offset_top + 1.0
-		stripe.color = Color(0.16, 0.22, 0.36, 0.22)
-		stripe.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		zone.add_child(stripe)
-
-	# 세로 룸 구분선 (3칸으로 나눔)
-	for i in 2:
-		var div := ColorRect.new()
-		div.anchor_left = 0.0; div.anchor_right  = 0.0
-		div.anchor_top  = 0.0; div.anchor_bottom = 1.0
-		div.offset_left   = float(i + 1) * 360.0 - 1.0
-		div.offset_right  = float(i + 1) * 360.0 + 1.0
-		div.offset_top    = 46.0; div.offset_bottom = -4.0
-		div.color = Color(0.20, 0.28, 0.44, 0.35)
-		div.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		zone.add_child(div)
-
-	var title_lbl := Label.new()
-	title_lbl.text = "파일럿 숙소"
-	title_lbl.add_theme_font_size_override("font_size", 12)
-	title_lbl.modulate = Color(0.52, 0.64, 0.82, 0.55)
-	title_lbl.anchor_left = 0.0; title_lbl.anchor_top = 0.0
-	title_lbl.offset_left = 16.0; title_lbl.offset_top = 8.0
-	title_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	zone.add_child(title_lbl)
-
+	zone.connect("pilot_detail_requested", func(pid: String, b: int, s: int):
+		_open_pilot_detail(pid, b, s)
+	)
 	_content.add_child(zone)
 
 
@@ -382,10 +342,11 @@ func _build_popups() -> void:
 		_scroll_to_zone(2420.0)
 		get_tree().create_timer(0.28).timeout.connect(_open_star_map)
 	)
-	_register_popup("star_map",  STAR_MAP_SCENE.instantiate())
-	_register_popup("hangar_bay", bay_popup)
-	_register_popup("shop",      SHOP_POPUP_SCENE.instantiate())
-	_register_popup("parts",     PARTS_POPUP_SCENE.instantiate())
+	_register_popup("star_map",     STAR_MAP_SCENE.instantiate())
+	_register_popup("hangar_bay",   bay_popup)
+	_register_popup("shop",         SHOP_POPUP_SCENE.instantiate())
+	_register_popup("parts",        PARTS_POPUP_SCENE.instantiate())
+	_register_popup("pilot_detail", PILOT_DETAIL_SCR.new())
 
 
 func _register_popup(key: String, node: Control) -> void:
@@ -413,6 +374,11 @@ func _open_shop() -> void:
 func _open_parts_shop() -> void:
 	if is_instance_valid(_popups.get("parts")):
 		_popups["parts"].call("open_popup")
+
+
+func _open_pilot_detail(pilot_id: String, bed_idx: int, slot_idx: int) -> void:
+	if is_instance_valid(_popups.get("pilot_detail")):
+		_popups["pilot_detail"].call("open", pilot_id, bed_idx, slot_idx)
 
 
 # ── 파일럿 동기화 ─────────────────────────────────────────────
