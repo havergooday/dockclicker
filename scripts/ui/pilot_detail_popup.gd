@@ -4,6 +4,8 @@ const POPUP_HEIGHT  := 300.0
 const POPUP_W       := 480.0
 const ANIM_DURATION := 0.20
 
+var _popup_w_half: float = 0.0  # 런타임에 뷰포트 기준으로 계산
+
 var _main_panel:  PanelContainer = null
 var _content_vb:  VBoxContainer  = null
 var _move_vb:     VBoxContainer  = null
@@ -32,14 +34,17 @@ func _build_ui() -> void:
 	)
 	add_child(overlay)
 
-	# 메인 패널 — 중앙 정렬, 고정 너비/높이
+	# 메인 패널 — 뷰포트 기준 중앙 정렬
+	# anchor 0 기준 + 뷰포트 너비로 offset 직접 계산 → 스크롤 여부와 무관하게 화면 중앙
+	var vp_w := get_viewport_rect().size.x
+	_popup_w_half = POPUP_W * 0.5
 	_main_panel = PanelContainer.new()
-	_main_panel.anchor_left   = 0.5
+	_main_panel.anchor_left   = 0.0
 	_main_panel.anchor_top    = 0.0
-	_main_panel.anchor_right  = 0.5
+	_main_panel.anchor_right  = 0.0
 	_main_panel.anchor_bottom = 0.0
-	_main_panel.offset_left   = -POPUP_W * 0.5
-	_main_panel.offset_right  =  POPUP_W * 0.5
+	_main_panel.offset_left   = (vp_w - POPUP_W) * 0.5
+	_main_panel.offset_right  = (vp_w + POPUP_W) * 0.5
 	_main_panel.offset_top    = -POPUP_HEIGHT  # 숨김 상태
 	_main_panel.offset_bottom = 0.0
 	var sty := StyleBoxFlat.new()
