@@ -8,7 +8,6 @@ var _popup_w_half: float = 0.0  # 런타임에 뷰포트 기준으로 계산
 
 var _main_panel:  PanelContainer = null
 var _content_vb:  VBoxContainer  = null
-var _move_vb:     VBoxContainer  = null
 
 var _pilot_id: String = ""
 var _bed_idx:  int    = -1
@@ -183,65 +182,6 @@ func _rebuild() -> void:
 			Color(0.50, 0.95, 0.68)))
 
 	# 침대 이동 버튼 + 목록
-	_content_vb.add_child(_hsep())
-
-	var move_btn := Button.new()
-	move_btn.text = "침대 이동"
-	move_btn.custom_minimum_size = Vector2(120, 28)
-	move_btn.add_theme_font_size_override("font_size", 11)
-	move_btn.pressed.connect(func():
-		if is_instance_valid(_move_vb) and _move_vb.visible:
-			_move_vb.visible = false
-		else:
-			_build_move_list()
-	)
-	_content_vb.add_child(move_btn)
-
-	_move_vb = VBoxContainer.new()
-	_move_vb.add_theme_constant_override("separation", 4)
-	_move_vb.visible = false
-	_move_vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_content_vb.add_child(_move_vb)
-
-
-func _build_move_list() -> void:
-	if _move_vb == null: return
-	for c in _move_vb.get_children(): c.queue_free()
-
-	var slots_row := HBoxContainer.new()
-	slots_row.add_theme_constant_override("separation", 6)
-	slots_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_move_vb.add_child(slots_row)
-
-	var any := false
-	for b in GameState.quarters_beds.size():
-		var bed: Dictionary = GameState.quarters_beds[b]
-		if bed.get("locked", true): continue
-		var slots: Array = bed.get("slots", ["", ""])
-		for s in 2:
-			if str(slots[s]) == _pilot_id: continue
-			if str(slots[s]) != "": continue
-			any = true
-			var cap_b := b; var cap_s := s
-			var btn := Button.new()
-			btn.text = "침대%d %s" % [b + 1, "상" if s == 0 else "하"]
-			btn.add_theme_font_size_override("font_size", 10)
-			btn.custom_minimum_size = Vector2(72, 26)
-			btn.pressed.connect(func():
-				GameState.move_pilot_bed(_pilot_id, cap_b, cap_s)
-				_bed_idx = cap_b; _slot_idx = cap_s
-				_rebuild()
-			)
-			slots_row.add_child(btn)
-
-	if not any:
-		var lbl := Label.new()
-		lbl.text = "이동 가능한 빈 슬롯 없음"
-		lbl.add_theme_font_size_override("font_size", 10)
-		lbl.modulate = Color(0.65, 0.35, 0.35)
-		_move_vb.add_child(lbl)
-
-	_move_vb.visible = true
 
 
 # ── 헬퍼 ──────────────────────────────────────────────────────
