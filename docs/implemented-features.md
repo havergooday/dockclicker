@@ -294,9 +294,19 @@
 - `GameState.owned_parts` (수량 딕셔너리) → `part_inventory: Array` (인스턴스 배열) 리팩터링
   - 각 파츠: `{iid, type, tier}` 딕셔너리 단위
   - `buy_part()` → 인스턴스 append, `consume_part()` → 첫 매칭 인스턴스 remove
+  - `consume_part_by_iid()` → 특정 iid 인스턴스 정확 소모 (iid 없으면 티어 fallback)
   - `get_owned_qty()` 는 count 함수로 유지 (하위 호환)
 - `SaveManager` 저장 버전 v2 → v3 bump, v2→v3 자동 마이그레이션 내장
-- `DispatchManager.assemble_machine()` → `consume_part()` 호출로 전환
+- `DispatchManager.assemble_machine()` / `replace_machine_part()` → `consume_part_by_iid()` 로 전환 (옵션 조회 iid와 소모 인스턴스 일치 보장)
+
+## 파츠 iid 기반 조립 선택 (공작실) 구현 완료
+
+- 공작실 조립 탭 파츠 목록을 **티어 그룹 → 인스턴스 단위**로 전환 (`hangar_assembly.gd`)
+  - 같은 티어라도 옵션이 다른 인스턴스를 각 행으로 분리, 옵션 라벨(수익/파견/복귀) 표기
+  - `_equipped_iids` 로 선택 인스턴스의 iid 추적, `assemble_machine(..., iids)` 로 전달
+  - 조립된 머신이 선택 인스턴스의 옵션(`*_opts`)을 정확히 보존
+  - 격납고 베이 팝업(`hangar_bay_popup.gd`)의 인스턴스 단위 선택과 동작 일관성 확보
+- `get_machine_preview(..., opts)` 옵션 인자 추가 — 조립 전 PREVIEW 스텟(임무/복귀 시간)에 선택 인스턴스의 파견·복귀 단축 옵션과 수익 옵션을 반영
 
 ## 격납고 조립 팝업 UI 구현 완료
 

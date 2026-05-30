@@ -25,6 +25,7 @@ const DRAG_THRESHOLD := 5.0
 var _selected_bay:  int        = -1
 var _selected_slot: String     = ""
 var _equipped:      Dictionary = {"body": 0, "weapon": 0, "legs": 0}
+var _equipped_iids: Dictionary = {"body": "", "weapon": "", "legs": ""}
 
 # 중앙 패널 뷰
 var _bay_view:       Control         = null
@@ -662,6 +663,7 @@ func _select_bay(index: int) -> void:
 	_selected_bay  = index
 	_selected_slot = ""
 	_equipped      = {"body": 0, "weapon": 0, "legs": 0}
+	_equipped_iids = {"body": "", "weapon": "", "legs": ""}
 	_bay_view.visible       = false
 	_schematic_view.visible = true
 	_bay_label.text = "← BAY %02d  ●  EMPTY" % (index + 1)
@@ -674,6 +676,7 @@ func _deselect_bay() -> void:
 	_selected_bay  = -1
 	_selected_slot = ""
 	_equipped      = {"body": 0, "weapon": 0, "legs": 0}
+	_equipped_iids = {"body": "", "weapon": "", "legs": ""}
 	_bay_view.visible       = true
 	_schematic_view.visible = false
 	_drag_start_x = -1.0
@@ -754,18 +757,19 @@ func _refresh_parts_list() -> void:
 		_parts_list.add_child(lbl)
 		return
 
-	var eq_tier: int  = _equipped.get(_selected_slot, 0)
-	var eq_found := false
+	var eq_iid: String = str(_equipped_iids.get(_selected_slot, ""))
 	for item: Dictionary in items:
-		var tier: int = int(item.get("tier", 1))
-		var is_eq: bool = (tier == eq_tier and not eq_found)
-		if is_eq: eq_found = true
-		_parts_list.add_child(_make_part_row(_selected_slot, tier, is_eq))
+		var is_eq: bool = (eq_iid != "" and str(item.get("iid", "")) == eq_iid)
+		_parts_list.add_child(_make_part_row(item, is_eq))
 
-func _make_part_row(part_type: String, tier: int, is_equipped: bool) -> Button:
-	var data: Dictionary = GameState.PARTS[part_type]
-	var td:   Dictionary = data["tiers"][tier - 1]
-	var tcol: Color      = TIER_COLORS[mini(tier - 1, 2)]
+func _make_part_row(item: Dictionary, is_equipped: bool) -> Button:
+	var part_type: String = str(item.get("type", _selected_slot))
+	var tier:      int    = int(item.get("tier", 1))
+	var iid:       String = str(item.get("iid", ""))
+	var opts:      Array  = item.get("options", []) as Array
+	var data: Dictionary  = GameState.PARTS[part_type]
+	var td:   Dictionary  = data["tiers"][tier - 1]
+	var tcol: Color       = TIER_COLORS[mini(tier - 1, 2)]
 
 	var btn := Button.new()
 	btn.text = ""
@@ -800,6 +804,18 @@ func _make_part_row(part_type: String, tier: int, is_equipped: bool) -> Button:
 	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(name_lbl)
 
+	if not opts.is_empty():
+		var opt_strs: Array = []
+		for opt: Dictionary in opts:
+			opt_strs.append(_opt_label(opt))
+		var opt_lbl := Label.new()
+		opt_lbl.text = "  ".join(opt_strs)
+		opt_lbl.add_theme_font_size_override("font_size", 9)
+		opt_lbl.modulate = Color(0.50, 0.95, 0.62)
+		opt_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		opt_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(opt_lbl)
+
 	if is_equipped:
 		var eq_lbl := Label.new()
 		eq_lbl.text = "장착중"
@@ -809,13 +825,21 @@ func _make_part_row(part_type: String, tier: int, is_equipped: bool) -> Button:
 		eq_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(eq_lbl)
 
-	var pt := part_type; var t := tier
+	var pt := part_type; var t := tier; var id := iid
 	btn.pressed.connect(func():
-		_equipped[pt] = t
+		_equipped[pt]      = t
+		_equipped_iids[pt] = id
 		_refresh_slot_visuals(); _refresh_parts_list()
 		_refresh_stats(); _refresh_bottom()
 	)
 	return btn
+
+func _opt_label(opt: Dictionary) -> String:
+	match opt.get("type", ""):
+		"credits_pct":       return "수익+%d%%" % opt.get("value", 0)
+		"dispatch_time_pct": return "파견-%d%%" % opt.get("value", 0)
+		"return_time_pct":   return "복귀-%d%%" % opt.get("value", 0)
+	return ""
 
 # ── 스텟 / 하단 ───────────────────────────────────────────
 
@@ -824,10 +848,21 @@ func _refresh_stats() -> void:
 	var b: int = _equipped.get("body", 0)
 	var w: int = _equipped.get("weapon", 0)
 	var l: int = _equipped.get("legs", 0)
-	var p: Dictionary = GameState.get_machine_preview(b, w, l)
+	var p: Dictionary = GameState.get_machine_preview(b, w, l, _equipped_opts())
 	_stat_mission.text = "임무  %s" % (("%ds" % int(p.get("mission_time", 0))) if b > 0 else "--")
 	_stat_rate.text    = "CR/s  %s" % (("×%d"  % p.get("rate", 0))            if w > 0 else "--")
 	_stat_return.text  = "복귀  %s" % (("%ds"  % int(p.get("return_time", 0))) if l > 0 else "--")
+
+func _equipped_opts() -> Dictionary:
+	var result := {"body_opts": [], "weapon_opts": [], "legs_opts": []}
+	for stype in ["body", "weapon", "legs"]:
+		var iid: String = str(_equipped_iids.get(stype, ""))
+		if iid == "": continue
+		for item: Dictionary in GameState.part_inventory:
+			if str(item.get("iid", "")) == iid:
+				result[stype + "_opts"] = (item.get("options", []) as Array)
+				break
+	return result
 
 func _refresh_bottom() -> void:
 	if _asm_btn == null: return
@@ -846,7 +881,12 @@ func _on_assemble_pressed() -> void:
 	var b: int = _equipped.get("body", 0)
 	var w: int = _equipped.get("weapon", 0)
 	var l: int = _equipped.get("legs", 0)
-	if GameState.assemble_machine(_selected_bay, b, w, l):
+	var iids := {
+		"body":   str(_equipped_iids.get("body",   "")),
+		"weapon": str(_equipped_iids.get("weapon", "")),
+		"legs":   str(_equipped_iids.get("legs",   "")),
+	}
+	if GameState.assemble_machine(_selected_bay, b, w, l, iids):
 		_deselect_bay()
 
 # ── 스타일 ────────────────────────────────────────────────

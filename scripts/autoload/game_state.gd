@@ -229,6 +229,16 @@ func consume_part(part_type: String, tier: int) -> bool:
 			return true
 	return false
 
+# 특정 인스턴스(iid)를 정확히 소모. iid가 비었거나 없으면 티어 기준으로 fallback.
+func consume_part_by_iid(iid: String, part_type: String, tier: int) -> bool:
+	if iid != "":
+		for i in part_inventory.size():
+			var item: Dictionary = part_inventory[i]
+			if str(item.get("iid", "")) == iid:
+				part_inventory.remove_at(i)
+				return true
+	return consume_part(part_type, tier)
+
 # ── 파일럿 시스템 ─────────────────────────────────────────────
 
 func get_pilot_data(pilot_id: String) -> Dictionary:
@@ -429,8 +439,8 @@ func start_auto_dispatch(slot_index: int, pilot_id: String, planet_id: String) -
 func collect_auto_slot(slot_index: int) -> bool:
 	return _dispatch.collect_auto_slot(slot_index)
 
-func get_machine_preview(body_tier: int, weapon_tier: int, legs_tier: int) -> Dictionary:
-	return _dispatch.get_machine_preview(body_tier, weapon_tier, legs_tier)
+func get_machine_preview(body_tier: int, weapon_tier: int, legs_tier: int, opts: Dictionary = {}) -> Dictionary:
+	return _dispatch.get_machine_preview(body_tier, weapon_tier, legs_tier, opts)
 
 
 func assign_pilot_to_slot(slot_index: int, pilot_id: String) -> bool:

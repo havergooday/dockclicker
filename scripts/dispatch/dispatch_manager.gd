@@ -168,9 +168,9 @@ func assemble_machine(slot_index: int, body_tier: int, weapon_tier: int, legs_ti
 	var weapon_opts := _lookup_opts(iids.get("weapon", ""), "weapon", weapon_tier)
 	var legs_opts   := _lookup_opts(iids.get("legs",   ""), "legs",   legs_tier)
 	GameState.total_credits -= cost
-	GameState.consume_part("body", body_tier)
-	GameState.consume_part("weapon", weapon_tier)
-	GameState.consume_part("legs", legs_tier)
+	GameState.consume_part_by_iid(str(iids.get("body",   "")), "body",   body_tier)
+	GameState.consume_part_by_iid(str(iids.get("weapon", "")), "weapon", weapon_tier)
+	GameState.consume_part_by_iid(str(iids.get("legs",   "")), "legs",   legs_tier)
 	slot.state = "offline"
 	slot.machine = {
 		"body": body_tier, "weapon": weapon_tier, "legs": legs_tier,
@@ -296,13 +296,18 @@ func _complete_return(slot_index: int) -> void:
 
 # ── 머신 스펙 미리보기 ───────────────────────────────────────
 
-func get_machine_preview(body_tier: int, weapon_tier: int, legs_tier: int) -> Dictionary:
+func get_machine_preview(body_tier: int, weapon_tier: int, legs_tier: int, opts: Dictionary = {}) -> Dictionary:
 	var mission_time := _get_mission_duration(body_tier) if body_tier > 0 else 0.0
 	var return_time  := _get_return_duration(legs_tier)  if legs_tier  > 0 else 0.0
+	if not opts.is_empty():
+		mission_time *= _opts_time_mult(opts, "dispatch_time_pct")
+		return_time  *= _opts_time_mult(opts, "return_time_pct")
 	var rate: int = 0
 	if weapon_tier >= 1 and weapon_tier <= PartsData.DICT["weapon"]["tiers"].size():
 		rate = PartsData.DICT["weapon"]["tiers"][weapon_tier - 1]["value"]
 	var credits: int = int(float(rate) * mission_time) if (body_tier > 0 and weapon_tier > 0) else 0
+	if credits > 0 and not opts.is_empty():
+		credits = int(float(credits) * _opts_credits_mult(opts))
 	return {
 		"mission_time": mission_time,
 		"return_time":  return_time,
@@ -513,7 +518,7 @@ func replace_machine_part(slot_index: int, part_type: String, tier: int, iid: St
 	if slot.state != "offline":
 		return false
 	var old_tier: int = int(slot.machine.get(part_type, 0))
-	if not GameState.consume_part(part_type, tier):
+	if not GameState.consume_part_by_iid(iid, part_type, tier):
 		return false
 	if old_tier > 0:
 		GameState.part_inventory.append({
