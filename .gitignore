@@ -4,3 +4,7 @@ __pycache__/
 *.import
 *.uid
 build/
+
+# Superpowers tool artifacts
+.superpowers/
+docs/superpowers/
