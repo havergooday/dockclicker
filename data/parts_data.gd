@@ -12,9 +12,12 @@ const COMBO_WINDOW_SEC: float   = 0.8
 
 # 드랍 파츠 옵션 풀 — 각 항목에서 랜덤 value 선택
 const OPTION_POOL: Array = [
-	{"type": "credits_pct",       "label": "수익 +%d%%",      "values": [8, 12, 18, 22]},
-	{"type": "dispatch_time_pct", "label": "파견 -%d%%",      "values": [5, 8, 12, 15]},
-	{"type": "return_time_pct",   "label": "복귀 -%d%%",      "values": [5, 8, 10, 12]},
+	{"type": "credits_pct",        "label": "수익 +%d%%",      "values": [8, 12, 18, 22]},
+	{"type": "dispatch_time_pct",  "label": "파견 -%d%%",      "values": [5, 8, 12, 15]},
+	{"type": "return_time_pct",    "label": "복귀 -%d%%",      "values": [5, 8, 10, 12]},
+	{"type": "fatigue_pct",        "label": "피로 -%d%%",      "values": [10, 15, 20, 25]},
+	{"type": "stress_pct",         "label": "스트레스 -%d%%",  "values": [10, 15, 20, 25]},
+	{"type": "material_yield_pct", "label": "재료 +%d%%",      "values": [8, 12, 18, 22]},
 ]
 
 const DICT: Dictionary = {

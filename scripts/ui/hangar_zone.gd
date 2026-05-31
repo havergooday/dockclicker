@@ -9,6 +9,9 @@ const CARD_H         := 108
 const CARD_SEP       := 8    # 격납고 내 카드 간격
 const GROUP_SEP      := 24   # 격납고 간 구분선 너비
 const DRAG_THRESHOLD := 6.0
+const LEFT_EXPANSION_GROUPS: Array = [3, 2]
+const CENTER_GROUP := 0
+const RIGHT_EXPANSION_GROUPS: Array = [1]
 
 var _layout_root:    Control         = null
 var _scroll_ref:     ScrollContainer = null
@@ -18,6 +21,8 @@ var _drag_start_h:   int             = 0
 var _was_dragging:   bool            = false
 var _bay_scroll_pos: int             = 0
 var _needs_rebuild:  bool            = false
+var _unlock_confirm_visible := false
+var _did_initial_center := false
 
 # 인라인 확인 상태 ("" | "hangar" | "bay")
 var _confirming_type: String = ""
@@ -47,7 +52,7 @@ func _process(_dt: float) -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if _scroll_ref == null or not visible or _popup_slot >= 0:
+	if _scroll_ref == null or not visible or _popup_slot >= 0 or _unlock_confirm_visible:
 		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
@@ -117,6 +122,24 @@ func _build() -> void:
 	_popup_root = popup
 
 
+func _visual_group_order() -> Array:
+	return LEFT_EXPANSION_GROUPS + [CENTER_GROUP] + RIGHT_EXPANSION_GROUPS
+
+
+func _hangar_group_title(g_idx: int) -> String:
+	match g_idx:
+		CENTER_GROUP:
+			return "중앙 격납고"
+		1:
+			return "우측 확장"
+		2:
+			return "좌측 확장"
+		3:
+			return "좌측 확장 II"
+		_:
+			return "격납고 %d" % (g_idx + 1)
+
+
 func _build_grid(area: Control) -> void:
 	var scroll := ScrollContainer.new()
 	scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -142,9 +165,9 @@ func _build_grid(area: Control) -> void:
 	const SEP_W         : int = GROUP_SEP               # 24
 	const VPAD          : int = 10     # 상하 마진
 
-	var left_idxs  := [3, 2]
-	var center_idx := 0
-	var right_idxs := [1]
+	var left_idxs: Array = LEFT_EXPANSION_GROUPS
+	var center_idx: int = CENTER_GROUP
+	var right_idxs: Array = RIGHT_EXPANSION_GROUPS
 
 	# 유효한 좌측 그룹만 카운트
 	var active_left := 0
@@ -193,12 +216,28 @@ func _build_grid(area: Control) -> void:
 	rpad.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(rpad)
 
-	call_deferred("_restore_scroll")
+	call_deferred("_restore_or_center_scroll")
 
 
-func _restore_scroll() -> void:
-	if is_instance_valid(_scroll_ref):
+func _restore_or_center_scroll() -> void:
+	if not is_instance_valid(_scroll_ref):
+		return
+	if not _did_initial_center:
+		_did_initial_center = true
+		_center_on_group(CENTER_GROUP)
+		return
+	_scroll_ref.scroll_horizontal = _bay_scroll_pos
+
+
+func _center_on_group(group_id: int) -> void:
+	if not is_instance_valid(_scroll_ref):
+		return
+	if _visual_group_order().find(group_id) < 0:
 		_scroll_ref.scroll_horizontal = _bay_scroll_pos
+		return
+	var target := 0
+	_scroll_ref.scroll_horizontal = target
+	_bay_scroll_pos = target
 
 
 # ── 격납고 구성 요소 ─────────────────────────────────────────
@@ -278,12 +317,12 @@ func _make_hangar_block(g_idx: int, group: DispatchManager.HangarGroup) -> Butto
 
 	if not is_conf:
 		HangarHelpers.add_lbl(vb, "🔒", 22, HORIZONTAL_ALIGNMENT_CENTER, Color.WHITE)
-		HangarHelpers.add_lbl(vb, "격납고 %d" % (g_idx + 1), 11, HORIZONTAL_ALIGNMENT_CENTER, Color(0.50, 0.54, 0.68))
+		HangarHelpers.add_lbl(vb, _hangar_group_title(g_idx), 11, HORIZONTAL_ALIGNMENT_CENTER, Color(0.50, 0.54, 0.68))
 		HangarHelpers.add_lbl(vb, "%s CR" % HangarHelpers.fmt(group.unlock_cost), 10, HORIZONTAL_ALIGNMENT_CENTER,
 				Color(0.85, 0.75, 0.50) if can_afford else Color(0.90, 0.35, 0.35))
 		btn.pressed.connect(func(): _set_confirming("hangar", g_idx))
 	else:
-		HangarHelpers.add_lbl(vb, "격납고 %d 해금" % (g_idx + 1), 12, HORIZONTAL_ALIGNMENT_CENTER, Color(0.75, 0.80, 0.95))
+		HangarHelpers.add_lbl(vb, "%s 해금" % _hangar_group_title(g_idx), 12, HORIZONTAL_ALIGNMENT_CENTER, Color(0.75, 0.80, 0.95))
 		HangarHelpers.add_lbl(vb, "%s CR" % HangarHelpers.fmt(group.unlock_cost), 14, HORIZONTAL_ALIGNMENT_CENTER,
 				Color(0.85, 0.75, 0.50) if can_afford else Color(0.90, 0.35, 0.35))
 		vb.add_child(HangarHelpers.vspacer())
@@ -498,9 +537,12 @@ func _build_card_confirm(btn: Button, slot: DispatchManager.AutoSlot, index: int
 func _set_confirming(type: String, id: int) -> void:
 	if _was_dragging:
 		return
-	_confirming_type = type
-	_confirming_id   = id
-	_rebuild_grid()
+	_confirming_type = ""
+	_confirming_id = -1
+	if type == "hangar":
+		_open_hangar_unlock_confirm(id)
+	elif type == "bay":
+		_open_bay_unlock_confirm(id)
 
 
 func _clear_confirming() -> void:
@@ -520,6 +562,7 @@ func _rebuild_grid() -> void:
 func _show_popup(slot_idx: int) -> void:
 	if not is_instance_valid(_popup_root):
 		return
+	_unlock_confirm_visible = false
 	_popup_slot = slot_idx
 	for child in _popup_root.get_children():
 		child.queue_free()
@@ -564,6 +607,7 @@ func _show_popup(slot_idx: int) -> void:
 
 func _hide_popup() -> void:
 	_popup_slot = -1
+	_unlock_confirm_visible = false
 	if is_instance_valid(_popup_root):
 		_popup_root.visible = false
 		for child in _popup_root.get_children():
@@ -575,4 +619,134 @@ func _build_popup_content(vb: VBoxContainer, slot_idx: int) -> void:
 		vb, slot_idx,
 		_hide_popup,
 		func(): navigate_to_control_requested.emit()
+	)
+
+
+func _show_unlock_confirm_popup(title: String, body: String, cost_text: String, can_afford: bool, on_confirm: Callable) -> void:
+	if not is_instance_valid(_popup_root):
+		return
+	_popup_slot = -1
+	_unlock_confirm_visible = true
+	for child in _popup_root.get_children():
+		child.queue_free()
+
+	var dim := ColorRect.new()
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.color = Color(0.0, 0.0, 0.0, 0.52)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.gui_input.connect(func(ev: InputEvent):
+		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+			_hide_unlock_confirm_popup()
+	)
+	_popup_root.add_child(dim)
+
+	var panel := PanelContainer.new()
+	panel.anchor_left = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_top = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left = -188
+	panel.offset_right = 188
+	panel.offset_top = -92
+	panel.offset_bottom = 92
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	var sty := StyleBoxFlat.new()
+	sty.bg_color = Color(0.05, 0.07, 0.13, 0.98)
+	sty.border_color = Color(0.48, 0.64, 0.86, 0.90)
+	sty.set_border_width_all(1)
+	sty.set_corner_radius_all(6)
+	sty.content_margin_left = 14
+	sty.content_margin_right = 14
+	sty.content_margin_top = 12
+	sty.content_margin_bottom = 12
+	panel.add_theme_stylebox_override("panel", sty)
+	_popup_root.add_child(panel)
+
+	var vb := VBoxContainer.new()
+	vb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vb.add_theme_constant_override("separation", 8)
+	panel.add_child(vb)
+
+	var title_lbl := Label.new()
+	title_lbl.text = "해금 진행"
+	title_lbl.add_theme_font_size_override("font_size", 15)
+	title_lbl.modulate = Color(0.90, 0.96, 1.0)
+	vb.add_child(title_lbl)
+
+	var body_lbl := Label.new()
+	body_lbl.text = "%s\n%s" % [title, body]
+	body_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body_lbl.add_theme_font_size_override("font_size", 11)
+	body_lbl.modulate = Color(0.72, 0.82, 0.96)
+	body_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vb.add_child(body_lbl)
+
+	var cost_lbl := Label.new()
+	cost_lbl.text = "비용: %s" % cost_text
+	cost_lbl.add_theme_font_size_override("font_size", 11)
+	cost_lbl.modulate = Color(0.85, 0.78, 0.56) if can_afford else Color(0.90, 0.35, 0.35)
+	vb.add_child(cost_lbl)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	vb.add_child(row)
+
+	var cancel_btn := Button.new()
+	cancel_btn.text = "취소"
+	cancel_btn.custom_minimum_size = Vector2(0, 30)
+	cancel_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cancel_btn.pressed.connect(_hide_unlock_confirm_popup)
+	row.add_child(cancel_btn)
+
+	var confirm_btn := Button.new()
+	confirm_btn.text = "해금"
+	confirm_btn.custom_minimum_size = Vector2(0, 30)
+	confirm_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	confirm_btn.disabled = not can_afford
+	confirm_btn.pressed.connect(func():
+		if on_confirm.is_valid():
+			on_confirm.call()
+		_hide_unlock_confirm_popup()
+	)
+	row.add_child(confirm_btn)
+	_popup_root.visible = true
+
+
+func _hide_unlock_confirm_popup() -> void:
+	_unlock_confirm_visible = false
+	if is_instance_valid(_popup_root):
+		_popup_root.visible = false
+		for child in _popup_root.get_children():
+			child.queue_free()
+
+
+func _open_hangar_unlock_confirm(g_idx: int) -> void:
+	var group := GameState.get_hangar_group(g_idx)
+	if group == null:
+		return
+	var can_afford := GameState.total_credits >= group.unlock_cost
+	_show_unlock_confirm_popup(
+		"격납고 %d 해금" % (g_idx + 1),
+		"연결된 Bay 묶음을 사용할 수 있게 합니다.",
+		"%s CR" % HangarHelpers.fmt(group.unlock_cost),
+		can_afford,
+		func():
+			GameState.unlock_hangar(g_idx)
+	)
+
+
+func _open_bay_unlock_confirm(index: int) -> void:
+	if index < 0 or index >= GameState.auto_slots.size():
+		return
+	var slot: DispatchManager.AutoSlot = GameState.auto_slots[index]
+	var slot_name: String = str(slot.custom_name)
+	var title := slot_name if slot_name != "" else "BAY %02d 해금" % (index + 1)
+	var can_afford := GameState.total_credits >= slot.unlock_cost
+	_show_unlock_confirm_popup(
+		title,
+		"자동 파견 Bay 슬롯을 사용할 수 있게 합니다.",
+		"%s CR" % HangarHelpers.fmt(slot.unlock_cost),
+		can_afford,
+		func():
+			GameState.unlock_auto_slot(index)
 	)

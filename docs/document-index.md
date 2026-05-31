@@ -14,8 +14,10 @@ AI 컨텍스트는 프로젝트 루트 `CLAUDE.md`에 있다. Claude Code가 세
 ## 기획 / 설계 문서
 
 - [Dispatch Clicker 기획서](dispatch-clicker-design.md) — 코어 루프, 파견 구조, 성장 구조
+- [Living Ship Design](living-ship-design.md) — 함선 생활, 파일럿 애착, 시설/재화 피벗 방향
 - [Dispatch Clicker 디자인 문서](dispatch-clicker-visual-design.md) — 가로형/세로형 와이어프레임, SD 캐릭터 방향
 - [UI/UX 전면 재설계 계획](plans/2026-05-27-ux-redesign.md) — 파노라마 함선 캔버스와 3구역 이동 구조 계획
+- [Living Ship Pivot 작업계획서](plans/2026-05-30-living-ship-pivot-plan.md) — 현재 구현 점검 기반의 요소별 전환 계획
 - [Godot 프로젝트 구조](godot-project-structure.md) — 폴더 구조와 책임 분리
 - [기술 결정 기록](technical-decisions.md) — 이미 확정된 기술 선택과 이유
 - [시스템 문서](systems/README.md) — 개별 시스템 설계 문서 인덱스

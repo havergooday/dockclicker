@@ -1,7 +1,13 @@
 extends Node
 
 var hangar_preselect_slot: int = -1
-var total_credits: int = 1000000
+var total_credits: int = 500
+const RESOURCE_IDS: Array = ["cp", "alloy", "supplies", "circuit"]
+var resources: Dictionary = {
+	"alloy": 0,
+	"supplies": 0,
+	"circuit": 0,
+}
 var pending_credits: int = 0
 var player_status: String = "idle"  # idle / on_mission / returned
 var click_damage: int = 1
@@ -20,13 +26,40 @@ var selected_planet: String = "sector_a"
 const FEATURE_DEFS: Array = [
 	{"id": "pc_terminal",    "name": "PC 터미널",       "desc": "파츠 구매 · 업그레이드",     "cost": 100},
 	{"id": "quarters",       "name": "숙소",             "desc": "침대 1개 · 파일럿 거주 공간", "cost": 300},
-	{"id": "pilot_workshop", "name": "공작실 · 파일럿", "desc": "머신 조립 · 파일럿 고용 · 격납고", "cost": 1000},
+	{"id": "pilot_workshop", "name": "공작실 · 파일럿", "desc": "머신 조립 · 파일럿 고용 · 격납고", "cost": 800},
+	{"id": "canteen",        "name": "간이 식당",        "desc": "식사 회복 강화 · 기분 회복 +1 추가",  "cost": 3000},
+]
+
+const BASE_AREA_DEFS: Array = [
+	{"id": "quarters", "name": "숙소", "desc": "침대와 파일럿 거주 공간", "cost": {"cp": 300}},
+	{"id": "lounge", "name": "라운지", "desc": "휴식과 생활 시설이 보이는 공간", "cost": {"cp": 1200, "supplies": 4}},
+	{"id": "canteen", "name": "간이 식당", "desc": "기분 회복을 강화하는 생활 구역", "cost": {"cp": 3000, "supplies": 10}},
+	{"id": "medbay", "name": "의무실", "desc": "회복 행동을 강화하는 의료 구역", "cost": {"cp": 2500, "alloy": 3, "circuit": 2}},
 ]
 
 var unlocked_features: Array = []
 
 signal feature_unlocked(feature_id: String)
+var base_area_unlocks: Dictionary = {
+	"quarters": true,
+	"lounge": false,
+	"canteen": false,
+	"medbay": false,
+}
+
+signal base_area_unlocks_changed
 var part_inventory: Array = []  # Array of {iid, type, tier}
+
+# ── 라운지 시설 ───────────────────────────────────────────────
+var lounge_slots: Dictionary = {
+	"wall": "",
+	"rest": "",
+	"table": "",
+	"service": "",
+	"medical": "",
+	"decor": "",
+}
+signal facilities_changed
 
 # ── 파일럿 ────────────────────────────────────────────────────
 var hired_pilots: Array = []  # Array of pilot instance dicts
@@ -52,19 +85,37 @@ signal board_refreshed
 # ── UI 편집 ───────────────────────────────────────────────────
 var ui_edit_mode: bool = false
 var ui_positions: Dictionary = {}
+var placeable_positions: Dictionary = {}
+const PLACEABLE_GRID_SIZE := 16.0
 signal ui_edit_mode_changed(enabled: bool)
 signal ui_positions_reset
+signal placeable_positions_changed
+
+# 상태표시줄(크레딧 HUD) 위치: "top" | "bottom" | "left" | "right"
+var hud_position: String = "right"
+signal hud_position_changed(pos: String)
+
+var _quarters_rest_accumulator: float = 0.0
+const QUARTERS_REST_TICK_SEC := 4.0
 
 # ── 데이터 상수 ───────────────────────────────────────────────
 const _PlanetDataScript = preload("res://data/planet_data.gd")
 const _PartsDataScript  = preload("res://data/parts_data.gd")
 const _PilotsDataScript = preload("res://data/pilots_data.gd")
+const _FacilityDataScript = preload("res://data/facility_data.gd")
 const PLANETS:               Array      = _PlanetDataScript.LIST
 const PARTS:                 Dictionary = _PartsDataScript.DICT
 const DAMAGE_UPGRADE_COSTS:  Array      = _PartsDataScript.DAMAGE_UPGRADE_COSTS
 const PILOTS:                Array      = _PilotsDataScript.LIST
+const FACILITIES:            Array      = _FacilityDataScript.LIST
 
 signal credits_changed(new_total: int)
+signal resources_changed(resources: Dictionary)
+signal resource_changed(resource_id: String, new_amount: int)
+signal resources_collected(rewards: Dictionary)
+signal pilot_tier_up(pilot_id: String)
+
+const EXP_PER_TIER: Array = [80, 160]
 signal credits_collected(amount: int, from_global_pos: Vector2)
 signal player_status_changed(status: String)
 signal planet_unlocked(planet_id: String)
@@ -91,6 +142,10 @@ func _ready() -> void:
 	feature_unlocked.connect(_on_feature_unlocked)
 	_init_quarters()
 
+
+func _process(delta: float) -> void:
+	apply_quarters_rest_tick(delta)
+
 func _on_feature_unlocked(feature_id: String) -> void:
 	if feature_id == "pilot_workshop" and _dispatch != null:
 		var slots: Array = _dispatch.auto_slots
@@ -100,6 +155,32 @@ func _on_feature_unlocked(feature_id: String) -> void:
 				s.state = "empty"
 				_dispatch.auto_slot_changed.emit(0)
 
+func get_base_area_data(area_id: String) -> Dictionary:
+	for area in BASE_AREA_DEFS:
+		if str(area.get("id", "")) == area_id:
+			return area
+	return {}
+
+func is_base_area_unlocked(area_id: String) -> bool:
+	return bool(base_area_unlocks.get(area_id, false))
+
+func unlock_base_area(area_id: String) -> bool:
+	if not base_area_unlocks.has(area_id):
+		return false
+	if is_base_area_unlocked(area_id):
+		return false
+	var area := get_base_area_data(area_id)
+	if area.is_empty():
+		return false
+	if not pay_cost(area.get("cost", {})):
+		return false
+	base_area_unlocks[area_id] = true
+	if area_id == "quarters" and quarters_beds.size() > 0 and bool(quarters_beds[0].get("locked", true)):
+		quarters_beds[0]["locked"] = false
+		quarters_changed.emit()
+	base_area_unlocks_changed.emit()
+	return true
+
 func _init_quarters() -> void:
 	quarters_beds.clear()
 	for i in MAX_BEDS:
@@ -108,6 +189,8 @@ func _init_quarters() -> void:
 			"unlock_cost":  BED_COSTS[i] if i < BED_COSTS.size() else 99999,
 			"slots":        ["", "", ""],   # 침대당 3 슬롯
 		})
+	if quarters_beds.size() > 0:
+		quarters_beds[0]["locked"] = not is_base_area_unlocked("quarters")
 
 # ── 숙소 함수 ────────────────────────────────────────────────
 
@@ -189,9 +272,16 @@ func unlock_planet(planet_id: String) -> bool:
 	if is_planet_unlocked(planet_id):
 		return false
 	var data := get_planet(planet_id)
-	if data.is_empty() or total_credits < int(data["unlock_cost"]):
+	if data.is_empty():
 		return false
-	total_credits -= int(data["unlock_cost"])
+	if total_credits < int(data.get("unlock_cost", 0)):
+		return false
+	var extra: Dictionary = data.get("unlock_resources", {})
+	if not can_pay(extra):
+		return false
+	total_credits -= int(data.get("unlock_cost", 0))
+	if not extra.is_empty():
+		pay_cost(extra)
 	unlocked_planets.append(planet_id)
 	credits_changed.emit(total_credits)
 	planet_unlocked.emit(planet_id)
@@ -201,6 +291,19 @@ func is_feature_unlocked(feature_id: String) -> bool:
 	return feature_id in unlocked_features
 
 func unlock_feature(feature_id: String) -> bool:
+	if feature_id == "quarters":
+		var was_feature_unlocked := is_feature_unlocked(feature_id)
+		if not is_base_area_unlocked(feature_id):
+			if not unlock_base_area(feature_id):
+				return false
+		elif quarters_beds.size() > 0 and bool(quarters_beds[0].get("locked", true)):
+			quarters_beds[0]["locked"] = false
+			quarters_changed.emit()
+		if was_feature_unlocked:
+			return false
+		unlocked_features.append(feature_id)
+		feature_unlocked.emit(feature_id)
+		return true
 	if is_feature_unlocked(feature_id):
 		return false
 	var def := _get_feature_def(feature_id)
@@ -223,6 +326,223 @@ func _get_feature_def(feature_id: String) -> Dictionary:
 		if str(f["id"]) == feature_id:
 			return f
 	return {}
+
+func get_feature_cost(feature_id: String) -> int:
+	var def := _get_feature_def(feature_id)
+	if def.is_empty():
+		return 0
+	return int(def.get("cost", 0))
+
+func format_feature_cost(feature_id: String) -> String:
+	return format_cost({"cp": get_feature_cost(feature_id)})
+
+# ── 배치 편집 ─────────────────────────────────────────────────
+
+func set_ui_edit_mode(enabled: bool) -> void:
+	if ui_edit_mode == enabled:
+		return
+	ui_edit_mode = enabled
+	ui_edit_mode_changed.emit(enabled)
+
+
+func set_hud_position(pos: String) -> void:
+	if pos not in ["top", "bottom", "left", "right"]:
+		return
+	if hud_position == pos:
+		return
+	hud_position = pos
+	hud_position_changed.emit(pos)
+
+
+func set_placeable_position(placeable_id: String, region_tag: String, pos: Vector2) -> bool:
+	var bounds := _placement_bounds(region_tag)
+	if bounds.size == Vector2.ZERO:
+		return false
+	var clamped := clamp_placeable_position(placeable_id, region_tag, pos)
+	if not can_place_at(placeable_id, region_tag, clamped):
+		return false
+	placeable_positions[placeable_id] = {
+		"region": region_tag,
+		"x": clamped.x,
+		"y": clamped.y,
+	}
+	placeable_positions_changed.emit()
+	return true
+
+
+func ensure_placeable_position(placeable_id: String, region_tag: String, pos: Vector2) -> void:
+	if placeable_positions.has(placeable_id):
+		return
+	var clamped := clamp_placeable_position(placeable_id, region_tag, pos)
+	placeable_positions[placeable_id] = {
+		"region": region_tag,
+		"x": clamped.x,
+		"y": clamped.y,
+	}
+
+
+func clamp_placeable_position(placeable_id: String, region_tag: String, pos: Vector2) -> Vector2:
+	var bounds := _placement_bounds(region_tag)
+	if bounds.size == Vector2.ZERO:
+		return pos
+	var size := _placeable_size(placeable_id, region_tag)
+	var snapped := pos.snapped(Vector2(PLACEABLE_GRID_SIZE, PLACEABLE_GRID_SIZE))
+	return Vector2(
+		clampf(snapped.x, bounds.position.x, bounds.position.x + bounds.size.x - size.x),
+		clampf(snapped.y, bounds.position.y, bounds.position.y + bounds.size.y - size.y)
+	)
+
+
+func can_place_at(placeable_id: String, region_tag: String, pos: Vector2) -> bool:
+	var bounds := _placement_bounds(region_tag)
+	if bounds.size == Vector2.ZERO:
+		return false
+	var clamped := clamp_placeable_position(placeable_id, region_tag, pos)
+	if clamped != pos:
+		return false
+	return _is_placeable_cell_free(placeable_id, region_tag, clamped)
+
+
+func get_placeable_position(placeable_id: String, fallback: Vector2) -> Vector2:
+	var raw = placeable_positions.get(placeable_id, {})
+	if raw is Dictionary:
+		var d := raw as Dictionary
+		var region_tag := str(d.get("region", ""))
+		return clamp_placeable_position(placeable_id, region_tag, Vector2(float(d.get("x", fallback.x)), float(d.get("y", fallback.y))))
+	return clamp_placeable_position(placeable_id, "", fallback)
+
+
+func get_placement_bounds(region_tag: String) -> Rect2:
+	return _placement_bounds(region_tag)
+
+
+func _placeable_size(placeable_id: String, region_tag: String) -> Vector2:
+	if placeable_id.begins_with("bed_") or region_tag == "quarters":
+		return Vector2(128.0, 64.0)
+	if placeable_id.begins_with("facility_") or region_tag == "lounge":
+		# 충돌 판정 크기를 실제 카드 시각 크기(144×56)에 맞춤 — 작게 두면 시각적으로 겹쳐 놓을 수 있음
+		return Vector2(144.0, 56.0)
+	return Vector2(PLACEABLE_GRID_SIZE, PLACEABLE_GRID_SIZE)
+
+
+func _is_placeable_cell_free(placeable_id: String, region_tag: String, candidate: Vector2) -> bool:
+	var candidate_rect := Rect2(candidate, _placeable_size(placeable_id, region_tag))
+	for other_key in placeable_positions.keys():
+		var other_id := str(other_key)
+		if other_id == placeable_id:
+			continue
+		var raw = placeable_positions.get(other_key, {})
+		if not (raw is Dictionary):
+			continue
+		var d := raw as Dictionary
+		if str(d.get("region", "")) != region_tag:
+			continue
+		var other_pos := Vector2(float(d.get("x", 0.0)), float(d.get("y", 0.0)))
+		var other_size := _placeable_size(other_id, region_tag)
+		if candidate_rect.intersects(Rect2(other_pos, other_size)):
+			return false
+	return true
+
+
+func _placement_bounds(region_tag: String) -> Rect2:
+	match region_tag:
+		"quarters": return Rect2(Vector2(0.0, 0.0), Vector2(1200.0, 288.0))
+		"lounge": return Rect2(Vector2(1200.0, 80.0), Vector2(1216.0, 208.0))
+	return Rect2()
+
+# ── 재화 ─────────────────────────────────────────────────────
+
+func get_resource(resource_id: String) -> int:
+	if resource_id == "cp":
+		return total_credits
+	return int(resources.get(resource_id, 0))
+
+
+func set_resource(resource_id: String, amount: int) -> void:
+	var new_amount := maxi(0, amount)
+	if resource_id == "cp":
+		total_credits = new_amount
+		credits_changed.emit(total_credits)
+	else:
+		resources[resource_id] = new_amount
+	resources_changed.emit(resources.duplicate())
+	resource_changed.emit(resource_id, new_amount)
+
+
+func add_resource(resource_id: String, amount: int) -> void:
+	set_resource(resource_id, get_resource(resource_id) + amount)
+
+
+func can_pay(cost: Dictionary) -> bool:
+	for id in cost.keys():
+		if get_resource(str(id)) < int(cost[id]):
+			return false
+	return true
+
+
+func pay_cost(cost: Dictionary) -> bool:
+	if not can_pay(cost):
+		return false
+	for id in cost.keys():
+		add_resource(str(id), -int(cost[id]))
+	return true
+
+
+func format_cost(cost: Dictionary) -> String:
+	var parts: Array = []
+	for id in cost.keys():
+		var resource_id := str(id)
+		var label := "CR" if resource_id == "cp" else resource_id.to_upper()
+		parts.append("%d %s" % [int(cost[id]), label])
+	return " · ".join(parts)
+
+# ── 라운지 시설 함수 ─────────────────────────────────────────
+
+func get_facility_data(facility_id: String) -> Dictionary:
+	for facility in FACILITIES:
+		if str(facility.get("id", "")) == facility_id:
+			return facility
+	return {}
+
+
+func install_facility(slot_id: String, facility_id: String) -> bool:
+	if not lounge_slots.has(slot_id):
+		return false
+	var facility := get_facility_data(facility_id)
+	if facility.is_empty():
+		return false
+	if str(facility.get("slot_type", "")) != slot_id:
+		return false
+	if get_installed_facility(slot_id) == facility_id:
+		return false
+	if not pay_cost(facility.get("cost", {})):
+		return false
+	lounge_slots[slot_id] = facility_id
+	facilities_changed.emit()
+	return true
+
+
+func remove_facility(slot_id: String) -> bool:
+	if not lounge_slots.has(slot_id):
+		return false
+	if str(lounge_slots.get(slot_id, "")) == "":
+		return false
+	lounge_slots[slot_id] = ""
+	facilities_changed.emit()
+	return true
+
+
+func get_installed_facility(slot_id: String) -> String:
+	return str(lounge_slots.get(slot_id, ""))
+
+# ── 파츠 옵션 동적 티어 ─────────────────────────────────────────
+
+func compute_part_tier(options: Array) -> int:
+	if options.is_empty():
+		return 1
+	elif options.size() == 1:
+		return 2
+	return 3
 
 # ── 클릭 데미지 강화 ──────────────────────────────────────────
 
@@ -316,11 +636,61 @@ func collect_player_credits(from_global_pos: Vector2) -> void:
 	var amount := pending_credits
 	total_credits += amount
 	pending_credits = 0
+	var mat_rewards := _roll_direct_dispatch_materials()
+	for id in mat_rewards.keys():
+		add_resource(str(id), int(mat_rewards[id]))
+	_apply_direct_dispatch_pilot_state()
 	player_status = "idle"
 	player_status_changed.emit(player_status)
 	if amount > 0:
 		credits_changed.emit(total_credits)
 		credits_collected.emit(amount, from_global_pos)
+	if not mat_rewards.is_empty():
+		resources_collected.emit(mat_rewards)
+
+
+func _apply_direct_dispatch_pilot_state() -> void:
+	var planet := get_planet(selected_planet)
+	if planet.is_empty():
+		return
+	var fat := int(planet.get("fatigue_delta", 0))
+	var str_ := int(planet.get("stress_delta", 0))
+	if fat <= 0 and str_ <= 0:
+		return
+	var idle := get_idle_pilots()
+	if idle.is_empty():
+		return
+	apply_pilot_state_delta(str(idle[0].get("id", "")), {"fatigue": fat, "stress": str_})
+
+
+func _roll_direct_dispatch_materials() -> Dictionary:
+	var planet := get_planet(selected_planet)
+	if planet.is_empty():
+		return {}
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var out: Dictionary = {}
+	for id_raw in planet.get("guaranteed_rewards", {}).keys():
+		var id := str(id_raw)
+		if id == "cp":
+			continue
+		var range_raw: Array = planet["guaranteed_rewards"][id_raw]
+		var min_v := int(range_raw[0]) if range_raw.size() > 0 else 0
+		var max_v := int(range_raw[1]) if range_raw.size() > 1 else min_v
+		out[id] = int(out.get(id, 0)) + rng.randi_range(min_v, max_v)
+	for reward_raw in planet.get("chance_rewards", []):
+		var reward: Dictionary = reward_raw
+		if rng.randf() > float(reward.get("chance", 0.0)):
+			continue
+		var rid := str(reward.get("id", ""))
+		if rid == "" or rid == "cp":
+			continue
+		var amt: Array = reward.get("amount", [1, 1])
+		out[rid] = int(out.get(rid, 0)) + rng.randi_range(
+			int(amt[0]) if amt.size() > 0 else 1,
+			int(amt[1]) if amt.size() > 1 else (int(amt[0]) if amt.size() > 0 else 1)
+		)
+	return out
 
 # ── 파츠 / 인벤토리 ──────────────────────────────────────────
 
@@ -394,6 +764,88 @@ func get_idle_pilots() -> Array:
 			result.append(p)
 	return result
 
+
+func _with_pilot_living_state(source: Dictionary) -> Dictionary:
+	return {
+		"id":             source.get("id", ""),
+		"name":           source.get("name", ""),
+		"tier":           int(source.get("tier", 1)),
+		"bonus_type":     source.get("bonus_type", "none"),
+		"bonus_value":    int(source.get("bonus_value", 0)),
+		"portrait_color": source.get("portrait_color", "#4499DD"),
+		"status":         source.get("status", "idle"),
+		"fatigue":        int(source.get("fatigue", 0)),
+		"stress":         int(source.get("stress", 0)),
+		"mood":           int(source.get("mood", 70)),
+		"preferred_regions": source.get("preferred_regions", []).duplicate(),
+		"favorite_facilities": source.get("favorite_facilities", []).duplicate(),
+		"personality": str(source.get("personality", "")),
+		"exp":            int(source.get("exp", 0)),
+		"is_custom":      bool(source.get("is_custom", false)),
+	}
+
+
+func apply_pilot_state_delta(pilot_id: String, deltas: Dictionary) -> bool:
+	for i in hired_pilots.size():
+		var pilot: Dictionary = hired_pilots[i]
+		if str(pilot.get("id", "")) != pilot_id:
+			continue
+		for id in ["fatigue", "stress", "mood"]:
+			if deltas.has(id):
+				pilot[id] = clampi(int(pilot.get(id, 0)) + int(deltas[id]), 0, 100)
+		hired_pilots[i] = pilot
+		pilot_status_changed.emit(pilot_id)
+		return true
+	return false
+
+
+func add_pilot_exp(pilot_id: String, amount: int) -> void:
+	for i in hired_pilots.size():
+		var pilot: Dictionary = hired_pilots[i]
+		if str(pilot.get("id", "")) != pilot_id:
+			continue
+		hired_pilots[i]["exp"] = int(pilot.get("exp", 0)) + amount
+		_check_tier_up(i)
+		pilot_status_changed.emit(pilot_id)
+		return
+
+
+func _check_tier_up(idx: int) -> void:
+	var pilot: Dictionary = hired_pilots[idx]
+	var tier := int(pilot.get("tier", 1))
+	if tier >= 3:
+		return
+	var threshold: int = EXP_PER_TIER[tier - 1]
+	if int(pilot.get("exp", 0)) < threshold:
+		return
+	hired_pilots[idx]["tier"] = tier + 1
+	hired_pilots[idx]["bonus_value"] = int(pilot.get("bonus_value", 0)) + 5
+	hired_pilots[idx]["exp"] = 0
+	pilot_tier_up.emit(str(pilot.get("id", "")))
+
+
+func apply_quarters_rest_tick(delta: float) -> void:
+	if delta <= 0.0:
+		return
+	_quarters_rest_accumulator += delta
+	while _quarters_rest_accumulator >= QUARTERS_REST_TICK_SEC:
+		_quarters_rest_accumulator -= QUARTERS_REST_TICK_SEC
+		_apply_quarters_rest_step()
+
+
+func _apply_quarters_rest_step() -> void:
+	for bed in quarters_beds:
+		if bool(bed.get("locked", true)):
+			continue
+		for pilot_id_raw in bed.get("slots", []):
+			var pilot_id := str(pilot_id_raw)
+			if pilot_id == "":
+				continue
+			var pilot := get_hired_pilot(pilot_id)
+			if pilot.is_empty() or str(pilot.get("status", "")) != "idle":
+				continue
+			apply_pilot_state_delta(pilot_id, {"fatigue": -1, "mood": 1})
+
 func hire_pilot(pilot_id: String) -> bool:
 	var data := get_pilot_data(pilot_id)
 	if data.is_empty() or is_pilot_hired(pilot_id):
@@ -403,15 +855,18 @@ func hire_pilot(pilot_id: String) -> bool:
 	if total_credits < int(data["cost"]):
 		return false
 	total_credits -= int(data["cost"])
-	hired_pilots.append({
-		"id":             data["id"],
-		"name":           data["name"],
-		"tier":           data["tier"],
-		"bonus_type":     data["bonus_type"],
-		"bonus_value":    data["bonus_value"],
-		"portrait_color": data["portrait_color"],
-		"status":         "idle",
-	})
+	hired_pilots.append(_with_pilot_living_state({
+		"id":                  data["id"],
+		"name":                data["name"],
+		"tier":                data["tier"],
+		"bonus_type":          data["bonus_type"],
+		"bonus_value":         data["bonus_value"],
+		"portrait_color":      data["portrait_color"],
+		"status":              "idle",
+		"preferred_regions":    data.get("preferred_regions", []),
+		"favorite_facilities": data.get("favorite_facilities", []),
+		"personality":         data.get("personality", ""),
+	}))
 	_auto_assign_bed(pilot_id)
 	credits_changed.emit(total_credits)
 	pilot_hired.emit(pilot_id)
@@ -429,7 +884,7 @@ func create_custom_pilot(custom_name: String, color_hex: String) -> bool:
 		return false
 	total_credits -= cost
 	var uid := "custom_%d" % Time.get_ticks_msec()
-	hired_pilots.append({
+	hired_pilots.append(_with_pilot_living_state({
 		"id":             uid,
 		"name":           custom_name.strip_edges(),
 		"tier":           1,
@@ -438,7 +893,7 @@ func create_custom_pilot(custom_name: String, color_hex: String) -> bool:
 		"portrait_color": color_hex,
 		"status":         "idle",
 		"is_custom":      true,
-	})
+	}))
 	_auto_assign_bed(uid)
 	credits_changed.emit(total_credits)
 	pilot_hired.emit(uid)
@@ -572,6 +1027,9 @@ func start_auto_dispatch(slot_index: int, pilot_id: String, planet_id: String) -
 
 func collect_auto_slot(slot_index: int) -> bool:
 	return _dispatch.collect_auto_slot(slot_index)
+
+func set_slot_auto_redispatch(slot_index: int, enabled: bool, pilot_id: String = "", planet_id: String = "") -> void:
+	_dispatch.set_slot_auto_redispatch(slot_index, enabled, pilot_id, planet_id)
 
 func get_machine_preview(body_tier: int, weapon_tier: int, legs_tier: int, opts: Dictionary = {}) -> Dictionary:
 	return _dispatch.get_machine_preview(body_tier, weapon_tier, legs_tier, opts)

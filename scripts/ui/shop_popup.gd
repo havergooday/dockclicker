@@ -512,6 +512,20 @@ func _make_row1(p: Dictionary, hired: bool, tier: int) -> Control:
 	if hired:
 		status_lbl.text    = "✓ ON BOARD"
 		status_lbl.modulate = Color(0.38, 0.88, 0.52)
+		var hired_data := GameState.get_hired_pilot(str(p.get("id", "")))
+		if not hired_data.is_empty():
+			var exp := int(hired_data.get("exp", 0))
+			var htier := int(hired_data.get("tier", 1))
+			var exp_lbl := Label.new()
+			exp_lbl.add_theme_font_size_override("font_size", 9)
+			if htier < 3:
+				var threshold: int = GameState.EXP_PER_TIER[htier - 1]
+				exp_lbl.text = "T%d  EXP %d / %d" % [htier, exp, threshold]
+				exp_lbl.modulate = Color(0.70, 0.88, 1.0)
+			else:
+				exp_lbl.text = "T3  MAX"
+				exp_lbl.modulate = Color(0.88, 0.68, 1.0)
+			info_vb.add_child(exp_lbl)
 	else:
 		status_lbl.text    = "모집 가능"
 		status_lbl.modulate = Color(0.40, 0.58, 0.88)
@@ -542,6 +556,40 @@ func _make_row2(p: Dictionary) -> Control:
 	bonus_lbl.modulate = _bonus_color(str(p.get("bonus_type", "none")))
 	vb.add_child(bonus_lbl)
 
+	var personality := str(p.get("personality", ""))
+	var fav: Array = p.get("favorite_facilities", [])
+	if personality != "" or not fav.is_empty():
+		var tag_lbl := Label.new()
+		var fav_names: Array = fav.map(func(a: String) -> String: return _activity_label(a))
+		var tag_text := personality
+		if not fav_names.is_empty():
+			tag_text += "  ·  선호 " + ", ".join(fav_names)
+		tag_lbl.text = tag_text
+		tag_lbl.add_theme_font_size_override("font_size", 10)
+		tag_lbl.modulate = Color(0.62, 0.90, 0.68)
+		vb.add_child(tag_lbl)
+	var pref_regions: Array = p.get("preferred_regions", [])
+	if not pref_regions.is_empty():
+		var region_names: Array = pref_regions.map(func(r: String) -> String: return _region_label_short(r))
+		var region_row := Label.new()
+		region_row.text = "지역  " + ", ".join(region_names)
+		region_row.add_theme_font_size_override("font_size", 9)
+		region_row.modulate = Color(0.65, 0.75, 0.92)
+		vb.add_child(region_row)
+		var matched := false
+		for planet in GameState.PLANETS:
+			if not GameState.is_planet_unlocked(str(planet.get("id", ""))):
+				continue
+			if str(planet.get("region_type", "")) in pref_regions:
+				matched = true
+				break
+		if matched:
+			var match_lbl := Label.new()
+			match_lbl.text = "★ 선호 지역 해금됨"
+			match_lbl.add_theme_font_size_override("font_size", 9)
+			match_lbl.modulate = Color(0.92, 0.88, 0.30)
+			vb.add_child(match_lbl)
+
 	var sep := ColorRect.new()
 	sep.color = Color(0.22, 0.32, 0.50, 0.32)
 	sep.custom_minimum_size = Vector2(0, 1)
@@ -555,6 +603,24 @@ func _make_row2(p: Dictionary) -> Control:
 	vb.add_child(flavor_lbl)
 
 	return margin
+
+
+func _region_label_short(region_id: String) -> String:
+	match region_id:
+		"scrap":      return "폐기위성"
+		"trade":      return "교역항로"
+		"city_ruins": return "버려진도시"
+		"bio":        return "생태행성"
+	return region_id
+
+
+func _activity_label(activity: String) -> String:
+	match activity:
+		"rest":    return "소파"
+		"play":    return "게임기"
+		"eat":     return "식탁·커피"
+		"recover": return "의료 키트"
+	return activity
 
 
 func _make_row3(cost: int) -> Control:

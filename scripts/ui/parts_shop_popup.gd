@@ -48,6 +48,10 @@ var _stock_refresh_count: int = 0
 var _body_node: Control = null
 var _upgrade_body: Control = null
 var _upgrade_list_box: VBoxContainer = null
+var _facility_body: Control = null
+var _facility_list_box: VBoxContainer = null
+
+signal open_facility_management_requested
 
 const UPGRADE_IDS: Array = ["click_damage", "auto_attack", "click_range", "combo"]
 
@@ -139,6 +143,8 @@ func _build_ui() -> void:
 	root.add_child(_body_node)
 	_upgrade_body = _build_upgrade_body()
 	root.add_child(_upgrade_body)
+	_facility_body = _build_facility_body()
+	root.add_child(_facility_body)
 
 
 func _build_top_bar() -> Control:
@@ -191,7 +197,7 @@ func _build_tabs_row() -> Control:
 	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var group := ButtonGroup.new()
-	var all_tabs: Array = PART_ORDER + ["upgrade"]
+	var all_tabs: Array = PART_ORDER + ["upgrade", "facility"]
 	for part_type in all_tabs:
 		var btn := Button.new()
 		btn.text = _tab_caption(part_type)
@@ -395,25 +401,31 @@ func _refresh_all() -> void:
 	_ensure_selection()
 	_sync_body_visibility()
 	_refresh_tabs()
-	if _current_part_type != "upgrade":
+	if _current_part_type == "upgrade":
+		_rebuild_upgrade_cards()
+	elif _current_part_type == "facility":
+		_refresh_facility_body()
+	else:
 		_refresh_grid()
 		_refresh_detail()
 		_update_refresh_button()
 		_update_timer_label()
-	else:
-		_rebuild_upgrade_cards()
 
 
 func _sync_body_visibility() -> void:
-	var is_upgrade := _current_part_type == "upgrade"
+	var is_upgrade  := _current_part_type == "upgrade"
+	var is_facility := _current_part_type == "facility"
+	var is_parts    := not is_upgrade and not is_facility
 	if _body_node != null:
-		_body_node.visible = not is_upgrade
+		_body_node.visible = is_parts
 	if _upgrade_body != null:
 		_upgrade_body.visible = is_upgrade
+	if _facility_body != null:
+		_facility_body.visible = is_facility
 	if _timer_label != null:
-		_timer_label.visible = not is_upgrade
+		_timer_label.visible = is_parts
 	if _refresh_btn != null:
-		_refresh_btn.visible = not is_upgrade
+		_refresh_btn.visible = is_parts
 
 
 func _refresh_tabs() -> void:
@@ -554,7 +566,7 @@ func _select_part_item(iid: String) -> void:
 
 
 func _ensure_selection() -> void:
-	if _current_part_type == "upgrade":
+	if _current_part_type in ["upgrade", "facility"]:
 		return
 	if not GameState.PARTS.has(_current_part_type):
 		_current_part_type = "body"
@@ -692,15 +704,80 @@ func _is_locked(part_type: String, item_data: Dictionary) -> bool:
 
 func _tab_caption(tab: String) -> String:
 	match tab:
-		"body":    return "몸체"
-		"weapon":  return "무기"
-		"legs":    return "다리"
-		"upgrade": return "강화"
-		_:         return tab
+		"body":     return "몸체"
+		"weapon":   return "무기"
+		"legs":     return "다리"
+		"upgrade":  return "강화"
+		"facility": return "시설"
+		_:          return tab
 
 
 func _part_caption(part_type: String) -> String:
 	return _tab_caption(part_type)
+
+
+# ── 시설 탭 ───────────────────────────────────────────────────
+
+func _build_facility_body() -> Control:
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.visible = false
+
+	_facility_list_box = VBoxContainer.new()
+	_facility_list_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_facility_list_box.add_theme_constant_override("separation", 8)
+	scroll.add_child(_facility_list_box)
+	return scroll
+
+
+func _refresh_facility_body() -> void:
+	if _facility_list_box == null:
+		return
+	for child in _facility_list_box.get_children():
+		_facility_list_box.remove_child(child)
+		child.queue_free()
+
+	var title := Label.new()
+	title.text = "설치된 시설"
+	title.add_theme_font_size_override("font_size", 13)
+	title.modulate = Color(0.72, 0.88, 1.0)
+	_facility_list_box.add_child(title)
+
+	var slot_labels := {"rest": "휴식", "table": "테이블", "service": "서비스",
+		"medical": "의료", "wall": "벽면", "decor": "장식"}
+	for slot_id in GameState.lounge_slots.keys():
+		var facility_id := GameState.get_installed_facility(str(slot_id))
+		var facility_name := "—"
+		if facility_id != "":
+			var fd := GameState.get_facility_data(facility_id)
+			facility_name = str(fd.get("name", facility_id))
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		var slot_lbl := Label.new()
+		slot_lbl.text = slot_labels.get(slot_id, slot_id)
+		slot_lbl.custom_minimum_size = Vector2(60, 0)
+		slot_lbl.add_theme_font_size_override("font_size", 11)
+		slot_lbl.modulate = Color(0.60, 0.68, 0.82)
+		row.add_child(slot_lbl)
+		var val_lbl := Label.new()
+		val_lbl.text = facility_name
+		val_lbl.add_theme_font_size_override("font_size", 11)
+		val_lbl.modulate = Color(0.88, 0.96, 0.90) if facility_id != "" else Color(1, 1, 1, 0.28)
+		row.add_child(val_lbl)
+		_facility_list_box.add_child(row)
+
+	var spacer := Control.new()
+	spacer.custom_minimum_size = Vector2(0, 8)
+	_facility_list_box.add_child(spacer)
+
+	var mgmt_btn := Button.new()
+	mgmt_btn.text = "시설관리 열기 →"
+	mgmt_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mgmt_btn.custom_minimum_size = Vector2(0, 32)
+	mgmt_btn.pressed.connect(func(): open_facility_management_requested.emit())
+	_facility_list_box.add_child(mgmt_btn)
 
 
 # ── 강화 탭 ───────────────────────────────────────────────────

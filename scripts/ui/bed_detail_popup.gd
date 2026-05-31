@@ -195,6 +195,27 @@ func _make_pilot_card(_slot_idx: int, pilot_id: String) -> Control:
 		if bonus_type != "none":
 			_add_lbl(inner, _bonus_label(bonus_type, int(pilot.get("bonus_value", 0))),
 				9, Color(0.50, 0.95, 0.68))
+
+		var exp := int(pilot.get("exp", 0))
+		var tier := int(pilot.get("tier", 1))
+		if tier < 3:
+			var threshold: int = GameState.EXP_PER_TIER[tier - 1]
+			_add_lbl(inner, "EXP %d / %d" % [exp, threshold], 9, Color(0.70, 0.88, 1.0))
+		else:
+			_add_lbl(inner, "EXP %d  MAX" % exp, 9, Color(0.88, 0.68, 1.0))
+		_add_lbl(inner, _living_state_label("피로", int(pilot.get("fatigue", 0))),
+			9, _living_state_color("fatigue", int(pilot.get("fatigue", 0))))
+		_add_lbl(inner, _living_state_label("스트레스", int(pilot.get("stress", 0))),
+			9, _living_state_color("stress", int(pilot.get("stress", 0))))
+		_add_lbl(inner, _living_state_label("기분", int(pilot.get("mood", 70))),
+			9, _living_state_color("mood", int(pilot.get("mood", 70))))
+		var personality := str(pilot.get("personality", ""))
+		if personality != "":
+			_add_lbl(inner, "성격  " + personality, 9, Color(0.62, 0.90, 0.68))
+		var pref_regions: Array = pilot.get("preferred_regions", [])
+		if not pref_regions.is_empty():
+			var region_names := pref_regions.map(func(r: String) -> String: return _region_label(r))
+			_add_lbl(inner, "선호  " + ", ".join(region_names), 9, Color(0.72, 0.82, 0.96))
 	else:
 		_add_lbl(inner, "비어있음", 10, Color(0.28, 0.34, 0.46))
 
@@ -216,6 +237,37 @@ func _bonus_label(btype: String, bval: int) -> String:
 		"dispatch_time_pct": return "파견 -%d%%" % bval
 		"return_time_pct":   return "복귀 -%d%%" % bval
 	return btype
+
+
+func _living_state_label(label: String, value: int) -> String:
+	return "%s %d/100" % [label, clampi(value, 0, 100)]
+
+
+func _living_state_color(state_id: String, value: int) -> Color:
+	var v := clampi(value, 0, 100)
+	match state_id:
+		"fatigue", "stress":
+			if v >= 70:
+				return Color(1.0, 0.48, 0.38)
+			if v >= 40:
+				return Color(0.95, 0.78, 0.38)
+			return Color(0.52, 0.88, 0.62)
+		"mood":
+			if v >= 70:
+				return Color(0.52, 0.88, 1.0)
+			if v >= 40:
+				return Color(0.72, 0.76, 0.90)
+			return Color(0.95, 0.58, 0.58)
+	return Color(0.72, 0.76, 0.90)
+
+func _region_label(region_id: String) -> String:
+	match region_id:
+		"scrap":      return "폐기 위성"
+		"trade":      return "교역 항로"
+		"city_ruins": return "버려진 도시"
+		"bio":        return "생태 행성"
+	return region_id
+
 
 func _add_lbl(parent: Control, text: String, size: int, col: Color) -> void:
 	var lbl := Label.new()

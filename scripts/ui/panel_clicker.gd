@@ -1,5 +1,7 @@
 extends Control
 
+const CreatureVisualData = preload("res://data/creature_visual_data.gd")
+
 # ── 생물 정의 ──────────────────────────────────────────────────
 # 난이도 티어 0(쉬움) ~ 5(어려움)
 # wave/circle/figure8 → speed = rad/s,  amp 사용
@@ -274,6 +276,8 @@ func _pick_creature_def() -> Dictionary:
 func _spawn_enemy() -> void:
 	var hp: int = _planet_data.get("enemy_hp", 2)
 	var def := _pick_creature_def()
+	var region_type := str(_planet_data.get("region_type", "scrap"))
+	var visual := CreatureVisualData.get_variant(region_type, _planet_tier)
 	var sz: Vector2  = def["size"]
 	var col: Color   = def["color"]
 	var pattern: String = def["pattern"]
@@ -313,6 +317,7 @@ func _spawn_enemy() -> void:
 	var d: Dictionary = {
 		"hp": hp, "max_hp": hp,
 		"glyph": def["glyph"],
+		"visual": visual,
 		"pattern": pattern,
 		"amp": amp,
 		"ax": ax, "ay": ay,
@@ -346,7 +351,68 @@ func _make_enemy_style(col: Color, hover: bool) -> StyleBoxFlat:
 
 func _update_enemy_display(enemy: Button) -> void:
 	var d: Dictionary = _enemies[enemy]
-	enemy.text = "%s\n%d/%d" % [d["glyph"], d["hp"], d["max_hp"]]
+	_clear_enemy_visual(enemy)
+	_build_enemy_visual(enemy, d["visual"], d["hp"], d["max_hp"])
+
+
+func _clear_enemy_visual(enemy: Button) -> void:
+	enemy.text = ""
+	for child in enemy.get_children():
+		child.queue_free()
+
+
+func _build_enemy_visual(enemy: Button, visual: Dictionary, hp: int, max_hp: int) -> void:
+	var body_col: Color = visual.get("body", Color(0.40, 0.82, 0.36))
+	var core_col: Color = visual.get("core", body_col.lightened(0.35))
+	var mark := str(visual.get("mark", "●"))
+
+	var body := PanelContainer.new()
+	body.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	body.offset_left = 7.0
+	body.offset_right = -7.0
+	body.offset_top = 7.0
+	body.offset_bottom = -18.0
+	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var body_style := StyleBoxFlat.new()
+	body_style.bg_color = body_col.darkened(0.20)
+	body_style.border_color = body_col.lightened(0.20)
+	body_style.set_border_width_all(1)
+	body_style.set_corner_radius_all(8)
+	body.add_theme_stylebox_override("panel", body_style)
+	enemy.add_child(body)
+
+	var core := ColorRect.new()
+	core.color = core_col
+	core.anchor_left = 0.35
+	core.anchor_right = 0.65
+	core.anchor_top = 0.30
+	core.anchor_bottom = 0.62
+	core.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	body.add_child(core)
+
+	var mark_lbl := Label.new()
+	mark_lbl.text = mark
+	mark_lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	mark_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	mark_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	mark_lbl.add_theme_font_size_override("font_size", 16)
+	mark_lbl.add_theme_color_override("font_color", Color(1, 1, 1, 0.90))
+	mark_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	body.add_child(mark_lbl)
+
+	var hp_lbl := Label.new()
+	hp_lbl.text = "%d/%d" % [hp, max_hp]
+	hp_lbl.anchor_left = 0.0
+	hp_lbl.anchor_right = 1.0
+	hp_lbl.anchor_top = 1.0
+	hp_lbl.anchor_bottom = 1.0
+	hp_lbl.offset_top = -17.0
+	hp_lbl.offset_bottom = -1.0
+	hp_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hp_lbl.add_theme_font_size_override("font_size", 10)
+	hp_lbl.add_theme_color_override("font_color", Color(0.88, 0.96, 1.0))
+	hp_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	enemy.add_child(hp_lbl)
 
 
 # ── 전투 ──────────────────────────────────────────────────────
@@ -414,16 +480,10 @@ func _kill_enemy(enemy: Button) -> void:
 func _try_drop_part() -> void:
 	if randf() > DROP_RATE:
 		return
-	var planet_idx := 0
-	for i in GameState.PLANETS.size():
-		if str(GameState.PLANETS[i].get("id", "")) == str(_planet_data.get("id", "")):
-			planet_idx = i
-			break
-	var max_tier := clampi(planet_idx / 3 + 1, 1, 3)
-	var tier     := randi_range(1, max_tier)
-	var types    := ["body", "weapon", "legs"]
+	var types := ["body", "weapon", "legs"]
 	var ptype: String = types[randi() % types.size()]
-	var options  := _gen_drop_options()
+	var options := _gen_drop_options()
+	var tier := GameState.compute_part_tier(options)
 	GameState.part_inventory.append({
 		"iid":     "drop_%d" % Time.get_ticks_usec(),
 		"type":    ptype,
@@ -435,9 +495,21 @@ func _try_drop_part() -> void:
 
 
 func _gen_drop_options() -> Array:
+	var planet_idx := 0
+	for i in GameState.PLANETS.size():
+		if str(GameState.PLANETS[i].get("id", "")) == str(_planet_data.get("id", "")):
+			planet_idx = i
+			break
+	var max_opts: int
+	if planet_idx < 6:
+		max_opts = 1 if randf() > 0.5 else 0
+	elif planet_idx < 12:
+		max_opts = 1
+	else:
+		max_opts = 2 if randf() > 0.4 else 1
 	var pool: Array = PartsData.OPTION_POOL.duplicate()
 	var opts: Array = []
-	for _i in 2:
+	for _i in max_opts:
 		if pool.is_empty():
 			break
 		var idx := randi() % pool.size()

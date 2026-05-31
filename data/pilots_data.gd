@@ -2,6 +2,8 @@ class_name PilotsData
 
 # bonus_type: "none" | "speed" (임무 시간 단축 %) | "credits" (수익 증가 %)
 # tier 1 → always available, tier 2 → sector_c 해금 후, tier 3 → sector_f 해금 후
+# personality: "활발함" | "차분함" | "사교적" | "독립적"
+# favorite_facilities: activity 태그 배열 ["rest"|"play"|"eat"|"recover"]
 const LIST: Array = [
 	# ── T1 ─────────────────────────────────────────────────────────
 	{
@@ -14,6 +16,9 @@ const LIST: Array = [
 		"portrait_color": "#4499DD",
 		"desc": "보너스 없음",
 		"flavor": "첫 임무라도 긴장 안 해요",
+		"personality": "차분함",
+		"preferred_regions": ["trade"],
+		"favorite_facilities": ["rest"],
 	},
 	{
 		"id": "jace_rol",
@@ -25,6 +30,9 @@ const LIST: Array = [
 		"portrait_color": "#AA7744",
 		"desc": "보너스 없음",
 		"flavor": "짐 나르다 파견으로 전향했죠",
+		"personality": "활발함",
+		"preferred_regions": ["scrap"],
+		"favorite_facilities": ["play"],
 	},
 	{
 		"id": "mira_yen",
@@ -36,6 +44,9 @@ const LIST: Array = [
 		"portrait_color": "#7799BB",
 		"desc": "보너스 없음",
 		"flavor": "조용하지만 꼼꼼한 편이에요",
+		"personality": "독립적",
+		"preferred_regions": ["city_ruins"],
+		"favorite_facilities": ["rest"],
 	},
 	{
 		"id": "sev_on",
@@ -47,6 +58,9 @@ const LIST: Array = [
 		"portrait_color": "#CC6644",
 		"desc": "임무 시간 -5%",
 		"flavor": "늦게 오는 건 성격에 안 맞아요",
+		"personality": "활발함",
+		"preferred_regions": ["scrap"],
+		"favorite_facilities": ["play"],
 	},
 	{
 		"id": "tove_ax",
@@ -58,6 +72,9 @@ const LIST: Array = [
 		"portrait_color": "#559944",
 		"desc": "보너스 없음",
 		"flavor": "돈만 주면 뭐든 합니다",
+		"personality": "사교적",
+		"preferred_regions": ["trade"],
+		"favorite_facilities": ["eat"],
 	},
 	{
 		"id": "lia_cho",
@@ -69,6 +86,9 @@ const LIST: Array = [
 		"portrait_color": "#DD88AA",
 		"desc": "수익 +5%",
 		"flavor": "수익률은 제가 챙겨드릴게요",
+		"personality": "사교적",
+		"preferred_regions": ["trade"],
+		"favorite_facilities": ["eat"],
 	},
 	# ── T2 ─────────────────────────────────────────────────────────
 	{
@@ -81,6 +101,9 @@ const LIST: Array = [
 		"portrait_color": "#DD7733",
 		"desc": "임무 시간 -20%",
 		"flavor": "빠른 귀환이 내 전문이야",
+		"personality": "활발함",
+		"preferred_regions": ["scrap"],
+		"favorite_facilities": ["play"],
 	},
 	{
 		"id": "dael_ris",
@@ -92,6 +115,9 @@ const LIST: Array = [
 		"portrait_color": "#3388CC",
 		"desc": "임무 시간 -15%",
 		"flavor": "정찰은 내 본업이야",
+		"personality": "독립적",
+		"preferred_regions": ["city_ruins"],
+		"favorite_facilities": ["recover"],
 	},
 	{
 		"id": "yura_nak",
@@ -103,6 +129,9 @@ const LIST: Array = [
 		"portrait_color": "#AACC33",
 		"desc": "수익 +20%",
 		"flavor": "이 루트면 이익이 두 배예요",
+		"personality": "사교적",
+		"preferred_regions": ["trade"],
+		"favorite_facilities": ["eat"],
 	},
 	{
 		"id": "bex_con",
@@ -114,6 +143,9 @@ const LIST: Array = [
 		"portrait_color": "#994477",
 		"desc": "임무 시간 -10%",
 		"flavor": "정시 귀환을 보장합니다",
+		"personality": "차분함",
+		"preferred_regions": ["trade"],
+		"favorite_facilities": ["rest"],
 	},
 	{
 		"id": "soma_li",
@@ -125,6 +157,9 @@ const LIST: Array = [
 		"portrait_color": "#44BBCC",
 		"desc": "수익 +15%",
 		"flavor": "버리는 자원은 없어요",
+		"personality": "독립적",
+		"preferred_regions": ["city_ruins"],
+		"favorite_facilities": ["recover"],
 	},
 	{
 		"id": "kai_ren",
@@ -136,6 +171,9 @@ const LIST: Array = [
 		"portrait_color": "#CC8833",
 		"desc": "수익 +10%",
 		"flavor": "눈치 빠르게 챙기죠",
+		"personality": "사교적",
+		"preferred_regions": ["trade"],
+		"favorite_facilities": ["eat"],
 	},
 	# ── T3 ─────────────────────────────────────────────────────────
 	{
@@ -148,6 +186,9 @@ const LIST: Array = [
 		"portrait_color": "#44CC66",
 		"desc": "수익 +30%",
 		"flavor": "숫자는 내 언어예요",
+		"personality": "사교적",
+		"preferred_regions": ["trade"],
+		"favorite_facilities": ["eat"],
 	},
 	{
 		"id": "vael_orn",
@@ -159,6 +200,9 @@ const LIST: Array = [
 		"portrait_color": "#5588FF",
 		"desc": "임무 시간 -30%",
 		"flavor": "임무는 빠를수록 좋아",
+		"personality": "활발함",
+		"preferred_regions": ["scrap"],
+		"favorite_facilities": ["play"],
 	},
 	{
 		"id": "rex_hol",
@@ -170,6 +214,9 @@ const LIST: Array = [
 		"portrait_color": "#FFAA33",
 		"desc": "수익 +25%",
 		"flavor": "수익 극대화가 내 철학이야",
+		"personality": "사교적",
+		"preferred_regions": ["trade"],
+		"favorite_facilities": ["eat"],
 	},
 	{
 		"id": "zira_vel",
@@ -181,6 +228,9 @@ const LIST: Array = [
 		"portrait_color": "#EE55AA",
 		"desc": "임무 시간 -25%",
 		"flavor": "속도에 관해선 내가 둘째가 없어",
+		"personality": "활발함",
+		"preferred_regions": ["scrap"],
+		"favorite_facilities": ["play"],
 	},
 	{
 		"id": "kano_set",
@@ -192,6 +242,9 @@ const LIST: Array = [
 		"portrait_color": "#66DDAA",
 		"desc": "수익 +28%",
 		"flavor": "최적 타이밍이 다 있는 법이죠",
+		"personality": "사교적",
+		"preferred_regions": ["trade"],
+		"favorite_facilities": ["eat"],
 	},
 	{
 		"id": "phel_dar",
@@ -203,6 +256,9 @@ const LIST: Array = [
 		"portrait_color": "#AA77FF",
 		"desc": "임무 시간 -35%",
 		"flavor": "내 기록은 아직도 안 깨졌어",
+		"personality": "독립적",
+		"preferred_regions": ["city_ruins"],
+		"favorite_facilities": ["recover"],
 	},
 	# ── T1 추가 ─────────────────────────────────────────────────────────
 	{
@@ -215,6 +271,9 @@ const LIST: Array = [
 		"portrait_color": "#88AACC",
 		"desc": "보너스 없음",
 		"flavor": "어... 열심히 할게요",
+		"personality": "차분함",
+		"preferred_regions": ["trade"],
+		"favorite_facilities": ["rest"],
 	},
 	{
 		"id": "zel_ko",
@@ -226,6 +285,9 @@ const LIST: Array = [
 		"portrait_color": "#BB6633",
 		"desc": "임무 시간 -5%",
 		"flavor": "일은 빨리 끝낼수록 좋죠",
+		"personality": "활발함",
+		"preferred_regions": ["scrap"],
+		"favorite_facilities": ["play"],
 	},
 	{
 		"id": "fei_bax",
@@ -237,6 +299,9 @@ const LIST: Array = [
 		"portrait_color": "#66AAAA",
 		"desc": "보너스 없음",
 		"flavor": "어디든 가겠습니다",
+		"personality": "독립적",
+		"preferred_regions": ["city_ruins"],
+		"favorite_facilities": ["recover"],
 	},
 	{
 		"id": "mora_vel",
@@ -248,6 +313,9 @@ const LIST: Array = [
 		"portrait_color": "#DDAA66",
 		"desc": "수익 +5%",
 		"flavor": "작은 이익도 쌓이면 커요",
+		"personality": "사교적",
+		"preferred_regions": ["trade"],
+		"favorite_facilities": ["eat"],
 	},
 	{
 		"id": "kian_dex",
@@ -259,6 +327,9 @@ const LIST: Array = [
 		"portrait_color": "#5577AA",
 		"desc": "보너스 없음",
 		"flavor": "성실함이 제 장점이에요",
+		"personality": "차분함",
+		"preferred_regions": ["trade"],
+		"favorite_facilities": ["rest"],
 	},
 	{
 		"id": "avi_sol",
@@ -270,6 +341,9 @@ const LIST: Array = [
 		"portrait_color": "#EE8866",
 		"desc": "임무 시간 -5%",
 		"flavor": "무사귀환이 최우선이에요",
+		"personality": "독립적",
+		"preferred_regions": ["city_ruins"],
+		"favorite_facilities": ["recover"],
 	},
 	# ── T2 추가 ─────────────────────────────────────────────────────────
 	{
@@ -282,6 +356,9 @@ const LIST: Array = [
 		"portrait_color": "#33AA88",
 		"desc": "수익 +15%",
 		"flavor": "루트 최적화는 자신 있어요",
+		"personality": "사교적",
+		"preferred_regions": ["trade"],
+		"favorite_facilities": ["eat"],
 	},
 	{
 		"id": "velax_rin",
@@ -293,6 +370,9 @@ const LIST: Array = [
 		"portrait_color": "#9944AA",
 		"desc": "임무 시간 -15%",
 		"flavor": "다음 임무가 이미 보여요",
+		"personality": "독립적",
+		"preferred_regions": ["city_ruins"],
+		"favorite_facilities": ["recover"],
 	},
 	{
 		"id": "sora_mex",
@@ -304,6 +384,9 @@ const LIST: Array = [
 		"portrait_color": "#CC4455",
 		"desc": "임무 시간 -20%",
 		"flavor": "빠른 판단이 생존이죠",
+		"personality": "활발함",
+		"preferred_regions": ["scrap"],
+		"favorite_facilities": ["play"],
 	},
 	{
 		"id": "dion_ker",
@@ -315,6 +398,9 @@ const LIST: Array = [
 		"portrait_color": "#88CC44",
 		"desc": "수익 +20%",
 		"flavor": "협상은 제 특기예요",
+		"personality": "사교적",
+		"preferred_regions": ["trade"],
+		"favorite_facilities": ["eat"],
 	},
 	{
 		"id": "fel_aris",
@@ -326,6 +412,9 @@ const LIST: Array = [
 		"portrait_color": "#4455CC",
 		"desc": "임무 시간 -10%",
 		"flavor": "정확한 귀환을 보장합니다",
+		"personality": "차분함",
+		"preferred_regions": ["trade"],
+		"favorite_facilities": ["rest"],
 	},
 	{
 		"id": "zion_va",
@@ -337,6 +426,9 @@ const LIST: Array = [
 		"portrait_color": "#BBAA33",
 		"desc": "수익 +10%",
 		"flavor": "이익 계산이 먼저죠",
+		"personality": "사교적",
+		"preferred_regions": ["trade"],
+		"favorite_facilities": ["eat"],
 	},
 	# ── T3 추가 ─────────────────────────────────────────────────────────
 	{
@@ -349,6 +441,9 @@ const LIST: Array = [
 		"portrait_color": "#FF6644",
 		"desc": "수익 +30%",
 		"flavor": "최고 수익을 보장해드리죠",
+		"personality": "사교적",
+		"preferred_regions": ["trade"],
+		"favorite_facilities": ["eat"],
 	},
 	{
 		"id": "nael_rex",
@@ -360,6 +455,9 @@ const LIST: Array = [
 		"portrait_color": "#44AAFF",
 		"desc": "임무 시간 -35%",
 		"flavor": "나보다 빠른 건 없어요",
+		"personality": "활발함",
+		"preferred_regions": ["scrap"],
+		"favorite_facilities": ["play"],
 	},
 	{
 		"id": "kira_zon",
@@ -371,6 +469,9 @@ const LIST: Array = [
 		"portrait_color": "#FFCC33",
 		"desc": "수익 +28%",
 		"flavor": "기회는 절대 놓치지 않아요",
+		"personality": "사교적",
+		"preferred_regions": ["trade"],
+		"favorite_facilities": ["eat"],
 	},
 	{
 		"id": "vel_sorn",
@@ -382,6 +483,9 @@ const LIST: Array = [
 		"portrait_color": "#FF44AA",
 		"desc": "임무 시간 -30%",
 		"flavor": "속도가 곧 생존이에요",
+		"personality": "활발함",
+		"preferred_regions": ["scrap"],
+		"favorite_facilities": ["play"],
 	},
 	{
 		"id": "axa_mir",
@@ -393,6 +497,9 @@ const LIST: Array = [
 		"portrait_color": "#33CCBB",
 		"desc": "수익 +25%",
 		"flavor": "숫자가 다 말해 주겠죠",
+		"personality": "사교적",
+		"preferred_regions": ["trade"],
+		"favorite_facilities": ["eat"],
 	},
 	{
 		"id": "len_kov",
@@ -404,5 +511,8 @@ const LIST: Array = [
 		"portrait_color": "#CC55FF",
 		"desc": "임무 시간 -25%",
 		"flavor": "판단이 빠를수록 살아남죠",
+		"personality": "활발함",
+		"preferred_regions": ["scrap"],
+		"favorite_facilities": ["play"],
 	},
 ]

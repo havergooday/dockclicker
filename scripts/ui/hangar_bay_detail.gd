@@ -76,7 +76,7 @@ static func _offline(vb: VBoxContainer, slot: DispatchManager.AutoSlot,
 			HORIZONTAL_ALIGNMENT_LEFT, Color(0.65, 0.70, 0.82))
 
 	var pilot_hdr := Label.new()
-	pilot_hdr.text = "파일럿"
+	pilot_hdr.text = "배정 파일럿"
 	pilot_hdr.add_theme_font_size_override("font_size", 9)
 	pilot_hdr.modulate = Color(0.40, 0.42, 0.55)
 	vb.add_child(pilot_hdr)
@@ -87,7 +87,7 @@ static func _offline(vb: VBoxContainer, slot: DispatchManager.AutoSlot,
 		var pname: String = str(pilot.get("name", assigned_id)) if not pilot.is_empty() else assigned_id
 		HangarHelpers.add_lbl(vb, "👤 " + pname, 11, HORIZONTAL_ALIGNMENT_LEFT, Color(0.65, 0.88, 1.0))
 	else:
-		HangarHelpers.add_lbl(vb, "미배정", 11, HORIZONTAL_ALIGNMENT_LEFT, Color(0.72, 0.40, 0.40))
+		HangarHelpers.add_lbl(vb, "대기", 11, HORIZONTAL_ALIGNMENT_LEFT, Color(0.72, 0.40, 0.40))
 
 	var idle := GameState.get_idle_pilots()
 	if not idle.is_empty():
@@ -117,7 +117,7 @@ static func _offline(vb: VBoxContainer, slot: DispatchManager.AutoSlot,
 	vb.add_child(HangarHelpers.vspacer())
 
 	var rebuild_btn := Button.new()
-	rebuild_btn.text = "⚙ 재조립"
+	rebuild_btn.text = "⚙ 조립 편집"
 	rebuild_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rebuild_btn.pressed.connect(func():
 		GameState.hangar_preselect_slot = slot_idx
@@ -126,16 +126,15 @@ static func _offline(vb: VBoxContainer, slot: DispatchManager.AutoSlot,
 	)
 	vb.add_child(rebuild_btn)
 
-	var repair_btn := Button.new()
-	repair_btn.text = "🔧 수리"
-	repair_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	repair_btn.modulate = Color(0.80, 0.90, 1.0)
-	repair_btn.pressed.connect(func():
-		GameState.hangar_preselect_slot = slot_idx
-		on_hide.call()
-		PanelManager.show_panel("hangar_assembly")
+	var disassemble_btn := Button.new()
+	disassemble_btn.text = "🧩 머신 분해"
+	disassemble_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	disassemble_btn.modulate = Color(0.95, 0.60, 0.48)
+	disassemble_btn.pressed.connect(func():
+		if GameState.disassemble_machine(slot_idx):
+			on_hide.call()
 	)
-	vb.add_child(repair_btn)
+	vb.add_child(disassemble_btn)
 
 	var control_btn := Button.new()
 	control_btn.text = "관제실로 이동  ▶"
@@ -170,19 +169,59 @@ static func _active(vb: VBoxContainer, slot: DispatchManager.AutoSlot) -> void:
 			HORIZONTAL_ALIGNMENT_LEFT, Color(0.50, 0.90, 0.55))
 
 	vb.add_child(HangarHelpers.vspacer())
-	HangarHelpers.add_lbl(vb, "자동 파견은 추후 업데이트 예정입니다.", 9, HORIZONTAL_ALIGNMENT_LEFT, Color(0.42, 0.44, 0.55))
+	HangarHelpers.add_lbl(vb, "파견 중인 베이는 읽기 전용입니다.", 9, HORIZONTAL_ALIGNMENT_LEFT, Color(0.42, 0.44, 0.55))
+
+
+static func _fmt_rewards(slot: DispatchManager.AutoSlot) -> String:
+	var rewards: Dictionary = slot.rewards
+	if rewards.is_empty():
+		return "+ %s CR" % HangarHelpers.fmt(slot.credits_earned)
+	var parts: Array = []
+	if int(rewards.get("cp", 0)) > 0:
+		parts.append("+%s CR" % HangarHelpers.fmt(int(rewards["cp"])))
+	var abbr := {"alloy": "합금", "supplies": "물자", "circuit": "칩"}
+	for id in ["alloy", "supplies", "circuit"]:
+		if int(rewards.get(id, 0)) > 0:
+			parts.append("+%d %s" % [int(rewards[id]), abbr[id]])
+	return "  ".join(parts) if not parts.is_empty() else "+ %s CR" % HangarHelpers.fmt(slot.credits_earned)
+
+
+static func _add_breakdown_lines(vb: VBoxContainer, slot: DispatchManager.AutoSlot) -> void:
+	var brk: Dictionary = slot.reward_breakdown
+	if brk.is_empty():
+		return
+	HangarHelpers.add_lbl(vb, "기본 %s CR" % HangarHelpers.fmt(int(brk.get("raw_credits", 0))),
+		10, HORIZONTAL_ALIGNMENT_CENTER, Color(0.60, 0.66, 0.80))
+	var line: Array = []
+	var cmult := float(brk.get("credits_mult", 1.0))
+	if cmult > 1.0:
+		line.append("파츠+%d%%" % int(round((cmult - 1.0) * 100.0)))
+	var pbonus := int(brk.get("pilot_credits_pct", 0))
+	if pbonus > 0:
+		line.append("파일럿+%d%%" % pbonus)
+	var fpen := int(brk.get("fatigue_penalty_pct", 0))
+	if fpen > 0:
+		line.append("피로-%d%%" % fpen)
+	var ymult := float(brk.get("yield_mult", 1.0))
+	if ymult > 1.0:
+		line.append("재료+%d%%" % int(round((ymult - 1.0) * 100.0)))
+	if not line.is_empty():
+		HangarHelpers.add_lbl(vb, "  ".join(line), 10, HORIZONTAL_ALIGNMENT_CENTER, Color(0.72, 0.86, 1.0))
 
 
 static func _returned(vb: VBoxContainer, slot: DispatchManager.AutoSlot,
 		slot_idx: int, on_hide: Callable) -> void:
-	HangarHelpers.add_lbl(vb, "보상 요약", 11, HORIZONTAL_ALIGNMENT_LEFT, Color(0.52, 0.60, 0.75))
+	HangarHelpers.add_lbl(vb, "수령 대기", 11, HORIZONTAL_ALIGNMENT_LEFT, Color(0.52, 0.60, 0.75))
 	var cr_lbl := Label.new()
-	cr_lbl.text = "+ %s CR" % HangarHelpers.fmt(slot.credits_earned)
-	cr_lbl.add_theme_font_size_override("font_size", 20)
+	cr_lbl.text = _fmt_rewards(slot)
+	cr_lbl.add_theme_font_size_override("font_size", 18)
 	cr_lbl.modulate = Color(0.28, 1.00, 0.48)
 	cr_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cr_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cr_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vb.add_child(cr_lbl)
+
+	_add_breakdown_lines(vb, slot)
 
 	vb.add_child(HangarHelpers.vspacer())
 

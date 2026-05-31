@@ -31,6 +31,10 @@ class AutoSlot:
 	var return_start_time: float = 0.0
 	var return_end_time: float = INF
 	var credits_earned: int = 0
+	var rewards: Dictionary = {}
+	# 정산 시 기록되는 수익 분해 내역 (UI 표시용)
+	# {raw_credits, credits_mult, pilot_credits_pct, fatigue_penalty_pct, yield_mult}
+	var reward_breakdown: Dictionary = {}
 	# 자동 재파견 설정 (수령 후 즉시 동일 조건으로 재파견)
 	var auto_redispatch: bool = false
 	var auto_pilot_id: String = ""
@@ -57,6 +61,8 @@ class AutoSlot:
 		mission_end_time = INF
 		return_end_time = INF
 		credits_earned = 0
+		rewards = {}
+		reward_breakdown = {}
 		# auto_redispatch 설정은 유지
 
 # ── 초기화 ────────────────────────────────────────────────────
@@ -142,7 +148,7 @@ func unlock_auto_slot(index: int) -> bool:
 # ── 머신 조립 ─────────────────────────────────────────────────
 
 func get_assembly_cost(body_tier: int, weapon_tier: int, legs_tier: int) -> int:
-	return (body_tier + weapon_tier + legs_tier) * 50
+	return (body_tier + weapon_tier + legs_tier) * 40
 
 func assemble_machine(slot_index: int, body_tier: int, weapon_tier: int, legs_tier: int, iids: Dictionary = {}, machine_name: String = "") -> bool:
 	if slot_index < 0 or slot_index >= auto_slots.size():
@@ -177,6 +183,22 @@ func assemble_machine(slot_index: int, body_tier: int, weapon_tier: int, legs_ti
 	GameState.credits_changed.emit(GameState.total_credits)
 	auto_slot_changed.emit(slot_index)
 	return true
+
+func set_slot_auto_redispatch(slot_index: int, enabled: bool, pilot_id: String = "", planet_id: String = "") -> void:
+	if slot_index < 0 or slot_index >= auto_slots.size():
+		return
+	var slot: AutoSlot = auto_slots[slot_index]
+	slot.auto_redispatch = enabled
+	if enabled:
+		if pilot_id != "":
+			slot.auto_pilot_id = pilot_id
+		if planet_id != "":
+			slot.auto_planet = planet_id
+	else:
+		slot.auto_pilot_id = ""
+		slot.auto_planet   = ""
+	auto_slot_changed.emit(slot_index)
+
 
 func rename_bay(slot_index: int, new_name: String) -> bool:
 	if slot_index < 0 or slot_index >= auto_slots.size():
@@ -254,8 +276,7 @@ func collect_auto_slot(slot_index: int) -> bool:
 		if not pilot.is_empty():
 			pilot["status"] = "idle"
 			GameState.pilot_status_changed.emit(slot.pilot_id)
-	GameState.total_credits += slot.credits_earned
-	GameState.credits_changed.emit(GameState.total_credits)
+	_grant_slot_rewards(slot)
 	slot.reset_mission_data()
 	slot.state = "offline"
 	auto_slot_changed.emit(slot_index)
@@ -269,12 +290,38 @@ func _start_returning(slot_index: int, now: float) -> void:
 	var weapon_tier: int = slot.machine.get("weapon", 1)
 	var legs_tier: int   = slot.machine.get("legs",   1)
 	var actual_duration := slot.mission_end_time - slot.mission_start_time
-	var base_credits := _get_mission_credits(weapon_tier, actual_duration)
-	base_credits = int(float(base_credits) * _opts_credits_mult(slot.machine))
+	var raw_credits := _get_mission_credits(weapon_tier, actual_duration)
+	var credits_mult := _opts_credits_mult(slot.machine)
 	var pilot := GameState.get_hired_pilot(slot.pilot_id)
+	var pilot_credits_pct := 0
 	if not pilot.is_empty() and pilot.get("bonus_type", "") == "credits":
-		base_credits = int(float(base_credits) * (1.0 + float(pilot.get("bonus_value", 0)) / 100.0))
+		pilot_credits_pct = int(pilot.get("bonus_value", 0))
+	var fatigue_penalty_pct := 0
+	if not pilot.is_empty():
+		var fatigue := int(pilot.get("fatigue", 0))
+		if fatigue >= 90:
+			fatigue_penalty_pct = 20
+		elif fatigue >= 70:
+			fatigue_penalty_pct = 10
+	var base_credits := int(float(raw_credits) * credits_mult)
+	base_credits = int(float(base_credits) * (1.0 + float(pilot_credits_pct) / 100.0))
+	base_credits = int(float(base_credits) * (1.0 - float(fatigue_penalty_pct) / 100.0))
 	slot.credits_earned = base_credits
+	slot.rewards = _roll_planet_rewards(slot.planet)
+	slot.rewards["cp"] = int(slot.rewards.get("cp", 0)) + base_credits
+	var yield_mult := 1.0 + _opts_value_sum(slot.machine, "material_yield_pct") / 100.0
+	if yield_mult > 1.0:
+		for id in slot.rewards.keys():
+			if str(id) != "cp":
+				slot.rewards[id] = int(float(slot.rewards[id]) * yield_mult)
+	slot.reward_breakdown = {
+		"raw_credits":         raw_credits,
+		"credits_mult":        credits_mult,
+		"pilot_credits_pct":   pilot_credits_pct,
+		"fatigue_penalty_pct": fatigue_penalty_pct,
+		"yield_mult":          yield_mult,
+	}
+	_grant_mission_exp(slot)
 	slot.state = "returning"
 	slot.return_start_time = now
 	var ret_dur := _get_return_duration(legs_tier) * _opts_time_mult(slot.machine, "return_time_pct")
@@ -284,6 +331,7 @@ func _start_returning(slot_index: int, now: float) -> void:
 func _complete_return(slot_index: int) -> void:
 	var slot: AutoSlot = auto_slots[slot_index]
 	slot.state = "returned"
+	_apply_planet_pilot_state(slot)
 	auto_slot_changed.emit(slot_index)
 	auto_dispatch_returned.emit(slot_index)
 	if slot.auto_redispatch and slot.auto_pilot_id != "" and slot.auto_planet != "":
@@ -332,6 +380,65 @@ func _get_mission_credits(weapon_tier: int, mission_duration: float) -> int:
 	var rate: int = tiers[weapon_tier - 1]["value"]
 	return int(float(rate) * mission_duration)
 
+
+func _roll_planet_rewards(planet_id: String) -> Dictionary:
+	var planet := GameState.get_planet(planet_id)
+	var out: Dictionary = {}
+	if planet.is_empty():
+		return out
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var guaranteed: Dictionary = planet.get("guaranteed_rewards", {})
+	for id in guaranteed.keys():
+		var range_raw: Array = guaranteed[id]
+		var min_v := int(range_raw[0]) if range_raw.size() > 0 else 0
+		var max_v := int(range_raw[1]) if range_raw.size() > 1 else min_v
+		out[str(id)] = int(out.get(str(id), 0)) + rng.randi_range(min_v, max_v)
+	for reward_raw in planet.get("chance_rewards", []):
+		var reward: Dictionary = reward_raw
+		if rng.randf() > float(reward.get("chance", 0.0)):
+			continue
+		var amount: Array = reward.get("amount", [1, 1])
+		var reward_id := str(reward.get("id", ""))
+		if reward_id == "":
+			continue
+		var min_amount := int(amount[0]) if amount.size() > 0 else 1
+		var max_amount := int(amount[1]) if amount.size() > 1 else min_amount
+		out[reward_id] = int(out.get(reward_id, 0)) + rng.randi_range(min_amount, max_amount)
+	return out
+
+
+func _grant_slot_rewards(slot: AutoSlot) -> void:
+	var rewards_to_grant: Dictionary = slot.rewards.duplicate()
+	if rewards_to_grant.is_empty() and slot.credits_earned > 0:
+		rewards_to_grant["cp"] = slot.credits_earned
+	for id in rewards_to_grant.keys():
+		GameState.add_resource(str(id), int(rewards_to_grant[id]))
+	if not rewards_to_grant.is_empty():
+		GameState.resources_collected.emit(rewards_to_grant)
+
+
+func _apply_planet_pilot_state(slot: AutoSlot) -> void:
+	if slot.pilot_id == "":
+		return
+	var planet := GameState.get_planet(slot.planet)
+	if planet.is_empty():
+		return
+	var fat_delta := int(planet.get("fatigue_delta", 0))
+	var str_delta := int(planet.get("stress_delta", 0))
+	var fat_reduce := _opts_value_sum(slot.machine, "fatigue_pct") / 100.0
+	var str_reduce := _opts_value_sum(slot.machine, "stress_pct") / 100.0
+	fat_delta = maxi(0, int(float(fat_delta) * (1.0 - fat_reduce)))
+	str_delta = maxi(0, int(float(str_delta) * (1.0 - str_reduce)))
+	var pilot := GameState.get_hired_pilot(slot.pilot_id)
+	if not pilot.is_empty():
+		var pref: Array = pilot.get("preferred_regions", [])
+		var region := str(planet.get("region_type", ""))
+		if region != "" and region in pref:
+			fat_delta = maxi(0, fat_delta - 2)
+			str_delta = maxi(0, str_delta - 2)
+	GameState.apply_pilot_state_delta(slot.pilot_id, {"fatigue": fat_delta, "stress": str_delta})
+
 # ── 저장/불러오기 ─────────────────────────────────────────────────
 
 func apply_save_data(slot_data: Array, save_time: float, groups_data: Array = []) -> void:
@@ -378,6 +485,10 @@ func apply_save_data(slot_data: Array, save_time: float, groups_data: Array = []
 		slot.return_start_time   = float(d.get("return_start_time",  0.0))
 		slot.return_end_time     = _dec(d.get("return_end_time",     INF))
 		slot.credits_earned    = int(d.get("credits_earned",    0))
+		var rewards_raw = d.get("rewards", {})
+		slot.rewards = (rewards_raw as Dictionary).duplicate() if rewards_raw is Dictionary else {}
+		var brk_raw = d.get("reward_breakdown", {})
+		slot.reward_breakdown = (brk_raw as Dictionary).duplicate() if brk_raw is Dictionary else {}
 		slot.auto_redispatch   = bool(d.get("auto_redispatch",  false))
 		slot.auto_pilot_id     = str(d.get("auto_pilot_id",     ""))
 		slot.auto_planet       = str(d.get("auto_planet",       ""))
@@ -395,17 +506,72 @@ func _fast_forward(now: float) -> void:
 			var w: int = slot.machine.get("weapon", 1)
 			var l: int = slot.machine.get("legs",   1)
 			var actual_duration := slot.mission_end_time - slot.mission_start_time
-			var base_credits := _get_mission_credits(w, actual_duration)
-			base_credits = int(float(base_credits) * _opts_credits_mult(slot.machine))
+			var raw_credits := _get_mission_credits(w, actual_duration)
+			var credits_mult := _opts_credits_mult(slot.machine)
+			var base_credits := int(float(raw_credits) * credits_mult)
 			var pilot := GameState.get_hired_pilot(slot.pilot_id)
+			var pilot_credits_pct := 0
 			if not pilot.is_empty() and pilot.get("bonus_type", "") == "credits":
-				base_credits = int(float(base_credits) * (1.0 + float(pilot.get("bonus_value", 0)) / 100.0))
+				pilot_credits_pct = int(pilot.get("bonus_value", 0))
+				base_credits = int(float(base_credits) * (1.0 + float(pilot_credits_pct) / 100.0))
 			slot.credits_earned  = base_credits
+			slot.rewards = _roll_planet_rewards(slot.planet)
+			slot.rewards["cp"] = int(slot.rewards.get("cp", 0)) + base_credits
+			slot.reward_breakdown = {
+				"raw_credits":         raw_credits,
+				"credits_mult":        credits_mult,
+				"pilot_credits_pct":   pilot_credits_pct,
+				"fatigue_penalty_pct": 0,
+				"yield_mult":          1.0,
+			}
+			_grant_mission_exp(slot)
 			slot.state           = "returning"
 			var ret_dur := _get_return_duration(l) * _opts_time_mult(slot.machine, "return_time_pct")
 			slot.return_end_time = slot.mission_end_time + maxf(5.0, ret_dur)
 		if slot.state == "returning" and now >= slot.return_end_time:
 			slot.state = "returned"
+			_apply_planet_pilot_state(slot)
+			if slot.auto_redispatch and slot.auto_planet != "":
+				_ff_simulate_auto_cycles(slot, now)
+
+func _ff_simulate_auto_cycles(slot: AutoSlot, now: float) -> void:
+	var b: int = slot.machine.get("body",   1)
+	var w: int = slot.machine.get("weapon", 1)
+	var l: int = slot.machine.get("legs",   1)
+	var mission_dur := maxf(5.0, _get_mission_duration(b) * _opts_time_mult(slot.machine, "dispatch_time_pct"))
+	var return_dur  := maxf(5.0, _get_return_duration(l)  * _opts_time_mult(slot.machine, "return_time_pct"))
+	var cycle_dur   := mission_dur + return_dur
+	_grant_slot_rewards(slot)
+	slot.reset_mission_data()
+	var remaining := now - slot.return_end_time
+	if remaining <= 0.0 or cycle_dur <= 0.0:
+		slot.state = "offline"
+		return
+	var extra_cycles := mini(int(remaining / cycle_dur), 72)
+	for _c in extra_cycles:
+		var extra := _roll_planet_rewards(slot.auto_planet)
+		var base_cr := int(float(_get_mission_credits(w, mission_dur)) * _opts_credits_mult(slot.machine))
+		extra["cp"] = int(extra.get("cp", 0)) + base_cr
+		for id in extra.keys():
+			GameState.add_resource(str(id), int(extra[id]))
+		GameState.add_pilot_exp(slot.pilot_id, 10)
+	slot.state = "offline"
+
+
+func _grant_mission_exp(slot: AutoSlot) -> void:
+	if slot.pilot_id == "":
+		return
+	var planet := GameState.get_planet(slot.planet)
+	var risk := int(planet.get("risk_level", 1))
+	var exp_gain := 15 if risk >= 3 else 10
+	var pilot := GameState.get_hired_pilot(slot.pilot_id)
+	if not pilot.is_empty():
+		var pref: Array = pilot.get("preferred_regions", [])
+		var region := str(planet.get("region_type", ""))
+		if region != "" and region in pref:
+			exp_gain += 2
+	GameState.add_pilot_exp(slot.pilot_id, exp_gain)
+
 
 func _dec(v) -> float:
 	var f := float(v)
@@ -421,6 +587,15 @@ func _lookup_opts(iid: String, part_type: String, _tier: int) -> Array:
 		if str(item.get("iid", "")) == iid and str(item.get("type", "")) == part_type:
 			return (item.get("options", []) as Array).duplicate()
 	return []
+
+
+func _opts_value_sum(machine: Dictionary, opt_type: String) -> float:
+	var total := 0.0
+	for key in ["body_opts", "weapon_opts", "legs_opts"]:
+		for opt: Dictionary in machine.get(key, []):
+			if opt.get("type", "") == opt_type:
+				total += float(opt.get("value", 0))
+	return total
 
 
 func _opts_credits_mult(machine: Dictionary) -> float:
@@ -449,8 +624,7 @@ func _do_auto_redispatch(slot_index: int) -> void:
 		if not pilot.is_empty():
 			pilot["status"] = "idle"
 			GameState.pilot_status_changed.emit(slot.pilot_id)
-	GameState.total_credits += slot.credits_earned
-	GameState.credits_changed.emit(GameState.total_credits)
+	_grant_slot_rewards(slot)
 	slot.reset_mission_data()
 	slot.state = "offline"
 	start_auto_dispatch(slot_index, slot.auto_pilot_id, slot.auto_planet)

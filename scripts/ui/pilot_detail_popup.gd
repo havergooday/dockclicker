@@ -1,6 +1,6 @@
 extends Control
 
-const POPUP_HEIGHT  := 300.0
+const POPUP_HEIGHT  := 340.0
 const POPUP_W       := 480.0
 const ANIM_DURATION := 0.20
 
@@ -180,6 +180,40 @@ func _rebuild() -> void:
 			_bonus_label(bonus_type, int(pilot.get("bonus_value", 0))),
 			Color(0.50, 0.95, 0.68)))
 
+	var personality := str(pilot.get("personality", ""))
+	if personality != "":
+		left_vb.add_child(_info_row("성격", personality, Color(0.62, 0.90, 0.68)))
+
+	var pref_regions: Array = pilot.get("preferred_regions", [])
+	if not pref_regions.is_empty():
+		var rnames := pref_regions.map(func(r: String) -> String: return _region_label(r))
+		left_vb.add_child(_info_row("선호 지역", ", ".join(rnames), Color(0.72, 0.82, 0.96)))
+
+	var right_vb := VBoxContainer.new()
+	right_vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right_vb.add_theme_constant_override("separation", 6)
+	right_vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	info_hb.add_child(right_vb)
+
+	var fat := int(pilot.get("fatigue", 0))
+	var stress := int(pilot.get("stress", 0))
+	var mood := int(pilot.get("mood", 70))
+	# 낮을수록 좋은 지표(피로/스트레스)는 빨강 경고, 높을수록 좋은 지표(기분)는 반대
+	right_vb.add_child(_stat_bar_row("피로", fat, 100, _bar_color(fat, false)))
+	right_vb.add_child(_stat_bar_row("스트레스", stress, 100, _bar_color(stress, false)))
+	right_vb.add_child(_stat_bar_row("기분", mood, 100, _bar_color(mood, true)))
+	var exp := int(pilot.get("exp", 0))
+	var tier := int(pilot.get("tier", 1))
+	if tier < 3:
+		var threshold: int = GameState.EXP_PER_TIER[tier - 1]
+		right_vb.add_child(_stat_bar_row("경험치", exp, threshold, Color(0.55, 0.78, 1.0)))
+	else:
+		right_vb.add_child(_stat_bar_row("경험치", 1, 1, Color(0.80, 0.58, 1.0), "MAX"))
+
+	# 상태 한마디 (성격 + 현재 상태 기반 대사 연출)
+	_content_vb.add_child(_hsep())
+	_content_vb.add_child(_build_status_quote(pilot, fat, stress, mood))
+
 	# 침대 이동 버튼 + 목록
 
 
@@ -192,12 +226,155 @@ func _find_assigned_bay() -> int:
 			return i
 	return -1
 
+func _region_label(region_id: String) -> String:
+	match region_id:
+		"scrap":      return "폐기 위성"
+		"trade":      return "교역 항로"
+		"city_ruins": return "버려진 도시"
+		"bio":        return "생태 행성"
+	return region_id
+
+
 func _bonus_label(btype: String, bval: int) -> String:
 	match btype:
 		"credits_pct":       return "수익 +%d%%" % bval
 		"dispatch_time_pct": return "파견 -%d%%" % bval
 		"return_time_pct":   return "복귀 -%d%%" % bval
 	return btype
+
+func _bar_color(value: int, high_is_good: bool) -> Color:
+	# high_is_good=false: 피로/스트레스 (높을수록 나쁨)
+	# high_is_good=true:  기분 (낮을수록 나쁨)
+	var bad := (value >= 70) if not high_is_good else (value < 40)
+	var warn := (value >= 40) if not high_is_good else (value < 70)
+	if bad:
+		return Color(1.0, 0.50, 0.50)
+	if warn:
+		return Color(1.0, 0.82, 0.42)
+	return Color(0.46, 0.86, 1.0)
+
+
+func _stat_bar_row(label: String, cur: int, maxv: int, fill_col: Color, override_text: String = "") -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var lbl := Label.new()
+	lbl.text = label
+	lbl.add_theme_font_size_override("font_size", 11)
+	lbl.modulate = Color(0.46, 0.52, 0.66)
+	lbl.custom_minimum_size = Vector2(60, 0)
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(lbl)
+
+	var bar := ProgressBar.new()
+	bar.min_value = 0.0
+	bar.max_value = maxf(1.0, float(maxv))
+	bar.value = clampf(float(cur), 0.0, bar.max_value)
+	bar.show_percentage = false
+	bar.custom_minimum_size = Vector2(0, 12)
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = Color(0.10, 0.13, 0.20, 0.95)
+	bg.set_corner_radius_all(3)
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = fill_col
+	fill.set_corner_radius_all(3)
+	bar.add_theme_stylebox_override("background", bg)
+	bar.add_theme_stylebox_override("fill", fill)
+	row.add_child(bar)
+
+	var val := Label.new()
+	val.text = override_text if override_text != "" else str(cur)
+	val.add_theme_font_size_override("font_size", 10)
+	val.modulate = fill_col
+	val.custom_minimum_size = Vector2(34, 0)
+	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	val.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	val.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(val)
+	return row
+
+
+func _build_status_quote(pilot: Dictionary, fat: int, stress: int, mood: int) -> PanelContainer:
+	var personality := str(pilot.get("personality", ""))
+	var quote := _status_quote_text(personality, fat, stress, mood)
+	var panel := PanelContainer.new()
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sty := StyleBoxFlat.new()
+	sty.bg_color = Color(0.07, 0.10, 0.16, 0.92)
+	sty.border_color = Color(0.30, 0.42, 0.64, 0.55)
+	sty.border_width_left = 3
+	sty.set_corner_radius_all(4)
+	sty.content_margin_left = 10; sty.content_margin_right = 10
+	sty.content_margin_top = 6; sty.content_margin_bottom = 6
+	panel.add_theme_stylebox_override("panel", sty)
+	var lbl := Label.new()
+	lbl.text = "“%s”" % quote
+	lbl.add_theme_font_size_override("font_size", 11)
+	lbl.modulate = Color(0.78, 0.84, 0.98)
+	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(lbl)
+	return panel
+
+
+func _status_quote_text(personality: String, fat: int, stress: int, mood: int) -> String:
+	# 우선순위: 스트레스 > 피로 > 낮은 기분 > 좋은 컨디션 > 평상시
+	var state := "neutral"
+	if stress >= 70:
+		state = "stress"
+	elif fat >= 70:
+		state = "fatigue"
+	elif mood < 40:
+		state = "low_mood"
+	elif mood >= 70 and fat < 40 and stress < 40:
+		state = "good"
+	var lines: Dictionary = {
+		"stress": {
+			"활발함": "으, 머리 터질 것 같아! 좀 쉬어야겠어.",
+			"차분함": "조금... 지친 것 같아요. 정비가 필요해요.",
+			"사교적": "다들 좀 쉬자고, 나 진짜 한계야.",
+			"독립적": "신경 쓰지 마. ...근데 좀 빡세긴 했어.",
+		},
+		"fatigue": {
+			"활발함": "몸이 안 따라주네. 잠깐 눈 좀 붙일게.",
+			"차분함": "피로가 쌓였어요. 침대가 그립네요.",
+			"사교적": "다리가 후들거려… 휴식 좀 줘.",
+			"독립적": "쉬는 건 시간 낭비지만… 오늘은 좀 눕고 싶군.",
+		},
+		"low_mood": {
+			"활발함": "기분이 영 별로야. 뭐 재밌는 거 없나?",
+			"차분함": "마음이 가라앉네요. 커피라도 한 잔…",
+			"사교적": "요즘 좀 외로워. 같이 게임할 사람?",
+			"독립적": "별일 아냐. ...그냥 좀 가라앉았을 뿐.",
+		},
+		"good": {
+			"활발함": "컨디션 최고야! 언제든 출격 가능!",
+			"차분함": "상태 양호합니다. 명령만 내려주세요.",
+			"사교적": "오늘 기분 좋은데? 다음 임무 어디야?",
+			"독립적": "준비 끝났어. 내 걱정은 안 해도 돼.",
+		},
+		"neutral": {
+			"활발함": "음, 그럭저럭이야. 슬슬 움직여볼까.",
+			"차분함": "특이사항 없습니다.",
+			"사교적": "뭐, 나쁘지 않아. 다음 일정은?",
+			"독립적": "평소대로야.",
+		},
+	}
+	var by_state: Dictionary = lines[state]
+	if personality != "" and by_state.has(personality):
+		return str(by_state[personality])
+	# 성격 미지정 폴백
+	match state:
+		"stress":   return "스트레스가 한계에 가까워요."
+		"fatigue":  return "피로가 많이 쌓였습니다."
+		"low_mood": return "기분이 가라앉아 있어요."
+		"good":     return "컨디션이 아주 좋습니다."
+		_:          return "이상 없습니다."
+
 
 func _info_row(label: String, value: String, val_col: Color) -> HBoxContainer:
 	var row := HBoxContainer.new()

@@ -41,6 +41,7 @@ var _bay_select_mode: bool = false
 var _confirm_panel: PanelContainer = null
 var _confirm_msg_lbl: Label = null
 var _pending_dispatch: Callable = Callable()
+var _last_unlockable_planet_notice: String = ""
 
 
 func _ready() -> void:
@@ -48,6 +49,8 @@ func _ready() -> void:
 	_build_ui()
 	hide()
 	GameState.planet_unlocked.connect(_on_state_changed)
+	GameState.credits_changed.connect(func(_new_total: int): _notify_unlockable_planets())
+	GameState.resources_changed.connect(func(_resources: Dictionary): _notify_unlockable_planets())
 	GameState.auto_slot_changed.connect(_on_auto_slot_changed)
 	GameState.auto_dispatch_returned.connect(_on_auto_slot_changed)
 	GameState.pilot_hired.connect(func(_pid: String): _on_auto_slot_changed(-1))
@@ -64,6 +67,7 @@ func open_for_control_room() -> void:
 	_select_default_planet()
 	_rebuild_planets()
 	call_deferred("_restore_saved_scroll")
+	call_deferred("_notify_unlockable_planets")
 	_main_panel.offset_top = -POPUP_HEIGHT
 	_main_panel.offset_bottom = 0.0
 	var tween := create_tween()
@@ -292,6 +296,74 @@ func _build_slide_panel() -> void:
 	_slot_grid.add_theme_constant_override("v_separation", 12)
 	_slot_scroll_container.add_child(_slot_grid)
 
+	var btn_row := HBoxContainer.new()
+	btn_row.add_theme_constant_override("separation", 6)
+	slot_wrap.add_child(btn_row)
+
+	var all_btn := Button.new()
+	all_btn.text = "▶▶ 전원 출격"
+	all_btn.custom_minimum_size = Vector2(0, 28)
+	all_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	all_btn.add_theme_font_size_override("font_size", 11)
+	all_btn.pressed.connect(_on_dispatch_all_pressed)
+	btn_row.add_child(all_btn)
+
+	var collect_btn := Button.new()
+	collect_btn.text = "◉◉ 전원 수령"
+	collect_btn.custom_minimum_size = Vector2(0, 28)
+	collect_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	collect_btn.add_theme_font_size_override("font_size", 11)
+	collect_btn.pressed.connect(_on_collect_all_pressed)
+	btn_row.add_child(collect_btn)
+
+
+func _on_collect_all_pressed() -> void:
+	var count := 0
+	for i in GameState.auto_slots.size():
+		var slot: DispatchManager.AutoSlot = GameState.auto_slots[i]
+		if slot.state == "returned" and slot.planet == _selected_planet_id:
+			if GameState.collect_auto_slot(i):
+				count += 1
+	if count > 0:
+		_show_toast("%d슬롯 수령 완료" % count)
+		_rebuild_slots()
+	else:
+		_show_toast("수령할 슬롯 없음")
+
+
+func _on_dispatch_all_pressed() -> void:
+	if _selected_planet_id == "":
+		return
+	var count := 0
+	var high_fatigue_count := 0
+	var skipped_exhausted := 0
+	for i in GameState.auto_slots.size():
+		var slot: DispatchManager.AutoSlot = GameState.auto_slots[i]
+		if slot.state != "offline" or slot.machine.is_empty():
+			continue
+		for pilot: Dictionary in GameState.hired_pilots:
+			if str(pilot.get("status", "")) != "idle":
+				continue
+			var fat := int(pilot.get("fatigue", 0))
+			if fat >= 100:
+				skipped_exhausted += 1
+				continue
+			if GameState.start_auto_dispatch(i, str(pilot.get("id", "")), _selected_planet_id):
+				count += 1
+				if fat >= 70:
+					high_fatigue_count += 1
+				break
+	if count > 0:
+		var msg := "%d슬롯 출격" % count
+		if high_fatigue_count > 0:
+			msg += "  (%d슬롯 고피로)" % high_fatigue_count
+		_show_toast(msg)
+		_rebuild_slots()
+	elif skipped_exhausted > 0:
+		_show_toast("출격 가능한 슬롯 없음 (%d명 피로 최대)" % skipped_exhausted)
+	else:
+		_show_toast("출격 가능한 슬롯 없음")
+
 
 func _build_bay_panel() -> void:
 	_bay_panel = PanelContainer.new()
@@ -479,7 +551,7 @@ func _make_planet_card(planet: Dictionary, pid: String, index: int, unlocked: bo
 	card.toggle_mode = true
 	card.button_pressed = selected
 	card.flat = true
-	card.disabled = not unlocked
+	card.disabled = false
 
 	var vbox := VBoxContainer.new()
 	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -526,12 +598,45 @@ func _rebuild_detail() -> void:
 	if planet.is_empty():
 		_detail_info_label.text = ""
 		return
-	_detail_info_label.text = "%s\n\n적 HP  %d\nCR/킬  %d\n웨이브  %d" % [
+	var base_fat := int(planet.get("fatigue_delta", 0))
+	var base_str := int(planet.get("stress_delta", 0))
+	var fat_note := ""
+	var str_note := ""
+	var _first_pid := _get_first_idle_pilot_id()
+	if _first_pid != "":
+		var _fp := GameState.get_hired_pilot(_first_pid)
+		if not _fp.is_empty():
+			var _pref: Array = _fp.get("preferred_regions", [])
+			var _region := str(planet.get("region_type", ""))
+			if _region != "" and _region in _pref:
+				fat_note = " (선호 -2)"
+				str_note = " (선호 -2)"
+	_detail_info_label.text = "%s\n\n주요 보상  %s\n위험도  %d\n피로  +%d%s\n스트레스  +%d%s\n\n적 HP  %d\nCR/킬  %d\n웨이브  %d" % [
 		str(planet.get("name", "")),
+		_format_primary_rewards(planet.get("primary_rewards", [])),
+		int(planet.get("risk_level", 0)),
+		base_fat, fat_note,
+		base_str, str_note,
 		int(planet.get("enemy_hp", 0)),
 		int(planet.get("credit_per_kill", 0)),
 		int(planet.get("wave_size", 0)),
 	]
+
+
+func _format_primary_rewards(raw_rewards: Array) -> String:
+	var labels: Array = []
+	for id in raw_rewards:
+		labels.append(_resource_label(str(id)))
+	return "없음" if labels.is_empty() else ", ".join(labels)
+
+
+func _resource_label(id: String) -> String:
+	match id:
+		"cp": return "CR"
+		"alloy": return "합금판"
+		"supplies": return "생활물자"
+		"circuit": return "회로칩"
+		_: return id
 
 
 func _rebuild_slots() -> void:
@@ -624,7 +729,25 @@ func _apply_slot_style(btn: Button, state: String, is_this_planet: bool) -> void
 
 func _select_planet(planet_id: String) -> void:
 	if not GameState.is_planet_unlocked(planet_id):
-		_show_toast("미해금 행성입니다.")
+		var planet := GameState.get_planet(planet_id)
+		var cp_cost := int(planet.get("unlock_cost", 0))
+		var extra: Dictionary = planet.get("unlock_resources", {})
+		var cost_text := GameState.format_cost({"cp": cp_cost})
+		if not extra.is_empty():
+			cost_text += "  +  " + GameState.format_cost(extra)
+		if _can_unlock_planet(planet):
+			if GameState.unlock_planet(planet_id):
+				_selected_planet_id = planet_id
+				GameState.selected_planet = planet_id
+				_show_toast("%s 해금 완료" % str(planet.get("name", planet_id)))
+				_rebuild_detail()
+				_rebuild_slots()
+				_rebuild_planets()
+				if not _planet_detail_mode:
+					_planet_detail_mode = true
+					_enter_detail_mode()
+				return
+		_show_toast("미해금  %s" % cost_text)
 		return
 	_selected_planet_id = planet_id
 	GameState.selected_planet = planet_id
@@ -763,6 +886,18 @@ func _make_bay_card(bay_index: int, slot: DispatchManager.AutoSlot) -> PanelCont
 	pilot_lbl.modulate = Color(0.72, 0.84, 1.0)
 	pilot_lbl.clip_text = true
 	vbox.add_child(pilot_lbl)
+	if _pid != "" and slot.state == "offline":
+		var _pp := GameState.get_hired_pilot(_pid)
+		if not _pp.is_empty():
+			var _pref: Array = _pp.get("preferred_regions", [])
+			var _region := str(GameState.get_planet(_selected_planet_id).get("region_type", ""))
+			if _region != "" and _region in _pref:
+				var hint := Label.new()
+				hint.text = "★ 선호"
+				hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				hint.add_theme_font_size_override("font_size", 9)
+				hint.modulate = Color(0.92, 0.88, 0.30)
+				vbox.add_child(hint)
 	match slot.state:
 		"offline":
 			var btn := Button.new()
@@ -772,6 +907,20 @@ func _make_bay_card(bay_index: int, slot: DispatchManager.AutoSlot) -> PanelCont
 			btn.pressed.connect(func(): _dispatch_from_bay(bay_index))
 			btn.disabled = not _can_dispatch_bay(bay_index)
 			vbox.add_child(btn)
+			var bay_i2: int = bay_index
+			var auto_btn := Button.new()
+			auto_btn.text = "자동 ●" if slot.auto_redispatch else "자동 ○"
+			auto_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			auto_btn.custom_minimum_size = Vector2(0, 20)
+			auto_btn.add_theme_font_size_override("font_size", 9)
+			auto_btn.modulate = Color(0.40, 0.92, 0.50) if slot.auto_redispatch else Color(1, 1, 1, 0.40)
+			auto_btn.pressed.connect(func():
+				var new_val: bool = not bool(GameState.auto_slots[bay_i2].auto_redispatch)
+				var ap := str(GameState.auto_slots[bay_i2].assigned_pilot_id)
+				GameState.set_slot_auto_redispatch(bay_i2, new_val, ap, _selected_planet_id)
+				_refresh_bay_grid()
+			)
+			vbox.add_child(auto_btn)
 		"returned":
 			var state_lbl := Label.new()
 			state_lbl.text = "복귀 완료"
@@ -816,16 +965,25 @@ func _dispatch_from_bay(bay_index: int) -> void:
 		_show_toast("대기 파일럿이 없습니다.")
 		return
 	var pilot := GameState.get_hired_pilot(pilot_id)
+	var fatigue := int(pilot.get("fatigue", 0))
+	if fatigue >= 100:
+		_show_toast("%s — 피로 최대, 출격 불가" % str(pilot.get("name", pilot_id)))
+		return
 	var planet := GameState.get_planet(_selected_planet_id)
 	var _bcn2: String = str(GameState.auto_slots[bay_index].custom_name) if bay_index < GameState.auto_slots.size() else ""
 	var _bay_label: String = _bcn2 if _bcn2 != "" else "BAY %02d" % (bay_index + 1)
+	var confirm_msg := "%s  ·  %s\n→ %s" % [_bay_label, str(pilot.get("name", pilot_id)), str(planet.get("name", _selected_planet_id))]
+	if fatigue >= 70:
+		confirm_msg += "\n피로 경고: %d — 고피로 상태" % fatigue
 	_show_dispatch_confirm(
-		"%s  ·  %s\n→ %s" % [_bay_label, str(pilot.get("name", pilot_id)), str(planet.get("name", _selected_planet_id))],
+		confirm_msg,
 		func():
 			_hide_bay_panel()
 			if not GameState.start_auto_dispatch(bay_index, pilot_id, _selected_planet_id):
 				_show_toast("%s 파견 실패" % _bay_label)
 				return
+			if GameState.auto_slots[bay_index].auto_redispatch:
+				GameState.set_slot_auto_redispatch(bay_index, true, pilot_id, _selected_planet_id)
 			_show_toast("%s 파견 시작" % _bay_label)
 			_rebuild_slots()
 	)
@@ -835,6 +993,46 @@ func _get_first_idle_pilot_id() -> String:
 	for pilot in GameState.get_idle_pilots():
 		return str(pilot.get("id", ""))
 	return ""
+
+
+func _can_unlock_planet(planet: Dictionary) -> bool:
+	if planet.is_empty():
+		return false
+	if GameState.total_credits < int(planet.get("unlock_cost", 0)):
+		return false
+	var extra: Dictionary = planet.get("unlock_resources", {})
+	return GameState.can_pay(extra)
+
+
+func _find_unlockable_planets() -> Array:
+	var result: Array = []
+	for planet_raw in GameState.PLANETS:
+		var planet: Dictionary = planet_raw
+		var planet_id := str(planet.get("id", ""))
+		if planet_id == "" or GameState.is_planet_unlocked(planet_id):
+			continue
+		if _can_unlock_planet(planet):
+			result.append(planet)
+	return result
+
+
+func _notify_unlockable_planets() -> void:
+	if not visible:
+		return
+	var unlockable := _find_unlockable_planets()
+	if unlockable.is_empty():
+		_last_unlockable_planet_notice = ""
+		return
+	var names: Array = []
+	for i in mini(unlockable.size(), 2):
+		var planet: Dictionary = unlockable[i]
+		names.append(str(planet.get("name", planet.get("id", ""))))
+	var key := "|".join(names)
+	if key == _last_unlockable_planet_notice:
+		return
+	_last_unlockable_planet_notice = key
+	var suffix := " 외 %d" % (unlockable.size() - 2) if unlockable.size() > 2 else ""
+	_show_toast("행성 해금 가능: %s%s" % [", ".join(names), suffix])
 
 
 func _show_toast(text: String) -> void:
@@ -919,6 +1117,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _on_state_changed(_planet_id: String) -> void:
 	if visible:
 		_rebuild_planets()
+		_notify_unlockable_planets()
 
 
 func _on_auto_slot_changed(_index: int) -> void:

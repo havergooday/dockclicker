@@ -41,6 +41,16 @@ class ProjectStructureTest(unittest.TestCase):
         project_text = (ROOT / "project.godot").read_text(encoding="utf8")
         self.assertRegex(project_text, re.compile(r'config/features=PackedStringArray\("4\.6"\)'))
 
+    def test_legacy_panel_script_uids_are_removed(self):
+        for relative_path in [
+            "scripts/ui/panel_dispatch.gd.uid",
+            "scripts/ui/panel_hangar.gd.uid",
+            "scripts/ui/panel_shop.gd.uid",
+            "scripts/ui/panel_workshop.gd.uid",
+        ]:
+            with self.subTest(path=relative_path):
+                self.assertFalse((ROOT / relative_path).exists())
+
 
 if __name__ == "__main__":
     unittest.main()

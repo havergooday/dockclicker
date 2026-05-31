@@ -1,18 +1,23 @@
 extends Node
 
 const SAVE_PATH    := "user://save.json"
-const SAVE_VERSION := 4
+const SAVE_VERSION := 5
 const _INF_SUB     := 1e30  # INF를 JSON에 저장할 때 대체값
 
 func _ready() -> void:
 	load_save()
 	GameState.credits_changed.connect(func(_v): save())
+	GameState.resources_changed.connect(func(_resources: Dictionary): save())
 	GameState.auto_slot_changed.connect(func(_i): save())
 	GameState.pilot_hired.connect(func(_id): save())
 	GameState.pilot_status_changed.connect(func(_id): save())
 	GameState.board_refreshed.connect(func(): save())
 	GameState.quarters_changed.connect(func(): save())
 	GameState.feature_unlocked.connect(func(_id: String): save())
+	GameState.base_area_unlocks_changed.connect(func(): save())
+	GameState.facilities_changed.connect(func(): save())
+	GameState.placeable_positions_changed.connect(func(): save())
+	GameState.hud_position_changed.connect(func(_p): save())
 
 # ── 저장 ─────────────────────────────────────────────────────────
 
@@ -21,6 +26,7 @@ func save() -> void:
 		"version":              SAVE_VERSION,
 		"save_time":            Time.get_unix_time_from_system(),
 		"total_credits":        GameState.total_credits,
+		"resources":            GameState.resources.duplicate(),
 		"pending_credits":      GameState.pending_credits,
 		"player_status":        GameState.player_status,
 		"click_damage":         GameState.click_damage,
@@ -40,6 +46,10 @@ func save() -> void:
 		"board_refresh_count": GameState.board_refresh_count,
 		"quarters_beds":       _serialize_quarters(),
 		"unlocked_features":   GameState.unlocked_features.duplicate(),
+		"base_area_unlocks":   GameState.base_area_unlocks.duplicate(true),
+		"lounge_slots":        GameState.lounge_slots.duplicate(),
+		"placeable_positions": GameState.placeable_positions.duplicate(true),
+		"hud_position":        GameState.hud_position,
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file == null:
@@ -66,6 +76,14 @@ func load_save() -> bool:
 	var d: Dictionary = parsed as Dictionary
 
 	GameState.total_credits        = int(d.get("total_credits",        0))
+	var resources_raw = d.get("resources", {})
+	if resources_raw is Dictionary:
+		GameState.resources = (resources_raw as Dictionary).duplicate()
+	else:
+		GameState.resources = {"alloy": 0, "supplies": 0, "circuit": 0}
+	for resource_id in ["alloy", "supplies", "circuit"]:
+		if not GameState.resources.has(resource_id):
+			GameState.resources[resource_id] = 0
 	GameState.pending_credits      = int(d.get("pending_credits",      0))
 	GameState.player_status        = str(d.get("player_status",        "idle"))
 	GameState.click_damage         = int(d.get("click_damage",         1))
@@ -77,6 +95,34 @@ func load_save() -> bool:
 	GameState.unlocked_planets     = (d.get("unlocked_planets", ["sector_a"]) as Array).duplicate()
 	var feat_raw = d.get("unlocked_features", [])
 	GameState.unlocked_features = (feat_raw as Array).duplicate() if feat_raw is Array else []
+	var base_area_defaults: Dictionary = {
+		"quarters": true,
+		"lounge": false,
+		"canteen": false,
+		"medbay": false,
+	}
+	var base_area_raw = d.get("base_area_unlocks", {})
+	if base_area_raw is Dictionary:
+		GameState.base_area_unlocks = (base_area_raw as Dictionary).duplicate(true)
+	else:
+		GameState.base_area_unlocks = {}
+	for area_id in base_area_defaults.keys():
+		if not GameState.base_area_unlocks.has(area_id):
+			GameState.base_area_unlocks[area_id] = base_area_defaults[area_id]
+	for feature_id in GameState.unlocked_features:
+		if GameState.base_area_unlocks.has(feature_id):
+			GameState.base_area_unlocks[feature_id] = true
+	for feature_id in ["quarters", "canteen"]:
+		if bool(GameState.base_area_unlocks.get(feature_id, false)) and not GameState.unlocked_features.has(feature_id):
+			GameState.unlocked_features.append(feature_id)
+	var lounge_raw = d.get("lounge_slots", {})
+	if lounge_raw is Dictionary:
+		var loaded_slots := (lounge_raw as Dictionary).duplicate()
+		for slot_id in GameState.lounge_slots.keys():
+			GameState.lounge_slots[slot_id] = str(loaded_slots.get(slot_id, ""))
+	var placeable_raw = d.get("placeable_positions", {})
+	if placeable_raw is Dictionary:
+		GameState.placeable_positions = (placeable_raw as Dictionary).duplicate(true)
 
 	GameState.part_inventory.clear()
 	if d.has("part_inventory"):
@@ -108,6 +154,8 @@ func load_save() -> bool:
 	GameState.hired_pilots.clear()
 	for pr in pilots_raw:
 		var pd: Dictionary = pr as Dictionary
+		var preferred_regions: Array = pd.get("preferred_regions", [])
+		var favorite_facilities: Array = pd.get("favorite_facilities", [])
 		GameState.hired_pilots.append({
 			"id":             str(pd.get("id",             "")),
 			"name":           str(pd.get("name",           "")),
@@ -116,6 +164,13 @@ func load_save() -> bool:
 			"bonus_value":    int(pd.get("bonus_value",    0)),
 			"portrait_color": str(pd.get("portrait_color", "#4499DD")),
 			"status":         str(pd.get("status",         "idle")),
+			"fatigue":        int(pd.get("fatigue",        0)),
+			"stress":         int(pd.get("stress",         0)),
+			"mood":           int(pd.get("mood",           70)),
+			"preferred_regions": preferred_regions.duplicate(),
+			"favorite_facilities": favorite_facilities.duplicate(),
+			"personality":    str(pd.get("personality",    "")),
+			"exp":            int(pd.get("exp",            0)),
 			"is_custom":      bool(pd.get("is_custom",     false)),
 		})
 
@@ -127,6 +182,8 @@ func load_save() -> bool:
 	var ui_pos = d.get("ui_positions", {})
 	if ui_pos is Dictionary:
 		GameState.ui_positions = (ui_pos as Dictionary).duplicate()
+
+	GameState.hud_position = str(d.get("hud_position", "right"))
 
 	var board_ids = d.get("board_pilot_ids", [])
 	if board_ids is Array:
@@ -148,6 +205,8 @@ func load_save() -> bool:
 				str(sl[1] if sl.size() > 1 else ""),
 				str(sl[2] if sl.size() > 2 else ""),
 			]
+	if GameState.quarters_beds.size() > 0:
+		GameState.quarters_beds[0]["locked"] = not bool(GameState.base_area_unlocks.get("quarters", true))
 
 	return true
 
@@ -164,6 +223,13 @@ func _serialize_pilots() -> Array:
 			"bonus_value":    p.get("bonus_value",    0),
 			"portrait_color": p.get("portrait_color", "#4499DD"),
 			"status":         p.get("status",         "idle"),
+			"fatigue":        p.get("fatigue",        0),
+			"stress":         p.get("stress",         0),
+			"mood":           p.get("mood",           70),
+			"preferred_regions": (p.get("preferred_regions", []) as Array).duplicate(),
+			"favorite_facilities": (p.get("favorite_facilities", []) as Array).duplicate(),
+			"personality":    p.get("personality",    ""),
+			"exp":            p.get("exp",            0),
 			"is_custom":      p.get("is_custom",      false),
 		})
 	return out
@@ -186,6 +252,8 @@ func _serialize_slots() -> Array:
 			"return_start_time":   s.return_start_time,
 			"return_end_time":     _enc(s.return_end_time),
 			"credits_earned":    s.credits_earned,
+			"rewards":           s.rewards.duplicate(),
+			"reward_breakdown":  s.reward_breakdown.duplicate(),
 			"auto_redispatch":   s.auto_redispatch,
 			"auto_pilot_id":     s.auto_pilot_id,
 			"auto_planet":       s.auto_planet,

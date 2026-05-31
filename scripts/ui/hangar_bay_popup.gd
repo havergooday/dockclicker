@@ -5,6 +5,7 @@ const POPUP_HEIGHT := 300.0
 const PANEL_W_RATIO := 0.60
 const PANEL_PAD_X := 32.0
 const PANEL_PAD_Y := 12.0
+const MECH_PART_DRAW_ORDER: Array = ["legs", "body", "weapon"]
 var _selector_w: float = 220.0  # computed in _build_ui from viewport
 
 signal navigate_to_control_requested
@@ -23,6 +24,7 @@ var _draft_pilot_id: String = ""
 var _draft_machine: Dictionary = {}
 var _draft_iids: Dictionary = {}
 var _bay_name_input: LineEdit = null
+var _part_sprite_cache: Dictionary = {}
 var _sel_dragging: bool = false
 var _sel_drag_start_y: float = 0.0
 var _sel_drag_start_scroll: int = 0
@@ -314,29 +316,56 @@ func _build_machine_panel(slot: DispatchManager.AutoSlot, accent: Color) -> VBox
 	schematic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	frame.add_child(schematic)
 
-	var core_glow := PanelContainer.new()
-	core_glow.custom_minimum_size = Vector2(48, 84)
-	core_glow.position = Vector2(60, 30)
-	var core_style := StyleBoxFlat.new()
-	core_style.bg_color = Color(0.10, 0.16, 0.24, 0.55)
-	core_style.border_color = accent.lightened(0.08)
-	core_style.set_border_width_all(1)
-	core_style.set_corner_radius_all(4)
-	core_glow.add_theme_stylebox_override("panel", core_style)
-	schematic.add_child(core_glow)
-
-	var core_line := ColorRect.new()
-	core_line.color = Color(1, 1, 1, 0.06)
-	core_line.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	core_line.offset_left = 22
-	core_line.offset_right = 22
-	core_glow.add_child(core_line)
-
+	schematic.add_child(_build_mech_preview(slot, accent))
 	schematic.add_child(_build_equipment_slot("body", slot, accent, Vector2(48, 8), "몸통"))
 	schematic.add_child(_build_equipment_slot("weapon", slot, accent, Vector2(4, 58), "무기"))
 	schematic.add_child(_build_equipment_slot("legs", slot, accent, Vector2(94, 106), "다리"))
 
 	return panel
+
+
+func _build_mech_preview(slot: DispatchManager.AutoSlot, accent: Color) -> Control:
+	var preview := Control.new()
+	preview.custom_minimum_size = Vector2(156, 168)
+	preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var bg := PanelContainer.new()
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.04, 0.07, 0.12, 0.72)
+	style.border_color = accent.darkened(0.18)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(5)
+	bg.add_theme_stylebox_override("panel", style)
+	preview.add_child(bg)
+
+	for part_key: String in MECH_PART_DRAW_ORDER:
+		var tier := int(slot.machine.get(part_key, 0))
+		var rect := Rect2(Vector2.ZERO, Vector2.ZERO)
+		match part_key:
+			"legs":
+				rect = Rect2(Vector2(48, 100), Vector2(62, 54))
+			"body":
+				rect = Rect2(Vector2(42, 42), Vector2(72, 72))
+			"weapon":
+				rect = Rect2(Vector2(18, 54), Vector2(120, 44))
+		_add_mech_part_layer(preview, part_key, tier, rect)
+
+	return preview
+
+
+func _add_mech_part_layer(root: Control, part_key: String, tier: int, rect: Rect2) -> void:
+	if tier <= 0:
+		return
+	var layer := TextureRect.new()
+	layer.position = rect.position
+	layer.custom_minimum_size = rect.size
+	layer.texture = _mech_part_texture(part_key, tier)
+	layer.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	layer.stretch_mode = TextureRect.STRETCH_SCALE
+	layer.modulate = _part_color(part_key, tier).lightened(0.16)
+	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(layer)
 
 
 func _build_spec_panel(slot: DispatchManager.AutoSlot, accent: Color) -> VBoxContainer:
@@ -371,7 +400,7 @@ func _build_spec_panel(slot: DispatchManager.AutoSlot, accent: Color) -> VBoxCon
 	_add_kv(stat_box, "복귀 시간", _format_time(float(preview["return_time"])))
 	_add_kv(stat_box, "예상 보상", "%s CR" % HangarHelpers.fmt(int(preview["credits"])))
 	_add_kv(stat_box, "CR/s", str(int(preview["rate"])))
-	_add_kv(stat_box, "파일럿 상태", _pilot_status_text(slot))
+	_add_kv(stat_box, "운용 상태", _pilot_status_text(slot))
 
 	var opts := PanelContainer.new()
 	opts.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -403,9 +432,22 @@ func _build_spec_panel(slot: DispatchManager.AutoSlot, accent: Color) -> VBoxCon
 		_add_option_line(opt_box, "행성", str(GameState.get_planet(slot.planet).get("name", slot.planet)), Color(0.78, 0.70, 1.0))
 		_countdown_lbl = _add_option_line(opt_box, "남은 시간", _mission_countdown(slot), Color(0.70, 1.0, 0.80))
 	elif slot.state == "returned":
-		_add_option_line(opt_box, "보상", "+%s CR" % HangarHelpers.fmt(slot.credits_earned), Color(0.70, 1.0, 0.80))
+		_add_reward_breakdown(opt_box, slot)
 	elif slot.state == "locked":
 		_add_option_line(opt_box, "해금", "%s CR 필요" % HangarHelpers.fmt(slot.unlock_cost), Color(0.90, 0.72, 0.48))
+	if slot.state in ["offline", "empty"]:
+		var ap_id := str(slot.assigned_pilot_id)
+		var ap_text := "— (자동)"
+		var ap_color := Color(1, 1, 1, 0.30)
+		if ap_id != "":
+			var ap := GameState.get_hired_pilot(ap_id)
+			if not ap.is_empty():
+				ap_text = "%s (고정)" % str(ap.get("name", ap_id))
+				ap_color = Color(0.68, 0.90, 0.72)
+		_add_option_line(opt_box, "담당", ap_text, ap_color)
+		_add_option_line(opt_box, "자동 재파견",
+			"ON ●" if slot.auto_redispatch else "OFF ○",
+			Color(0.40, 0.92, 0.50) if slot.auto_redispatch else Color(1, 1, 1, 0.30))
 
 	return panel
 
@@ -427,9 +469,11 @@ func _build_action_panel(slot: DispatchManager.AutoSlot, accent: Color) -> VBoxC
 			build_btn.disabled = not _can_commit_assembly()
 			panel.add_child(build_btn)
 		"offline":
-			var repair_btn := _make_action_button("수리", _on_repair_pressed, accent.lightened(0.06))
-			repair_btn.disabled = true
-			panel.add_child(repair_btn)
+			var repair_note := Label.new()
+			repair_note.text = "정비 예정"
+			repair_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			repair_note.modulate = Color(0.62, 0.68, 0.82)
+			panel.add_child(repair_note)
 			panel.add_child(_make_action_button("관제실 이동", _on_control_room_pressed, accent))
 		"returned":
 			panel.add_child(_make_action_button("수령", _on_collect_pressed, Color(0.26, 0.95, 0.46)))
@@ -468,10 +512,6 @@ func _make_action_button(text: String, callback: Callable, accent: Color) -> But
 	return btn
 
 
-func _on_repair_pressed() -> void:
-	pass
-
-
 func _on_control_room_pressed() -> void:
 	_request_control_room()
 
@@ -479,6 +519,48 @@ func _on_control_room_pressed() -> void:
 func _on_collect_pressed() -> void:
 	GameState.collect_auto_slot(_slot_index)
 	close_popup()
+
+
+func _add_reward_breakdown(parent: Control, slot: DispatchManager.AutoSlot) -> void:
+	var brk: Dictionary = slot.reward_breakdown
+	# 레거시 세이브(분해 내역 없음) 폴백: 기존 한 줄 합계 표시
+	if brk.is_empty():
+		_add_option_line(parent, "보상", _fmt_rewards_text(slot), Color(0.70, 1.0, 0.80))
+		return
+	var dim := Color(0.72, 0.78, 0.90)
+	_add_option_line(parent, "기본 수익", "%s CR" % HangarHelpers.fmt(int(brk.get("raw_credits", 0))), dim)
+	var cmult := float(brk.get("credits_mult", 1.0))
+	if cmult > 1.0:
+		_add_option_line(parent, "파츠 보너스", "+%d%%" % int(round((cmult - 1.0) * 100.0)), Color(0.72, 0.90, 1.0))
+	var pbonus := int(brk.get("pilot_credits_pct", 0))
+	if pbonus > 0:
+		_add_option_line(parent, "파일럿 보너스", "+%d%%" % pbonus, Color(0.72, 0.90, 1.0))
+	var fpen := int(brk.get("fatigue_penalty_pct", 0))
+	if fpen > 0:
+		_add_option_line(parent, "피로 패널티", "-%d%%" % fpen, Color(1.0, 0.66, 0.58))
+	_add_option_line(parent, "정산 CR", "+%s CR" % HangarHelpers.fmt(slot.credits_earned), Color(0.40, 0.95, 0.55))
+	var ymult := float(brk.get("yield_mult", 1.0))
+	if ymult > 1.0:
+		_add_option_line(parent, "재료 보너스", "+%d%%" % int(round((ymult - 1.0) * 100.0)), Color(0.72, 0.90, 1.0))
+	var abbr := {"alloy": "합금", "supplies": "물자", "circuit": "칩"}
+	for id in ["alloy", "supplies", "circuit"]:
+		var amt := int(slot.rewards.get(id, 0))
+		if amt > 0:
+			_add_option_line(parent, abbr[id], "+%d" % amt, Color(0.70, 1.0, 0.80))
+
+
+func _fmt_rewards_text(slot: DispatchManager.AutoSlot) -> String:
+	var rewards: Dictionary = slot.rewards
+	if rewards.is_empty():
+		return "+%s CR" % HangarHelpers.fmt(slot.credits_earned)
+	var parts: Array = []
+	if int(rewards.get("cp", 0)) > 0:
+		parts.append("+%s CR" % HangarHelpers.fmt(int(rewards["cp"])))
+	var abbr := {"alloy": "합금", "supplies": "물자", "circuit": "칩"}
+	for id in ["alloy", "supplies", "circuit"]:
+		if int(rewards.get(id, 0)) > 0:
+			parts.append("+%d %s" % [int(rewards[id]), abbr[id]])
+	return "  ".join(parts) if not parts.is_empty() else "+%s CR" % HangarHelpers.fmt(slot.credits_earned)
 
 
 func _on_unlock_pressed() -> void:
@@ -1167,15 +1249,39 @@ func _part_color(part_key: String, tier: int) -> Color:
 
 func _opt_label(opt: Dictionary) -> String:
 	match opt.get("type", ""):
-		"credits_pct":       return "수익+%d%%" % opt.get("value", 0)
-		"dispatch_time_pct": return "파견-%d%%" % opt.get("value", 0)
-		"return_time_pct":   return "복귀-%d%%" % opt.get("value", 0)
+		"credits_pct":        return "수익+%d%%" % opt.get("value", 0)
+		"dispatch_time_pct":  return "파견-%d%%" % opt.get("value", 0)
+		"return_time_pct":    return "복귀-%d%%" % opt.get("value", 0)
+		"fatigue_pct":        return "피로-%d%%" % opt.get("value", 0)
+		"stress_pct":         return "스트-%d%%" % opt.get("value", 0)
+		"material_yield_pct": return "재료+%d%%" % opt.get("value", 0)
 	return ""
 
 func _part_sprite_texture(part_key: String, tier: int) -> Texture2D:
-	# 아직 실제 파츠 아트가 연결되지 않았으므로 슬롯 전용 자리만 유지한다.
-	# 나중에 파츠 타입/tier별 아이콘을 여기에 매핑하면 된다.
-	return null
+	return _mech_part_texture(part_key, tier)
+
+
+func _mech_part_texture(part_key: String, tier: int) -> Texture2D:
+	if tier <= 0:
+		return null
+	var cache_key := "%s:%d" % [part_key, tier]
+	if _part_sprite_cache.has(cache_key):
+		return _part_sprite_cache[cache_key] as Texture2D
+
+	var gradient := Gradient.new()
+	var base := _part_color(part_key, tier)
+	gradient.set_color(0, base.darkened(0.26))
+	gradient.set_color(1, base.lightened(0.22))
+
+	var texture := GradientTexture2D.new()
+	texture.width = 64
+	texture.height = 64
+	texture.gradient = gradient
+	texture.fill = GradientTexture2D.FILL_LINEAR
+	texture.fill_from = Vector2(0.0, 0.0)
+	texture.fill_to = Vector2(1.0, 1.0)
+	_part_sprite_cache[cache_key] = texture
+	return texture
 
 
 func _state_label(state: String) -> String:
