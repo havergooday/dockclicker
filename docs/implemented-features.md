@@ -85,6 +85,7 @@
     - **베이 전환 오염 버그 수정** — `_init_draft_state()` 가 이전 베이 값을 먼저 초기화하도록 수정
     - **동일 티어 파츠 교체 허용** — `replace_machine_part()` 동일 tier early return 제거, 인스턴스 스왑 동작
     - `remove_machine_part()` 추가 — offline 슬롯의 특정 파츠를 인벤토리로 반환하고 슬롯 갱신
+    - `get_inventory_summary()` + `disassemble_part_group()` 추가 — 보유 파츠를 타입/티어/옵션별로 묶어 표시하고 일괄 분해 지원
   - 격납고 Bay의 도킹 상태 UI는 재조립 버튼 없이 슬롯 클릭 교체로 처리하고, 수리는 예정 항목으로만 남김
   - 파견 중 Bay는 임무 정보, 도착 행성, 남은 시간만 노출하는 읽기 전용 요약으로 유지
   - 귀환 완료 Bay는 수령 버튼과 보상 요약만 제공
@@ -564,6 +565,7 @@
   - `SaveManager`가 `reward_breakdown` 직렬화/복원 (오프라인 귀환분도 저장 후 표시 유지)
   - `hangar_bay_popup.gd` `_add_reward_breakdown()`: returned 상태에 분해 라인(기본 수익/보너스/패널티/정산 CR/재료) 표시, 레거시 세이브는 한 줄 합계로 폴백
   - `hangar_bay_detail.gd` `_add_breakdown_lines()`: 격납고 사이드 패널에 압축 분해 라인 추가
+- **자동 파견 후반 CP 재조정 구현 완료** — `sector_i~sector_t`의 `guaranteed_rewards.cp`를 `credit_per_kill` 비례 곡선으로 상향, 자동 파견은 재료 중심 + 보조 CP 역할로 정리
 - **상태표시줄(크레딧 HUD) 위치 옵션 구현 완료** — 상/하/좌/우 4방향, 설정에서 즉시 전환
   - `GameState.hud_position` + `set_hud_position()` + `hud_position_changed` 신호 (top/bottom/left/right)
   - `SaveManager`가 `hud_position` 직렬화/복원 (변경 시 자동 저장)

@@ -114,6 +114,7 @@ signal resources_changed(resources: Dictionary)
 signal resource_changed(resource_id: String, new_amount: int)
 signal resources_collected(rewards: Dictionary)
 signal pilot_tier_up(pilot_id: String)
+signal part_inventory_changed
 
 const EXP_PER_TIER: Array = [80, 160]
 signal credits_collected(amount: int, from_global_pos: Vector2)
@@ -710,6 +711,7 @@ func buy_part(part_type: String, tier: int) -> bool:
 	part_inventory.append({"iid": "p_%d" % Time.get_ticks_usec(), "type": part_type, "tier": tier})
 	credits_changed.emit(total_credits)
 	part_purchased.emit(part_type, tier)
+	part_inventory_changed.emit()
 	return true
 
 func get_owned_qty(part_type: String, tier: int) -> int:
@@ -724,6 +726,7 @@ func consume_part(part_type: String, tier: int) -> bool:
 		var item: Dictionary = part_inventory[i]
 		if item.get("type") == part_type and int(item.get("tier", 0)) == tier:
 			part_inventory.remove_at(i)
+			part_inventory_changed.emit()
 			return true
 	return false
 
@@ -734,6 +737,7 @@ func consume_part_by_iid(iid: String, part_type: String, tier: int) -> bool:
 			var item: Dictionary = part_inventory[i]
 			if str(item.get("iid", "")) == iid:
 				part_inventory.remove_at(i)
+				part_inventory_changed.emit()
 				return true
 	return consume_part(part_type, tier)
 
@@ -993,6 +997,26 @@ func rename_bay(slot_index: int, new_name: String) -> bool:
 func rename_machine(slot_index: int, new_name: String) -> bool:
 	return _dispatch.rename_machine(slot_index, new_name)
 
+func get_inventory_summary() -> Array:
+	# part_inventory를 type·tier·옵션 시그니처별로 집계한 목록을 반환한다.
+	# 반환: [{type, tier, options, count}, ...] (등장 순서 유지)
+	var groups: Dictionary = {}
+	var order: Array = []
+	for item: Dictionary in part_inventory:
+		var type_id := str(item.get("type", ""))
+		var tier := int(item.get("tier", 0))
+		var opts: Array = item.get("options", []) as Array
+		var sig := "%s|%d|%s" % [type_id, tier, JSON.stringify(opts)]
+		if not groups.has(sig):
+			groups[sig] = {"type": type_id, "tier": tier, "options": opts.duplicate(), "count": 0}
+			order.append(sig)
+		groups[sig]["count"] = int(groups[sig]["count"]) + 1
+	var out: Array = []
+	for sig in order:
+		out.append(groups[sig])
+	return out
+
+
 func calc_part_refund(item: Dictionary) -> int:
 	var type: String = str(item.get("type", ""))
 	var tier: int    = int(item.get("tier", 1))
@@ -1013,8 +1037,31 @@ func disassemble_part(iid: String) -> int:
 			part_inventory.remove_at(i)
 			total_credits += refund
 			credits_changed.emit(total_credits)
+			part_inventory_changed.emit()
 			return refund
 	return -1
+
+
+func disassemble_part_group(part_type: String, tier: int, options: Array = []) -> int:
+	var sig := JSON.stringify(options)
+	var refund_total := 0
+	var removed := false
+	for i in range(part_inventory.size() - 1, -1, -1):
+		var item: Dictionary = part_inventory[i]
+		if str(item.get("type", "")) != part_type:
+			continue
+		if int(item.get("tier", 0)) != tier:
+			continue
+		if JSON.stringify(item.get("options", [])) != sig:
+			continue
+		refund_total += calc_part_refund(item)
+		part_inventory.remove_at(i)
+		removed = true
+	if removed:
+		total_credits += refund_total
+		credits_changed.emit(total_credits)
+		part_inventory_changed.emit()
+	return refund_total
 
 func get_pilot_accessible_planets(pilot_id: String) -> Array:
 	var p := get_hired_pilot(pilot_id)

@@ -36,6 +36,7 @@ func _ready() -> void:
 	GameState.auto_slot_changed.connect(func(_i): _needs_rebuild = true)
 	GameState.auto_dispatch_returned.connect(func(_i): _needs_rebuild = true)
 	GameState.slot_pilot_assigned.connect(func(_i): _needs_rebuild = true)
+	GameState.part_inventory_changed.connect(func(): _needs_rebuild = true)
 	_build()
 
 

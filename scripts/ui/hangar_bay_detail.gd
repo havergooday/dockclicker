@@ -51,6 +51,8 @@ static func build_content(
 		"on_mission", "returning": _active(vb, slot)
 		"returned":                _returned(vb, slot, slot_idx, on_hide)
 
+	_inventory_overview(vb)
+
 
 static func _empty(vb: VBoxContainer, slot_idx: int, on_hide: Callable) -> void:
 	HangarHelpers.add_lbl(vb, "머신 없음", 12, HORIZONTAL_ALIGNMENT_LEFT, Color(0.45, 0.45, 0.60))
@@ -233,3 +235,71 @@ static func _returned(vb: VBoxContainer, slot: DispatchManager.AutoSlot,
 		on_hide.call()
 	)
 	vb.add_child(btn)
+
+
+# 보유 파츠 전체를 한눈에 보여주는 요약 섹션 (베이 상태와 무관하게 항상 표시).
+# 빈 베이가 없어도 격납고에서 인벤토리를 확인할 수 있게 한다.
+static func _inventory_overview(vb: VBoxContainer) -> void:
+	var summary := GameState.get_inventory_summary()
+	if summary.is_empty():
+		return
+	vb.add_child(HangarHelpers.vspacer())
+	var div := ColorRect.new()
+	div.color = Color(0.30, 0.40, 0.60, 0.25)
+	div.custom_minimum_size = Vector2(0, 1)
+	div.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vb.add_child(div)
+	var total := 0
+	for g in summary:
+		total += int(g.get("count", 0))
+	HangarHelpers.add_lbl(vb, "보유 파츠  (%d)" % total, 10, HORIZONTAL_ALIGNMENT_LEFT, Color(0.55, 0.62, 0.78))
+	var type_name := {"body": "몸체", "weapon": "무기", "legs": "다리"}
+	var shown := 0
+	for g in summary:
+		if shown >= 10:
+			HangarHelpers.add_lbl(vb, "…외 %d종" % (summary.size() - shown), 9, HORIZONTAL_ALIGNMENT_LEFT, Color(0.50, 0.55, 0.68))
+			break
+		var t := str(g.get("type", ""))
+		var tier := int(g.get("tier", 0))
+		var cnt := int(g.get("count", 0))
+		var opts: Array = g.get("options", []) as Array
+		var opt_txt := ""
+		if not opts.is_empty():
+			var ps: Array = []
+			for o: Dictionary in opts:
+				ps.append(_opt_label(o))
+			opt_txt = "  [%s]" % "  ".join(ps)
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 6)
+		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		vb.add_child(row)
+
+		var lbl := Label.new()
+		lbl.text = "%s T%d  ×%d%s" % [type_name.get(t, t), tier, cnt, opt_txt]
+		lbl.add_theme_font_size_override("font_size", 10)
+		lbl.modulate = Color(0.70, 0.78, 0.92)
+		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(lbl)
+
+		var btn := Button.new()
+		btn.text = "일괄 분해"
+		btn.custom_minimum_size = Vector2(72, 22)
+		btn.add_theme_font_size_override("font_size", 9)
+		btn.disabled = cnt <= 0
+		btn.pressed.connect(func():
+			GameState.disassemble_part_group(t, tier, opts)
+		)
+		row.add_child(btn)
+		shown += 1
+
+
+static func _opt_label(opt: Dictionary) -> String:
+	var v := int(opt.get("value", 0))
+	match str(opt.get("type", "")):
+		"credits_pct":        return "수익+%d%%" % v
+		"dispatch_time_pct":  return "파견-%d%%" % v
+		"return_time_pct":    return "복귀-%d%%" % v
+		"fatigue_pct":        return "피로-%d%%" % v
+		"stress_pct":         return "스트-%d%%" % v
+		"material_yield_pct": return "재료+%d%%" % v
+	return ""

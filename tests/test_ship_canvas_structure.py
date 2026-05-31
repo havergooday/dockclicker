@@ -131,10 +131,21 @@ class ShipCanvasStructureTest(unittest.TestCase):
             "조립 편집",
             "파견 중인 베이는 읽기 전용입니다.",
             "수령 대기",
+            "일괄 분해",
+            "GameState.disassemble_part_group(",
         ]:
             self.assertIn(token, detail)
         self.assertNotIn("🔧 수리", detail)
         self.assertNotIn("자동 파견은 추후 업데이트 예정입니다.", detail)
+
+    def test_game_state_exposes_part_inventory_change_signal(self):
+        text = GAME_STATE_SCRIPT.read_text(encoding="utf8")
+        for token in [
+            "signal part_inventory_changed",
+            "func disassemble_part_group(",
+            "part_inventory_changed.emit()",
+        ]:
+            self.assertIn(token, text)
 
     def test_docs_do_not_keep_stale_progression_values(self):
         implemented = IMPLEMENTED_FEATURES.read_text(encoding="utf8")
