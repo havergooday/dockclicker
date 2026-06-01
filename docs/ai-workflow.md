@@ -1,7 +1,8 @@
 # AI 작업 가이드
 
 이 문서는 프로젝트 루트 `CLAUDE.md`로 통합됐다.  
-Claude Code는 세션 시작 시 `CLAUDE.md`를 자동으로 읽으므로 별도 로드 명령이 필요 없다.
+Claude Code는 세션 시작 시 `CLAUDE.md`를 자동으로 읽으므로 별도 로드 명령이 필요 없다.  
+현재는 기능 추가가 중단된 상태이므로, 상태 문서와 유지보수 문서를 먼저 확인한다.
 
 ## 커밋 시 문서 갱신 규칙
 
@@ -14,3 +15,4 @@ Claude Code는 세션 시작 시 `CLAUDE.md`를 자동으로 읽으므로 별도
 - 기술 선택 확정 시 `technical-decisions.md` 갱신
 - 프로젝트 구조 변경 시 `godot-project-structure.md` 갱신
 - 게임 규칙/시스템 변경 시 `dispatch-clicker-design.md` 또는 `docs/systems/` 갱신
+- 기능 삭제나 축소가 있으면 `implemented-features.md`와 `missing-features.md`를 같이 갱신
